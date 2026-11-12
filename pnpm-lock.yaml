@@ -224,6 +224,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@openboard/app':
+        specifier: workspace:*
+        version: link:../app
       '@openboard/core':
         specifier: workspace:*
         version: link:../core
