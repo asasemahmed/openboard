@@ -87,6 +87,9 @@ function BoardEdgeView({ id, source, target, data, selected }: EdgeProps<FlowEdg
   const ghost = data?.ghost ?? false;
   const route = parseRouteKey(useRouteKey(source, target, !ghost));
   const recent = useStoreValue(activity, () => activity.highlightFor('edge', id));
+  const proposed = useStoreValue(store, () =>
+    ghost ? undefined : store.review().edgeMarks.get(id)?.kind,
+  );
   if (!sourceNode || !targetNode || !data) return null;
 
   const edge = data.edge;
@@ -111,7 +114,13 @@ function BoardEdgeView({ id, source, target, data, selected }: EdgeProps<FlowEdg
   }
   const tone: MarkerTone = ghost || selected ? 'accent' : meta.tone;
   const dash = ghost ? '6 5' : meta.dash;
-  const recentClass = recent ? ' is-recent' : '';
+  const recentClass = `${recent ? ' is-recent' : ''}${
+    proposed === 'remove'
+      ? ' is-removal-proposed'
+      : proposed === 'update'
+        ? ' is-change-proposed'
+        : ''
+  }`;
   const recentStyle = recent ? { ['--recent-ms' as string]: `${recent.until - recent.at}ms` } : {};
 
   return (
@@ -139,7 +148,7 @@ function BoardEdgeView({ id, source, target, data, selected }: EdgeProps<FlowEdg
             transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
             ...recentStyle,
           }}
-          aria-label={`${meta.label} edge${edge.label ? `: ${edge.label}` : ''}`}
+          aria-label={`${ghost ? 'Proposed ' : ''}${meta.label} edge${edge.label ? `: ${edge.label}` : ''}${proposed === 'remove' ? ' (removal proposed)' : ''}`}
           tabIndex={-1}
           onClick={(event) => {
             event.stopPropagation();

@@ -6,10 +6,15 @@
  *
  * Transient state that is not written to the document (positions while a
  * drag is in progress, measured sizes, selection flags) also lives here.
+ *
+ * It also derives what people review: pending proposals (drawn as the ghost
+ * layer), open questions, and comment threads. Each is memoised and rebuilt
+ * only after a transaction that changed its collection.
  */
 import type {
   Actor,
   ApplyOutcome,
+  Ask,
   BoardDoc,
   BoardEdge,
   BoardMeta,
@@ -23,6 +28,8 @@ import {
   type EdgeChange,
   type NodeChange,
 } from '@xyflow/react';
+import { askedNodes, openAsks } from '../lib/asks.js';
+import { type CommentIndex, indexComments } from '../lib/comments.js';
 import {
   type FlowEdge,
   type FlowNode,
@@ -32,6 +39,7 @@ import {
   toFlowNode,
 } from '../lib/flow.js';
 import type { PlacementMap } from '../lib/geometry.js';
+import { deriveReview, type ReviewModel } from '../lib/review.js';
 import { Emitter } from './emitter.js';
 
 export interface Selection {
@@ -63,6 +71,11 @@ export class BoardStore extends Emitter {
   private nodeIndex = new Map<string, number>();
   private edgeIndex = new Map<string, number>();
   private placementCache: PlacementMap | null = null;
+  private reviewCache: ReviewModel | null = null;
+  private asksCache: { open: readonly Ask[]; nodes: ReadonlyMap<string, string[]> } | null = null;
+  private commentCache: CommentIndex | null = null;
+  /** Ghosts come from pending proposals unless a caller set its own layer. */
+  private ghostsFromReview = true;
 
   /** Current React Flow nodes, parents before children. Replaced (never mutated) on change. */
   nodes: FlowNode[] = [];
@@ -79,6 +92,7 @@ export class BoardStore extends Emitter {
     this.meta = this.readMeta();
     for (const node of doc.nodes()) this.nodeMap.set(node.id, toFlowNode(node));
     for (const edge of doc.edges()) this.edgeMap.set(edge.id, toFlowEdge(edge));
+    this.applyReviewGhosts();
     this.rebuildNodes();
     this.rebuildEdges();
     this.detach = doc.observe((event) => this.onDocEvent(event));
@@ -123,6 +137,37 @@ export class BoardStore extends Emitter {
   get nodeCount(): number {
     return this.nodeMap.size;
   }
+
+  /** Pending proposals, their ghosts and marks. Same object until proposals or the board change. */
+  readonly review = (): ReviewModel => {
+    this.reviewCache ??= deriveReview(this.doc.proposals(), {
+      node: (id) => this.nodeMap.get(id)?.data.node,
+      edge: (id) => this.edgeMap.get(id)?.data?.edge,
+    });
+    return this.reviewCache;
+  };
+
+  /** Open questions, oldest first. */
+  readonly openAsks = (): readonly Ask[] => this.askState().open;
+
+  /** Open questions that point at a node. */
+  asksOn(nodeId: string): readonly string[] | undefined {
+    return this.askState().nodes.get(nodeId);
+  }
+
+  private askState() {
+    if (!this.asksCache) {
+      const open = openAsks(this.doc.asks());
+      this.asksCache = { open, nodes: askedNodes(open) };
+    }
+    return this.asksCache;
+  }
+
+  /** Comment threads, newest activity first, with per-node counts. */
+  readonly comments = (): CommentIndex => {
+    this.commentCache ??= indexComments(this.doc.comments());
+    return this.commentCache;
+  };
 
   /** Where every real node is drawn right now, including positions mid-drag. */
   placements(): PlacementMap {
@@ -209,6 +254,17 @@ export class BoardStore extends Emitter {
       else this.patchEdges(changedEdges);
     }
     if (event.metaChanged) this.meta = this.readMeta();
+    if (event.asks) this.asksCache = null;
+    if (event.comments) this.commentCache = null;
+    // Marks depend on which nodes exist; ghosts on the proposals themselves.
+    if (event.proposals || structuralNodes || structuralEdges) {
+      this.reviewCache = null;
+      if (event.proposals && this.ghostsFromReview) {
+        this.applyReviewGhosts();
+        this.rebuildNodes();
+        this.rebuildEdges();
+      }
+    }
     if (doneNodes.size > 0 || changedEdges.size > 0) this.pruneSelection();
     this.emit();
   }
@@ -231,14 +287,17 @@ export class BoardStore extends Emitter {
   // ── Array maintenance ──────────────────────────────────────────────────────
 
   private rebuildNodes(): void {
-    const nodes = orderFlowNodes([...this.nodeMap.values(), ...this.ghostNodes.values()]);
+    // A ghost whose node has landed (an accepted proposal) gives way to the real one.
+    const ghosts = [...this.ghostNodes.values()].filter((g) => !this.nodeMap.has(g.id));
+    const nodes = orderFlowNodes([...this.nodeMap.values(), ...ghosts]);
     this.nodes = nodes;
     this.nodeIndex = new Map(nodes.map((n, i) => [n.id, i]));
     this.placementCache = null;
   }
 
   private rebuildEdges(): void {
-    this.edges = [...this.edgeMap.values(), ...this.ghostEdges.values()];
+    const ghosts = [...this.ghostEdges.values()].filter((g) => !this.edgeMap.has(g.id));
+    this.edges = [...this.edgeMap.values(), ...ghosts];
     this.edgeIndex = new Map(this.edges.map((e, i) => [e.id, i]));
   }
 
@@ -403,6 +462,28 @@ export class BoardStore extends Emitter {
    * Ghost ids must not collide with real ones.
    */
   setGhosts(layer: GhostLayer): void {
+    this.ghostsFromReview = false;
+    this.fillGhosts(layer);
+    this.rebuildNodes();
+    this.rebuildEdges();
+    this.emit();
+  }
+
+  /** Go back to drawing pending proposals as the ghost layer. */
+  showProposalGhosts(): void {
+    this.ghostsFromReview = true;
+    this.applyReviewGhosts();
+    this.rebuildNodes();
+    this.rebuildEdges();
+    this.emit();
+  }
+
+  private applyReviewGhosts(): void {
+    const review = this.review();
+    this.fillGhosts({ nodes: review.ghostNodes, edges: review.ghostEdges });
+  }
+
+  private fillGhosts(layer: GhostLayer): void {
     this.ghostNodes.clear();
     this.ghostEdges.clear();
     for (const node of layer.nodes) {
@@ -414,8 +495,5 @@ export class BoardStore extends Emitter {
       if (this.edgeMap.has(edge.id) || !known(edge.source) || !known(edge.target)) continue;
       this.ghostEdges.set(edge.id, toFlowEdge(edge, { ghost: true }));
     }
-    this.rebuildNodes();
-    this.rebuildEdges();
-    this.emit();
   }
 }

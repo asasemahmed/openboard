@@ -12,6 +12,7 @@ import type { FlowNode } from '../lib/flow.js';
 import { useSession } from '../state/context.js';
 import { useStoreValue } from '../state/emitter.js';
 import { NodeDecorations } from './NodeDecorations.js';
+import { useReviewClass } from './reviewClass.js';
 import { TitleEditor, useIsEditing } from './TitleEditor.js';
 
 /** "count,minW,minH" for a frame's children; a string so the hook result is a primitive. */
@@ -50,11 +51,12 @@ function FrameNodeView({ id, data, selected }: NodeProps<FlowNode>) {
   );
   const { count, minW, minH } = useFrameContent(id, selected);
   const focus = useNodeFocus(id, ghost);
+  const review = useReviewClass(id, ghost);
 
   return (
     <section
-      className={`frame${selected ? ' is-selected' : ''}${isDropTarget ? ' is-drop-target' : ''}${ghost ? ' is-ghost' : ''}`}
-      aria-label={`Frame: ${node.title}`}
+      className={`frame${selected ? ' is-selected' : ''}${isDropTarget ? ' is-drop-target' : ''}${ghost ? ' is-ghost' : ''}${review}`}
+      aria-label={ghost ? `Proposed frame: ${node.title}. Open the review` : `Frame: ${node.title}`}
       {...focus}
     >
       {!ghost && (
@@ -103,12 +105,14 @@ function FrameNodeView({ id, data, selected }: NodeProps<FlowNode>) {
             {node.title}
           </h3>
         )}
-        <span
-          className="frame-count"
-          title={`${count} item${count === 1 ? '' : 's'} directly inside`}
-        >
-          {count}
-        </span>
+        {!ghost && (
+          <span
+            className="frame-count"
+            title={`${count} item${count === 1 ? '' : 's'} directly inside`}
+          >
+            {count}
+          </span>
+        )}
         <span className="frame-head-end">
           <NodeDecorations slot="header" node={node} ghost={ghost} />
         </span>

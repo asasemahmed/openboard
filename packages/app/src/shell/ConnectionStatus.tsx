@@ -28,7 +28,7 @@ export function ConnectionStatus() {
         }
       >
         <span className="conn-mark" aria-hidden="true" />
-        {LABEL[status]}
+        <span className="topbar-label">{LABEL[status]}</span>
       </button>
       <Popover
         anchor={anchor}

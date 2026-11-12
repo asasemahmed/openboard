@@ -7,6 +7,7 @@ import { ReactFlowProvider } from '@xyflow/react';
 import { useEffect } from 'react';
 import { ActionsProvider, useBoardActions } from '../canvas/actions.js';
 import { Canvas } from '../canvas/Canvas.js';
+import { useBoardCommentNotices, useReviewAutoOpen } from '../canvas/TrustHooks.js';
 import { useShortcuts } from '../canvas/useShortcuts.js';
 import { toActor } from '../lib/identity.js';
 import { LeftPanel, RightPanel } from '../panels/PanelSlot.js';
@@ -22,6 +23,8 @@ function Workspace({ onlyRenderVisibleElements }: { onlyRenderVisibleElements: b
   const actions = useBoardActions();
   const { meta } = useMeta();
   useShortcuts(actions);
+  useReviewAutoOpen();
+  useBoardCommentNotices();
 
   useEffect(() => {
     document.title = `${meta.name} · OpenBoard`;

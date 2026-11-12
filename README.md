@@ -15,9 +15,11 @@ OpenBoard is an open canvas that AI agents read and edit over MCP while you edit
 ## What it does
 
 - **A live canvas.** The board runs in your browser and stays in sync with everyone editing it. Changes made by others, people or agents, are highlighted as they arrive.
-- **Agent tools over MCP.** Eight `board_*` tools to outline, read, change and lay out a board, over stdio or Streamable HTTP, with ready-made setups for Claude Code, Cursor and Codex.
+- **Agent tools over MCP.** Twelve `board_*` tools to outline, read, change and lay out a board, and to talk with the people on it, over stdio or Streamable HTTP, with ready-made setups for Claude Code, Cursor and Codex.
 - **Budgeted reads, atomic writes.** Agents read an outline, a slice or just what changed, within a token budget. They write whole intents as one batch that is validated and applied all at once, and the layout engine places what they add.
 - **Selection as context.** Select cards on the canvas and say "these"; the agent sees what you selected.
+- **You stay in control.** Decide per project and per agent what agents may change on their own; changes to your work wait as proposals you accept or reject, in whole or in part. Every change is recorded and can be undone exactly, without overwriting later work.
+- **Agents ask instead of guessing.** Agents put questions to you on the board and wait for the answer, read your comments and mentions in their inbox, and reply in the thread.
 - **Boards in git.** Each board is a deterministic JSON file in `.openboard/`. It diffs and merges like code, and the server picks up changes from a checkout or a merge.
 
 ## Quick start
@@ -68,10 +70,10 @@ Three ideas carry the design:
 ## Documentation
 
 - [Getting started](docs/getting-started.md): build, start, connect, first prompts
-- [How agents work with a board](docs/agents.md): the read and write paths, selection, cursors, identity, trust
+- [How agents work with a board](docs/agents.md): the read and write paths, selection, cursors, review and undo, comments and questions, identity, trust
 - [Tool reference](docs/tools.md): every tool, operation, validation error and type
 - [CLI reference](docs/cli.md): every command and flag
-- [Board file format](docs/board-format.md): the `.board.json` file, for reviewers and tool authors
+- [Board file format](docs/board-format.md): the `.board.json` file and `config.json`, for reviewers and tool authors
 - [Integrations](integrations/README.md): Claude Code, Cursor, Codex and generic MCP setups
 - [Architecture](docs/ARCHITECTURE.md): how the packages fit together
 

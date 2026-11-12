@@ -1,3 +1,4 @@
+import { AskIndicator } from '../canvas/AskStack.js';
 import { useActions } from '../canvas/actions.js';
 import { navigate } from '../lib/router.js';
 import { PanelToggles } from '../panels/PanelSlot.js';
@@ -10,6 +11,7 @@ import { ConnectAgentButton, FollowToggle } from './AgentControls.js';
 import { BoardName } from './BoardName.js';
 import { BoardSwitcher } from './BoardSwitcher.js';
 import { ConnectionStatus } from './ConnectionStatus.js';
+import { OverflowMenu } from './OverflowMenu.js';
 import { Participants } from './Participants.js';
 import { ProfileMenu } from './ProfileMenu.js';
 import { ThemeToggle } from './ThemeToggle.js';
@@ -58,7 +60,9 @@ export function TopBar() {
           />
         </div>
         <AddMenu />
-        <TidyMenu />
+        <span className="topbar-roomy">
+          <TidyMenu />
+        </span>
         <button
           type="button"
           className="search-btn"
@@ -72,20 +76,27 @@ export function TopBar() {
       </div>
       <div className="topbar-end">
         <div className="toolbar-group" role="group" aria-label="Agents">
-          <ConnectAgentButton />
+          <span className="topbar-wide">
+            <ConnectAgentButton />
+          </span>
           <FollowToggle />
         </div>
+        <AskIndicator />
         <PanelToggles />
         <ConnectionStatus />
         <Participants />
         <span className="topbar-sep" aria-hidden="true" />
-        <IconButton
-          icon="keyboard"
-          label="Keyboard shortcuts"
-          shortcut="?"
-          onClick={() => ui.shortcuts.set(true)}
-        />
-        <ThemeToggle />
+        <div className="toolbar-group topbar-wide">
+          <IconButton
+            icon="keyboard"
+            label="Keyboard shortcuts"
+            shortcut="?"
+            onClick={() => ui.shortcuts.set(true)}
+          />
+          <ThemeToggle />
+          <IconButton icon="settings" label="Settings" onClick={() => ui.settings.set(true)} />
+        </div>
+        <OverflowMenu />
         <IconButton
           icon="edit"
           label={inspectorOpen ? 'Hide inspector' : 'Show inspector'}

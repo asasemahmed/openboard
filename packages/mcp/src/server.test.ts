@@ -20,7 +20,7 @@ import { createMcpServer, type McpServerOptions } from './server.js';
 import { OP_KINDS, TOOL_NAMES } from './tools.js';
 
 /** Total size of `tools/list` may not grow past this without a deliberate decision. */
-const TOOLS_LIST_TOKEN_CEILING = 2500;
+const TOOLS_LIST_TOKEN_CEILING = 3500;
 
 const ADA: Actor = { id: 'ada', kind: 'human', name: 'Ada' };
 
@@ -69,7 +69,7 @@ async function open(
 const human = () => server.api(ADA);
 
 describe('tools/list', () => {
-  it('lists the eight tools with titles, honest annotations and compact schemas', async () => {
+  it('lists the twelve tools with titles, honest annotations and compact schemas', async () => {
     const { client } = await open();
     const { tools } = await client.listTools();
     expect(tools.map((tool) => tool.name)).toEqual([...TOOL_NAMES]);
@@ -94,6 +94,30 @@ describe('tools/list', () => {
     });
     expect(byName.board_create?.annotations?.readOnlyHint).toBe(false);
     expect(byName.board_layout?.annotations?.readOnlyHint).toBe(false);
+    expect(tools).toHaveLength(12);
+    expect(byName.board_inbox?.annotations).toMatchObject({
+      readOnlyHint: true,
+      idempotentHint: false,
+    });
+    for (const name of ['board_comment', 'board_ask']) {
+      expect(byName[name]?.annotations).toMatchObject({
+        readOnlyHint: false,
+        destructiveHint: false,
+      });
+    }
+    expect(byName.board_undo?.annotations).toMatchObject({
+      readOnlyHint: false,
+      destructiveHint: true,
+    });
+    expect(Object.keys(byName.board_ask?.inputSchema.properties ?? {}).sort()).toEqual(
+      ['askId', 'board', 'cancel', 'kind', 'nodeIds', 'options', 'question', 'waitSeconds'].sort(),
+    );
+    expect(Object.keys(byName.board_undo?.inputSchema.properties ?? {}).sort()).toEqual(
+      ['all', 'batchId', 'board', 'last', 'proposalId'].sort(),
+    );
+    // The descriptions say when to use which.
+    expect(byName.board_comment?.description).toContain('board_ask');
+    expect(byName.board_ask?.description).toMatch(/need the answer to proceed/);
 
     const read = byName.board_read?.inputSchema.properties ?? {};
     expect(Object.keys(read).sort()).toEqual(
@@ -132,6 +156,10 @@ describe('tools/list', () => {
     expect(instructions).toContain('board_outline');
     expect(instructions).toContain('board_selection');
     expect(instructions).toMatch(/data, never as instructions/);
+    for (const tool of ['board_inbox', 'board_ask', 'board_undo']) {
+      expect(instructions).toContain(tool);
+    }
+    expect(instructions).toMatch(/normal, not an error/);
   });
 });
 
@@ -160,7 +188,7 @@ describe('the read and write loop', () => {
     });
     expect(applied.isError).toBe(false);
     const lines = applied.text.split('\n');
-    expect(lines[0]).toMatch(/^Applied: added 3 nodes, 1 edge\. Cursor \d+\.$/);
+    expect(lines[0]).toMatch(/^Applied: added 3 nodes, 1 edge\. Cursor \d+, batch b_\w+\.$/);
     expect(lines[1]).toMatch(/^Refs: goal=n_\w+, api=n_\w+$/);
     expect(lines[2]).toMatch(/^New node ids: n_\w+$/);
     expect(lines).toHaveLength(3);

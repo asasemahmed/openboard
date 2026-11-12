@@ -63,16 +63,21 @@ Inside a batch, `add_node` can declare a `ref`, and later operations can use `"$
 
 The live board is a Yjs document, so that concurrent edits from browsers and from the server merge without conflicts. Its layout is a contract between `core`, `server`, and `app`:
 
-| Top-level key | Yjs type       | Contents                                                               |
-| ------------- | -------------- | ---------------------------------------------------------------------- |
-| `meta`        | `Y.Map`        | `schemaVersion`, `id`, `name`, `description`, `createdAt`, `updatedAt` |
-| `actors`      | `Y.Map<Actor>` | Plain actor objects by id                                              |
-| `nodes`       | `Y.Map<Y.Map>` | One `Y.Map` per node, keyed by node id                                 |
-| `edges`       | `Y.Map<Y.Map>` | One `Y.Map` per edge, keyed by edge id                                 |
+| Top-level key | Yjs type          | Contents                                                               |
+| ------------- | ----------------- | ---------------------------------------------------------------------- |
+| `meta`        | `Y.Map`           | `schemaVersion`, `id`, `name`, `description`, `createdAt`, `updatedAt` |
+| `actors`      | `Y.Map<Actor>`    | Plain actor objects by id                                              |
+| `nodes`       | `Y.Map<Y.Map>`    | One `Y.Map` per node, keyed by node id                                 |
+| `edges`       | `Y.Map<Y.Map>`    | One `Y.Map` per edge, keyed by edge id                                 |
+| `proposals`   | `Y.Map<Proposal>` | Plain proposal objects by id (working state, not saved in the file)    |
+| `asks`        | `Y.Map<Ask>`      | Plain question objects by id (working state, not saved in the file)    |
+| `comments`    | `Y.Map<Comment>`  | Plain comment objects by id (saved in the file under `comments`)       |
 
 Inside a node or edge map, each schema field is one key holding a plain JSON value. That includes `body` (a string), `tags`, `props`, `links`, and `view` (replaced as a whole). Conflict resolution is therefore last-writer-wins per field, which is the right grain for a board: two people editing different fields of one node both win, and two people editing the same field get one consistent result.
 
-Code never touches these maps directly. `BoardDoc` in `core` wraps the Yjs document and is the only thing that reads or writes it; it also turns raw Yjs events into a normalized list of changes.
+Code never touches these maps directly. `BoardDoc` in `core` wraps the Yjs document and is the only thing that reads or writes it; it also turns raw Yjs events into a normalized list of changes. Its `DocEvent` names the proposals, questions and comments a transaction changed, and carries the exact before and after state of every node, edge and comment it changed (`states`), which is what history and undo are built on. Entries of the three plain maps that fail their schema are skipped and listed by `issues()`.
+
+A comment whose node was removed keeps its `nodeId`, so restoring the node re-attaches it; readers treat such a thread as detached.
 
 ### Transaction origins
 
@@ -86,6 +91,24 @@ interface TxOrigin {
 ```
 
 The origin is how the server attributes a change to an actor in the change feed, and how undo is scoped to one actor.
+
+## People in control
+
+Defined in [`packages/core/src/collab.ts`](../packages/core/src/collab.ts).
+
+**Review policy.** `.openboard/config.json` (committed) sets a mode per agent and a default: `auto`, `review_destructive` (the default), `review_all` or `locked`. A frame can override it for its contents through `props["openboard.policy"]` (`auto`, `review`, `locked`). People are never restricted. `classifyOps` in core is the whole rule set, as a pure function. On `apply` by an agent the server validates the batch, then classifies it: anything `denied` makes the batch `invalid` with `forbidden` errors; anything `review` turns the whole batch into one **proposal**; otherwise it applies.
+
+**Proposals.** A proposal holds every operation of the batch, with refs already resolved to the ids they will get, so the canvas can draw the preview as ghosts and accepting lands on the same ids. New nodes carry views from the layout engine, and `preview.views` gives the new views of existing nodes the layout would change (frames growing to hold the ghosts, siblings they push aside). A person accepts or rejects all or some items; dependencies are respected (accepting an edge accepts the node it needs, rejecting a node rejects the edge). Accepted items are applied as one batch attributed to the proposal's author. Each item remembers a fingerprint of what it changes; when that changes or vanishes, the item becomes a `conflict` (immediately while pending, re-checked on accept) and the preview is recomputed, so ghosts never show something that would fail. The most recent 50 decided proposals are kept.
+
+**History and undo.** Every change to nodes, edges and comments is a batch: an agent's apply together with the layout pass that follows it, an accepted proposal, a layout run, a file reload, an undo, or a person's browser edits (consecutive edits by one person less than 5 seconds apart are one batch). For each batch the server keeps the exact state of every item before and after. Undo restores an item only if it is still exactly as the batch left it, and reports the rest as conflicts; it never overwrites later work or leaves an edge without its nodes. An undo is itself a batch, so undoing it redoes. `apply` returns the `batchId` it became. Undoing by actor (`last`, `all`) considers only batches that changed nodes or edges; a comment-only batch is undone by its id.
+
+Undo follows the review policy. People may undo anything. An agent may undo only its own batches, and not at all in `locked` mode; it restores an item only where that restoring change would be `free` for it under the current policy, and leaves the rest as conflicts (`needs review: ...`, `not allowed: ...`). The reviewed items of a batch that came from an accepted proposal are left to people (`was applied through a reviewed proposal; ask a person to undo it`).
+
+Everyone who proposes, asks, answers, decides, comments or undoes is added to the board's actor registry, so their name is shown instead of their id.
+
+**Comments, inbox and questions.** Comments live in the document (browsers write them directly) and in the board file. Mentions, replies, answers to questions, decisions on proposals and undone batches become inbox items for the actor concerned, never for the one who acted. Agents ask people questions through `ask`, and can long-poll `askResult` for the answer; an answer that `askResult` returned to its author is not delivered again by the inbox (a read with `since` still shows it). `asks` lists the open questions.
+
+**"People only" is a guard, not a boundary.** Deciding proposals, answering questions and changing settings require an actor of kind `human`. The kind is whatever the caller declares (the `x-openboard-actor-kind` header); the server has no authentication on loopback. The check stops an agent from approving its own work by mistake, not a program that lies about who it is.
 
 ## Reading a board
 
@@ -115,23 +138,39 @@ One server process serves one project root.
 
 ### HTTP surface
 
-| Method and path                        | Purpose                                                             |
-| -------------------------------------- | ------------------------------------------------------------------- |
-| `GET /api/health`                      | `{ ok, version, pid, root }`                                        |
-| `GET /api/info`                        | `{ version, root, projectName, url, ...ServerOptions.info }`        |
-| `GET /api/boards` · `POST /api/boards` | List and create boards                                              |
-| `GET /api/boards/:id`                  | Full board JSON                                                     |
-| `POST /api/boards/:id/outline`         | `BoardApi.outline`                                                  |
-| `POST /api/boards/:id/read`            | `BoardApi.read`                                                     |
-| `POST /api/boards/:id/changes`         | `BoardApi.changes`                                                  |
-| `POST /api/boards/:id/apply`           | `BoardApi.apply`                                                    |
-| `GET /api/boards/:id/selection`        | `BoardApi.selection`                                                |
-| `POST /api/boards/:id/layout`          | `BoardApi.layout`                                                   |
-| `GET /sync/:id` (WebSocket)            | Document sync and presence, using the standard y-websocket protocol |
-| `ALL /mcp`                             | MCP over Streamable HTTP, mounted with `OpenBoardServer.mount`      |
-| `GET /*`                               | The web app                                                         |
+| Method and path                                    | Purpose                                                             |
+| -------------------------------------------------- | ------------------------------------------------------------------- |
+| `GET /api/health`                                  | `{ ok, version, pid, root }`                                        |
+| `GET /api/info`                                    | `{ version, root, projectName, url, ...ServerOptions.info }`        |
+| `GET /api/boards` · `POST /api/boards`             | List and create boards                                              |
+| `GET /api/boards/:id`                              | Full board JSON                                                     |
+| `POST /api/boards/:id/outline`                     | `BoardApi.outline`                                                  |
+| `POST /api/boards/:id/read`                        | `BoardApi.read`                                                     |
+| `POST /api/boards/:id/changes`                     | `BoardApi.changes`                                                  |
+| `POST /api/boards/:id/apply`                       | `BoardApi.apply`                                                    |
+| `GET /api/boards/:id/selection`                    | `BoardApi.selection`                                                |
+| `POST /api/boards/:id/layout`                      | `BoardApi.layout`                                                   |
+| `GET /api/config` · `PUT /api/config`              | `BoardApi.getConfig` · `setConfig` (people only)                    |
+| `GET /api/boards/:id/proposals?status=&maxTokens=` | `BoardApi.proposals` (`status` is `pending` or `all`)               |
+| `POST /api/boards/:id/proposals/:pid/decide`       | `BoardApi.decideProposal` (body: `Decision`; people only)           |
+| `POST /api/boards/:id/proposals/:pid/withdraw`     | `BoardApi.withdrawProposal` (author only)                           |
+| `POST /api/boards/:id/history`                     | `BoardApi.history` (body: `HistoryOptions`)                         |
+| `POST /api/boards/:id/undo`                        | `BoardApi.undo` (body: `UndoRequest`)                               |
+| `POST /api/boards/:id/comments`                    | `BoardApi.comment` (body: `CommentInput`; 201 with the `Comment`)   |
+| `POST /api/boards/:id/threads/:thread/resolve`     | `BoardApi.resolveThread` (body: `{ resolved }`, default true)       |
+| `POST /api/boards/:id/inbox`                       | `BoardApi.inbox` (body: `InboxOptions`)                             |
+| `POST /api/boards/:id/asks`                        | `BoardApi.ask` (body: `AskInput`; 201 with the `Ask`)               |
+| `GET /api/boards/:id/asks?status=&maxTokens=`      | `BoardApi.asks` (`status` is `open`, the default, or `all`)         |
+| `GET /api/boards/:id/asks/:aid?waitMs=`            | `BoardApi.askResult`; a long-poll of at most `MAX_ASK_WAIT_MS`      |
+| `POST /api/boards/:id/asks/:aid/answer`            | `BoardApi.answerAsk` (body: `AnswerInput`; people only)             |
+| `POST /api/boards/:id/asks/:aid/cancel`            | `BoardApi.cancelAsk` (the author or a person)                       |
+| `GET /sync/:id` (WebSocket)                        | Document sync and presence, using the standard y-websocket protocol |
+| `ALL /mcp`                                         | MCP over Streamable HTTP, mounted with `OpenBoardServer.mount`      |
+| `GET /*`                                           | The web app                                                         |
 
 Request and response bodies are the JSON forms of the `BoardApi` types. Errors are `{ "error": { "code", "message", "details" } }` with the HTTP status from `OpenBoardError.status`.
+
+The long-poll is not cut by a server-side timeout (Node's request timeout only covers receiving the request), and a client that disconnects ends the wait at once. Missing proposals, batches and questions are `not_found` (404); acting on something already decided, answered or undone is `conflict` (409); a people-only or author-only call by someone else is `forbidden` (403).
 
 The caller's actor is taken from the headers `x-openboard-actor-id`, `x-openboard-actor-name`, and `x-openboard-actor-kind`. Over the WebSocket the same values arrive as query parameters `actorId`, `actorName`, `actorKind`.
 
@@ -155,13 +194,18 @@ The server reads awareness to answer `BoardApi.selection` with the most recent n
 <project root>/
   .openboard/
     <board id>.board.json     the board; deterministic, meant for git
+    config.json               project settings (review policy); deterministic, meant for git
     .local/                   runtime state; ignored by git
       server.json             { pid, port, url, root, version, startedAt } of the running server
-      <board id>.ydoc         document state with history, for fast restarts
+      <board id>.ydoc         document state with history (and pending proposals and questions)
       <board id>.changes.jsonl  the change feed
+      <board id>.history.jsonl  batches with before/after states, for history and undo (last 2000)
+      <board id>.inbox.jsonl    inbox items and each actor's read position
 ```
 
-The JSON file is the source of truth. It is written with sorted keys and one stable layout, so a small change to the board is a small diff. When the file changes on disk (a checkout, a merge, a manual edit), the server reconciles the live document to match it.
+The JSON file is the source of truth. It is written with sorted keys and one stable layout, so a small change to the board is a small diff. When the file changes on disk (a checkout, a merge, a manual edit), the server reconciles the live document to match it. `config.json` is watched the same way; while it does not parse, the last good settings stay in effect.
+
+The change feed gives each change the `reason` and `batchId` of the batch it belongs to. A transaction that only changed comments still moves the cursor (through a mark line in the feed file) but adds no entry.
 
 The project root is the nearest ancestor directory that contains `.openboard/`, then the git root, then the current directory.
 

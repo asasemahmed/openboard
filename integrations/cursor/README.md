@@ -37,7 +37,7 @@ The rule has `alwaysApply: false` and a description, so the agent loads it when 
 
 ## Verify
 
-- The `openboard` server is enabled where Cursor lists its MCP servers, and its eight tools (`board_list` to `board_layout`) appear among the agent's available tools.
+- The `openboard` server is enabled where Cursor lists its MCP servers, and its twelve tools (`board_list` to `board_undo`) appear among the agent's available tools.
 - If it does not start, open the Output panel, choose "MCP Logs", and run `openboard doctor` in the project.
 - Start the canvas with `openboard start` and ask the agent: "Show me the outline of the board."
 

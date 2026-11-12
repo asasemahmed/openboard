@@ -15,6 +15,9 @@ const CommandPalette = lazy(() =>
 const ShortcutsSheet = lazy(() =>
   import('./ShortcutsSheet.js').then((m) => ({ default: m.ShortcutsSheet })),
 );
+const SettingsDialog = lazy(() =>
+  import('./SettingsDialog.js').then((m) => ({ default: m.SettingsDialog })),
+);
 const ConnectAgentDialog = lazy(() =>
   import('./ConnectAgentDialog.js').then((m) => ({ default: m.ConnectAgentDialog })),
 );
@@ -54,6 +57,9 @@ export function LazyDialogs() {
       </OnceOpened>
       <OnceOpened store={ui.connectAgent} isOpen={ui.connectAgent.get}>
         <ConnectAgentDialog />
+      </OnceOpened>
+      <OnceOpened store={ui.settings} isOpen={ui.settings.get}>
+        <SettingsDialog />
       </OnceOpened>
       <OnceOpened store={ui.newBoard} isOpen={ui.newBoard.get}>
         <NewBoard />

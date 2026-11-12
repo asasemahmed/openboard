@@ -24,7 +24,7 @@ export const IDENTITY_COLORS = [
 ] as const;
 
 const KEY = 'identity';
-export const DEFAULT_NAME = 'You';
+export const DEFAULT_NAME = 'Guest';
 export const NAME_MAX = 80;
 
 function isIdentity(value: unknown): value is Identity {

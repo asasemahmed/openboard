@@ -6,12 +6,13 @@ import './styles/shell.css';
 import './styles/canvas.css';
 import './styles/nodes.css';
 import './styles/panels.css';
+import './styles/trust.css';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.js';
-import { registerBuiltinDecorations } from './nodes/builtinDecorations.js';
+import { registerTrust } from './trust.js';
 
-registerBuiltinDecorations();
+registerTrust();
 
 const root = document.getElementById('root');
 if (!root) throw new Error('missing #root');

@@ -1,29 +1,9 @@
 import { LIMITS } from '@openboard/core';
 import { useEffect, useRef, useState } from 'react';
+import { useMarkdownHtml } from '../ui/Markdown.js';
 import { useDraft } from './useDraft.js';
 
 const SAVE_AFTER_MS = 800;
-
-type Renderer = (source: string) => string;
-let renderer: Renderer | null = null;
-let loading: Promise<Renderer> | null = null;
-
-/** The markdown renderer is loaded on first use, so it stays out of the initial bundle. */
-function loadRenderer(): Promise<Renderer> {
-  loading ??= import('../lib/markdown.js').then((m) => {
-    renderer = m.renderMarkdown;
-    return m.renderMarkdown;
-  });
-  return loading;
-}
-
-function useMarkdownHtml(source: string): string {
-  const [, setLoaded] = useState(renderer !== null);
-  useEffect(() => {
-    if (!renderer && source) void loadRenderer().then(() => setLoaded(true));
-  }, [source]);
-  return renderer && source ? renderer(source) : '';
-}
 
 /** Markdown body with Write / Preview. Saves after a pause in typing and on blur. */
 export function BodyEditor({

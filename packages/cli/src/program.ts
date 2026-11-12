@@ -9,6 +9,8 @@ import { doctorCommand } from './commands/doctor.js';
 import { exportCommand } from './commands/export.js';
 import { initCommand } from './commands/init.js';
 import { mcpCommand } from './commands/mcp.js';
+import { policyCommand, policySetCommand, policyUnsetCommand } from './commands/policy.js';
+import { decideCommand, historyCommand, proposalsCommand, undoCommand } from './commands/review.js';
 import { startCommand } from './commands/start.js';
 import { statusCommand } from './commands/status.js';
 import { stopCommand } from './commands/stop.js';
@@ -24,7 +26,17 @@ Examples:
   $ openboard mcp                      serve the boards to an agent over stdio
   $ openboard export --format outline  print the shape of the main board
   $ openboard status --json            machine-readable status for scripts
+  $ openboard proposals                what agents are waiting to have reviewed
+  $ openboard policy set review_all    hold every agent change for review
 `;
+
+function parseLimit(value: string): number {
+  const limit = Number(value);
+  if (!Number.isInteger(limit) || limit < 1 || limit > 200) {
+    throw new InvalidArgumentError('must be a whole number from 1 to 200');
+  }
+  return limit;
+}
 
 function parsePort(value: string): number {
   const port = Number(value);
@@ -161,6 +173,105 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
     .addOption(rootOption())
     .option('--board <id>', 'board used when a tool call names none')
     .action(action((opts: { root?: string; board?: string }) => mcpCommand(io, opts)));
+
+  const policy = program
+    .command('policy')
+    .description("show or change the project's review policy for agents")
+    // `--root` after `set` or `unset` belongs to them; before, to `policy`.
+    .enablePositionalOptions()
+    .addOption(rootOption())
+    .option('--json', 'print JSON')
+    .action(action((opts: { root?: string; json?: boolean }) => policyCommand(io, opts)));
+  policy
+    .command('set')
+    .description("set the default mode, or one agent's mode with --agent")
+    .argument('<mode>', 'auto, review_destructive, review_all or locked')
+    .addOption(rootOption())
+    .option('--agent <id>', 'set the mode of this agent only')
+    .action(
+      action((mode: string, opts: { root?: string; agent?: string }) =>
+        policySetCommand(io, mode, { ...opts, root: opts.root ?? policy.opts().root }),
+      ),
+    );
+  policy
+    .command('unset')
+    .description("remove an agent's own mode, so it uses the default again")
+    .addOption(rootOption())
+    .requiredOption('--agent <id>', 'the agent')
+    .action(
+      action((opts: { root?: string; agent?: string }) =>
+        policyUnsetCommand(io, { ...opts, root: opts.root ?? policy.opts().root }),
+      ),
+    );
+
+  program
+    .command('proposals')
+    .description('list agent changes waiting for review (needs the running server)')
+    .argument('[board]', 'board id (default: the only board, or "main")')
+    .addOption(rootOption())
+    .option('--all', 'also list decided and withdrawn proposals')
+    .option('--json', 'print JSON')
+    .action(
+      action((board: string | undefined, opts: { root?: string; all?: boolean; json?: boolean }) =>
+        proposalsCommand(io, board, opts),
+      ),
+    );
+
+  for (const verb of ['accept', 'reject'] as const) {
+    program
+      .command(verb)
+      .description(`${verb} a proposal, in whole or in part (needs the running server)`)
+      .argument('<proposalId>', 'the proposal, as `openboard proposals` lists it')
+      .argument('[board]', 'board id (default: the only board, or "main")')
+      .addOption(rootOption())
+      .option('--items <list>', `item numbers to ${verb}, like 0,2 (default: every pending item)`)
+      .option('--note <text>', 'a note for the agent; it reaches the agent in its inbox')
+      .option('--json', 'print the proposal as JSON')
+      .action(
+        action(
+          (
+            proposalId: string,
+            board: string | undefined,
+            opts: { root?: string; items?: string; note?: string; json?: boolean },
+          ) => decideCommand(io, verb, proposalId, board, opts),
+        ),
+      );
+  }
+
+  program
+    .command('history')
+    .description('list recent batches of changes, newest first (needs the running server)')
+    .argument('[board]', 'board id (default: the only board, or "main")')
+    .addOption(rootOption())
+    .option('--limit <n>', 'how many batches, 1 to 200 (default: 20)', parseLimit)
+    .option('--actor <id>', 'only batches by this actor')
+    .option('--json', 'print JSON')
+    .action(
+      action(
+        (
+          board: string | undefined,
+          opts: { root?: string; limit?: number; actor?: string; json?: boolean },
+        ) => historyCommand(io, board, opts),
+      ),
+    );
+
+  program
+    .command('undo')
+    .description(
+      "undo a batch, or an actor's last (or every) batch; never overwrites later changes (needs the running server)",
+    )
+    .usage('<batchId> [board] | --actor <id> [--all] [board]')
+    .argument('[args...]', '<batchId> [board], or with --actor just [board]')
+    .addOption(rootOption())
+    .option('--actor <id>', "undo this actor's most recent batch")
+    .option('--all', 'with --actor: undo all of its batches that are still in place')
+    .option('--json', 'print JSON')
+    .action(
+      action(
+        (args: string[], opts: { root?: string; actor?: string; all?: boolean; json?: boolean }) =>
+          undoCommand(io, args, opts),
+      ),
+    );
 
   program
     .command('connect')

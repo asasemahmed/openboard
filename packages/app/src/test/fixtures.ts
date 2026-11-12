@@ -1,4 +1,4 @@
-import { type Actor, BoardDoc, type Op } from '@openboard/core';
+import { type Actor, BoardDoc, buildProposal, type Op, type Proposal } from '@openboard/core';
 import { vi } from 'vitest';
 import type { ApiClient } from '../lib/api.js';
 
@@ -77,6 +77,40 @@ export function fakeApi(overrides: Partial<ApiClient> = {}): ApiClient {
       truncated: false,
     })),
     info: vi.fn(async () => null),
+    decideProposal: vi.fn(),
+    answerAsk: vi.fn(),
+    cancelAsk: vi.fn(),
+    history: vi.fn(async (boardId: string) => ({
+      boardId,
+      cursor: 0,
+      batches: [],
+      text: '',
+      tokens: 0,
+      truncated: false,
+    })),
+    undo: vi.fn(),
+    getConfig: vi.fn(async () => ({
+      version: 1 as const,
+      policy: { default: 'review_destructive' as const, agents: {} },
+    })),
+    setConfig: vi.fn(async (config) => config),
     ...overrides,
   };
+}
+
+/** A pending proposal by `AGENT` for `ops` on `doc`, stored in the document. */
+export function propose(
+  doc: BoardDoc,
+  ops: Op[],
+  verdicts: Array<'free' | 'review' | 'denied'>,
+  opts: { reason?: string; now?: Date } = {},
+): Proposal {
+  const proposal = buildProposal(doc.toJSON(), ops, {
+    actor: AGENT,
+    verdicts,
+    ...(opts.reason ? { reason: opts.reason } : {}),
+    ...(opts.now ? { now: opts.now } : {}),
+  });
+  doc.putProposal(proposal, doc.origin(AGENT.id, 'ops'));
+  return proposal;
 }

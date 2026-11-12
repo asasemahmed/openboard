@@ -1,20 +1,46 @@
 /**
  * One live board: its document, the store that persists it, its change feed,
- * and the presence of everyone connected to it.
+ * its history and inbox, and the presence of everyone connected to it.
+ *
+ * Every transaction on the document, from any path (the agent API, a browser
+ * over sync, a file reload), passes one observer here, which numbers it in the
+ * change feed, records it in the history, and turns comments and answers into
+ * inbox items.
  */
-import { type Actor, ActorSchema, BoardDoc, type Presence, type TxOrigin } from '@openboard/core';
+import {
+  type Actor,
+  ActorSchema,
+  type Ask,
+  BoardDoc,
+  type Comment,
+  type DocEvent,
+  MENTION_AGENTS,
+  type Op,
+  type Presence,
+  type TxOrigin,
+} from '@openboard/core';
 import { Awareness } from 'y-protocols/awareness';
+import { ConfigStore } from './config.js';
 import { ChangeFeed } from './feed.js';
+import { errorMessage } from './fsutil.js';
+import { History, type TxContext } from './history.js';
+import { Inbox } from './inbox.js';
 import { Mutex } from './mutex.js';
 import { BoardStore, type FileStatus, loadBoard, type StoreFiles } from './store.js';
 
 export interface RoomFiles extends StoreFiles {
   changes: string;
+  history: string;
+  inbox: string;
 }
 
 export interface RoomOptions {
   log?: (line: string) => void;
   debounceMs?: number;
+  /** Project settings shared by every board; a private default store when omitted. */
+  config?: ConfigStore;
+  /** Called (debounced) when nodes or edges that pending proposals touch have changed. */
+  onProposalsStale?: (room: Room) => Promise<void>;
 }
 
 /** A human's current selection, as published over awareness. */
@@ -25,24 +51,39 @@ export interface HumanSelection {
   at: string;
 }
 
+const REFRESH_DELAY_MS = 50;
+
 export class Room {
   readonly awareness: Awareness;
-  /** Serializes agent writes (apply and layout) on this board. */
+  /** Serializes agent writes (apply, layout, decisions, undo) on this board. */
   readonly lock = new Mutex();
   /** Actors seen on this board's connections and sessions, for labelling the change feed. */
   readonly knownActors = new Map<string, Actor>();
-  private readonly detachFeed: () => void;
+  readonly config: ConfigStore;
+  private readonly detachDoc: () => void;
+  private context: TxContext | null = null;
+  private readonly askStatus = new Map<string, Ask['status']>();
+  private readonly askWaiters = new Map<string, Set<() => void>>();
+  private refreshTimer: NodeJS.Timeout | null = null;
+  private closed = false;
+  private readonly log: (line: string) => void;
 
   private constructor(
     readonly id: string,
     readonly doc: BoardDoc,
     readonly store: BoardStore,
     readonly feed: ChangeFeed,
+    readonly history: History,
+    readonly inbox: Inbox,
+    private readonly opts: RoomOptions,
   ) {
+    this.log = opts.log ?? (() => {});
+    this.config = opts.config ?? new ConfigStore('', this.log);
     this.awareness = new Awareness(doc.ydoc);
     // The server itself has no presence; only connected clients do.
     this.awareness.setLocalState(null);
-    this.detachFeed = feed.attach(doc);
+    for (const ask of doc.asks()) this.askStatus.set(ask.id, ask.status);
+    this.detachDoc = doc.observe((event) => this.observe(event));
   }
 
   /** Open a board that exists on disk, or return null when it does not. */
@@ -50,10 +91,12 @@ export class Room {
     const loaded = await loadBoard(files);
     if (!loaded) return null;
     const feed = await ChangeFeed.open(files.changes, { log: opts.log });
+    const history = await History.open(files.history, { log: opts.log });
+    const inbox = await Inbox.open(files.inbox, { log: opts.log });
     const store = new BoardStore(loaded.doc, files, loaded, opts);
-    const room = new Room(id, loaded.doc, store, feed);
+    const room = new Room(id, loaded.doc, store, feed, history, inbox, opts);
     // The file changed while the server was not running: catch up, and let the
-    // feed record what changed.
+    // feed and history record what changed.
     if (loaded.reconcileTo) loaded.doc.reconcile(loaded.reconcileTo, room.fileOrigin);
     return room;
   }
@@ -67,8 +110,10 @@ export class Room {
   ): Promise<Room> {
     await BoardStore.discardSnapshot(files);
     const feed = await ChangeFeed.open(files.changes, { log: opts.log });
+    const history = await History.open(files.history, { log: opts.log });
+    const inbox = await Inbox.open(files.inbox, { log: opts.log });
     const store = new BoardStore(doc, files, { fileText: null }, opts);
-    const room = new Room(id, doc, store, feed);
+    const room = new Room(id, doc, store, feed, history, inbox, opts);
     await store.writeNow();
     return room;
   }
@@ -85,9 +130,51 @@ export class Room {
     return this.doc.origin('system', 'file');
   }
 
+  /**
+   * Run `write` (which makes at most a few transactions) with `context`
+   * attached to them, so the history and the feed know the batch id, reason,
+   * proposal or undone batch.
+   */
+  withContext<T>(context: TxContext, write: () => T): T {
+    const previous = this.context;
+    this.context = context;
+    try {
+      return write();
+    } finally {
+      this.context = previous;
+    }
+  }
+
   /** Actor labels for rendering: the board's registry plus everyone seen live. */
   actors(): Record<string, Actor> {
     return { ...Object.fromEntries(this.knownActors), ...this.doc.toJSON().actors };
+  }
+
+  /** The actor with this id, as far as the board knows it. */
+  actorFor(id: string): Actor {
+    return this.actors()[id] ?? { id, kind: 'agent', name: id };
+  }
+
+  /**
+   * Agents that have acted on this board: authors in its registry, plus agents
+   * seen live that have history, proposals, questions or comments here.
+   */
+  agentIds(): string[] {
+    const registry = this.doc.toJSON().actors;
+    const ids = new Set(
+      Object.values(registry)
+        .filter((actor) => actor.kind === 'agent')
+        .map((actor) => actor.id),
+    );
+    const acted = new Set<string>();
+    for (const record of this.history.all()) acted.add(record.batch.actor);
+    for (const p of this.doc.proposals()) acted.add(p.author);
+    for (const a of this.doc.asks()) acted.add(a.author);
+    for (const c of this.doc.comments()) acted.add(c.author);
+    for (const actor of this.knownActors.values()) {
+      if (actor.kind === 'agent' && acted.has(actor.id)) ids.add(actor.id);
+    }
+    return [...ids].sort();
   }
 
   /** The most recent non-empty selection published by a human, or null. */
@@ -100,17 +187,208 @@ export class Room {
     return best;
   }
 
+  /**
+   * Resolve once the question is no longer open, after `ms`, when `signal`
+   * aborts, or when the room closes, whichever comes first. Never rejects.
+   */
+  waitForAsk(askId: string, ms: number, signal?: AbortSignal): Promise<void> {
+    if (this.closed || this.doc.getAsk(askId)?.status !== 'open' || ms <= 0 || signal?.aborted) {
+      return Promise.resolve();
+    }
+    return new Promise<void>((resolve) => {
+      let waiters = this.askWaiters.get(askId);
+      if (!waiters) {
+        waiters = new Set();
+        this.askWaiters.set(askId, waiters);
+      }
+      const done = () => {
+        clearTimeout(timer);
+        signal?.removeEventListener('abort', done);
+        const set = this.askWaiters.get(askId);
+        set?.delete(done);
+        if (set?.size === 0) this.askWaiters.delete(askId);
+        resolve();
+      };
+      const timer = setTimeout(done, ms);
+      signal?.addEventListener('abort', done, { once: true });
+      waiters.add(done);
+    });
+  }
+
+  /** How many long-polls are waiting on questions; for tests and diagnostics. */
+  get waiting(): number {
+    let n = 0;
+    for (const set of this.askWaiters.values()) n += set.size;
+    return n;
+  }
+
   async flush(): Promise<void> {
     await this.store.flush();
     await this.feed.flush();
+    await this.history.flush();
+    await this.inbox.flush();
   }
 
   async close(): Promise<void> {
+    this.closed = true;
+    if (this.refreshTimer) clearTimeout(this.refreshTimer);
+    this.refreshTimer = null;
+    for (const set of [...this.askWaiters.values()]) for (const done of [...set]) done();
     await this.store.close();
     await this.feed.flush();
-    this.detachFeed();
+    await this.history.flush();
+    await this.inbox.flush();
+    this.detachDoc();
     this.awareness.destroy();
   }
+
+  // ── The observer ───────────────────────────────────────────────────────────
+
+  private observe(event: DocEvent): void {
+    const ctx = this.context;
+    const pending = this.history.begin(event, ctx);
+    const tag: { reason?: string; batchId?: string } = {};
+    const reason = pending?.record?.batch.reason ?? ctx?.reason;
+    if (reason !== undefined) tag.reason = reason;
+    if (pending) tag.batchId = pending.id;
+    this.feed.record(event, tag);
+    if (pending) this.history.commit(pending, event, ctx, this.feed.cursor);
+
+    try {
+      if (event.comments && event.origin?.source !== 'undo') {
+        for (const id of event.comments) {
+          const state = event.states?.comments[id];
+          if (state && state.before === null && state.after) this.notifyComment(state.after);
+        }
+      }
+      if (event.asks) this.asksChanged(event.asks);
+      if (event.states) this.maybeRefresh(event);
+    } catch (error) {
+      this.log(`board "${this.id}": ${errorMessage(error)}`);
+    }
+  }
+
+  private name(id: string): string {
+    return this.actors()[id]?.name ?? id;
+  }
+
+  private where(comment: Comment): string {
+    if (comment.nodeId === undefined) return 'on the board';
+    const node = this.doc.storedNode(comment.nodeId);
+    return node ? `on ${JSON.stringify(node.title)}` : 'on a removed node';
+  }
+
+  private notifyComment(comment: Comment): void {
+    const recipients = new Map<string, 'mention' | 'reply'>();
+    for (const mention of comment.mentions ?? []) {
+      if (mention === MENTION_AGENTS)
+        for (const id of this.agentIds()) recipients.set(id, 'mention');
+      else if (ActorSchema.shape.id.safeParse(mention).success) recipients.set(mention, 'mention');
+    }
+    const threadAuthors = new Set(
+      this.doc
+        .comments()
+        .filter((c) => c.thread === comment.thread && c.id !== comment.id)
+        .map((c) => c.author),
+    );
+    for (const author of threadAuthors)
+      if (!recipients.has(author)) recipients.set(author, 'reply');
+    const node = comment.nodeId === undefined ? undefined : this.doc.storedNode(comment.nodeId);
+    if (node && !recipients.has(node.createdBy)) recipients.set(node.createdBy, 'reply');
+    recipients.delete(comment.author);
+
+    const from = this.name(comment.author);
+    const where = this.where(comment);
+    for (const [to, kind] of recipients) {
+      let summary: string;
+      if (kind === 'mention') summary = `${from} mentioned you ${where}`;
+      else if (threadAuthors.has(to))
+        summary = `${from} replied in a thread you took part in ${where}`;
+      else summary = `${from} commented ${where}, which you created`;
+      const item: Parameters<Inbox['deliver']>[1] = {
+        kind,
+        from: comment.author,
+        summary,
+        body: comment.body,
+        commentId: comment.id,
+        thread: comment.thread,
+        at: comment.createdAt,
+      };
+      if (comment.nodeId !== undefined) item.nodeId = comment.nodeId;
+      this.inbox.deliver(to, item);
+    }
+  }
+
+  private asksChanged(ids: string[]): void {
+    for (const id of ids) {
+      const ask = this.doc.getAsk(id);
+      const previous = this.askStatus.get(id);
+      if (ask) this.askStatus.set(id, ask.status);
+      else this.askStatus.delete(id);
+      if (ask && previous !== 'answered' && ask.status === 'answered' && ask.answer) {
+        const by = ask.answer.by;
+        if (by !== ask.author) {
+          const answer = [ask.answer.option, ask.answer.text].filter(Boolean).join(' — ');
+          this.inbox.deliver(ask.author, {
+            kind: 'answer',
+            from: by,
+            summary: `${this.name(by)} answered your question ${JSON.stringify(ask.question.slice(0, 80))}`,
+            body: answer,
+            askId: ask.id,
+            at: ask.answer.at,
+          });
+        }
+      }
+      if (!ask || ask.status !== 'open') {
+        for (const done of [...(this.askWaiters.get(id) ?? [])]) done();
+      }
+    }
+  }
+
+  private maybeRefresh(event: DocEvent): void {
+    if (!this.opts.onProposalsStale || this.closed) return;
+    const states = event.states;
+    if (!states) return;
+    const touched = new Set([...Object.keys(states.nodes), ...Object.keys(states.edges)]);
+    if (touched.size === 0) return;
+    const affected = this.doc
+      .proposals()
+      .some(
+        (p) =>
+          p.status === 'pending' &&
+          p.items.some((item) => item.status === 'pending' && opTouches(item.op, touched)),
+      );
+    if (!affected || this.refreshTimer) return;
+    this.refreshTimer = setTimeout(() => {
+      this.refreshTimer = null;
+      if (this.closed) return;
+      const refresh = this.opts.onProposalsStale;
+      if (!refresh) return;
+      this.lock
+        .run(() => refresh(this))
+        .catch((error: unknown) => this.log(`proposals on "${this.id}": ${errorMessage(error)}`));
+    }, REFRESH_DELAY_MS);
+  }
+}
+
+/** Whether an operation names any of `ids` (its target, parent, or edge ends). */
+function opTouches(op: Op, ids: ReadonlySet<string>): boolean {
+  const named: string[] = [];
+  switch (op.op) {
+    case 'add_node':
+      if (op.node.parent) named.push(op.node.parent);
+      break;
+    case 'update_node':
+      named.push(op.id);
+      if (typeof op.patch.parent === 'string') named.push(op.patch.parent);
+      break;
+    case 'add_edge':
+      named.push(op.edge.source, op.edge.target);
+      break;
+    default:
+      named.push(op.id);
+  }
+  return named.some((id) => ids.has(id));
 }
 
 const stringList = (value: unknown): string[] =>

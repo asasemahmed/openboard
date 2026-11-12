@@ -222,6 +222,144 @@ export function createHttpApp(ctx: HttpContext): Hono<{ Variables: { actor: Acto
     c.json(await api(c).layout(c.req.param('id'), await jsonBody(c))),
   );
 
+  // ── Settings ───────────────────────────────────────────────────────────────
+  // "People only" routes trust x-openboard-actor-kind; see the note in service.ts.
+
+  app.get('/api/config', async (c) => c.json(await api(c).getConfig()));
+
+  app.put('/api/config', async (c) =>
+    c.json(
+      await api(c).setConfig(
+        (await jsonBody(c)) as unknown as Parameters<LocalBoardApi['setConfig']>[0],
+      ),
+    ),
+  );
+
+  // ── Review ─────────────────────────────────────────────────────────────────
+
+  app.get('/api/boards/:id/proposals', async (c) => {
+    const status = c.req.query('status');
+    const maxTokens = c.req.query('maxTokens');
+    const options: Record<string, unknown> = {};
+    if (status !== undefined) options.status = status;
+    if (maxTokens !== undefined) options.maxTokens = Number(maxTokens);
+    return c.json(
+      await api(c).proposals(
+        c.req.param('id'),
+        options as Parameters<LocalBoardApi['proposals']>[1],
+      ),
+    );
+  });
+
+  app.post('/api/boards/:id/proposals/:pid/decide', async (c) =>
+    c.json(
+      await api(c).decideProposal(
+        c.req.param('id'),
+        c.req.param('pid'),
+        (await jsonBody(c)) as unknown as Parameters<LocalBoardApi['decideProposal']>[2],
+      ),
+    ),
+  );
+
+  app.post('/api/boards/:id/proposals/:pid/withdraw', async (c) =>
+    c.json(await api(c).withdrawProposal(c.req.param('id'), c.req.param('pid'))),
+  );
+
+  // ── History ────────────────────────────────────────────────────────────────
+
+  app.post('/api/boards/:id/history', async (c) =>
+    c.json(await api(c).history(c.req.param('id'), await jsonBody(c))),
+  );
+
+  app.post('/api/boards/:id/undo', async (c) =>
+    c.json(
+      await api(c).undo(
+        c.req.param('id'),
+        (await jsonBody(c)) as unknown as Parameters<LocalBoardApi['undo']>[1],
+      ),
+    ),
+  );
+
+  // ── Conversation ───────────────────────────────────────────────────────────
+
+  app.post('/api/boards/:id/comments', async (c) =>
+    c.json(
+      await api(c).comment(
+        c.req.param('id'),
+        (await jsonBody(c)) as unknown as Parameters<LocalBoardApi['comment']>[1],
+      ),
+      201,
+    ),
+  );
+
+  app.post('/api/boards/:id/threads/:thread/resolve', async (c) => {
+    const body = await jsonBody(c);
+    const resolved = body.resolved === undefined ? true : body.resolved;
+    return c.json(
+      await api(c).resolveThread(c.req.param('id'), c.req.param('thread'), resolved as boolean),
+    );
+  });
+
+  app.post('/api/boards/:id/inbox', async (c) =>
+    c.json(await api(c).inbox(c.req.param('id'), await jsonBody(c))),
+  );
+
+  // ── Questions ──────────────────────────────────────────────────────────────
+
+  app.post('/api/boards/:id/asks', async (c) =>
+    c.json(
+      await api(c).ask(
+        c.req.param('id'),
+        (await jsonBody(c)) as unknown as Parameters<LocalBoardApi['ask']>[1],
+      ),
+      201,
+    ),
+  );
+
+  app.get('/api/boards/:id/asks', async (c) => {
+    const status = c.req.query('status');
+    const maxTokens = c.req.query('maxTokens');
+    const options: Record<string, unknown> = {};
+    if (status !== undefined) options.status = status;
+    if (maxTokens !== undefined) options.maxTokens = Number(maxTokens);
+    return c.json(
+      await api(c).asks(c.req.param('id'), options as Parameters<LocalBoardApi['asks']>[1]),
+    );
+  });
+
+  /**
+   * Long-poll with `?waitMs=`. Node's request timeout only covers receiving the
+   * request, so it never cuts the wait; a client that disconnects aborts the
+   * request signal, which ends the wait and releases its waiter.
+   */
+  app.get('/api/boards/:id/asks/:aid', async (c) => {
+    const raw = c.req.query('waitMs');
+    const waitMs = raw === undefined ? undefined : Number(raw);
+    if (waitMs !== undefined && !(Number.isInteger(waitMs) && waitMs >= 0)) {
+      throw new OpenBoardError('invalid_request', 'waitMs must be a whole number of milliseconds');
+    }
+    return c.json(
+      await api(c).askResult(c.req.param('id'), c.req.param('aid'), {
+        ...(waitMs !== undefined ? { waitMs } : {}),
+        signal: c.req.raw.signal,
+      }),
+    );
+  });
+
+  app.post('/api/boards/:id/asks/:aid/answer', async (c) =>
+    c.json(
+      await api(c).answerAsk(
+        c.req.param('id'),
+        c.req.param('aid'),
+        (await jsonBody(c)) as unknown as Parameters<LocalBoardApi['answerAsk']>[2],
+      ),
+    ),
+  );
+
+  app.post('/api/boards/:id/asks/:aid/cancel', async (c) =>
+    c.json(await api(c).cancelAsk(c.req.param('id'), c.req.param('aid'))),
+  );
+
   app.notFound(async (c) => {
     const pathname = c.req.path;
     const method = c.req.method;

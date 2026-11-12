@@ -116,62 +116,44 @@ function isUnavailable(error: unknown): boolean {
 
 /**
  * A `BoardApi` over HTTP that survives the server going away: when a call
- * finds the server unreachable, it makes sure a server runs again (starting
- * one if needed), reconnects, and retries that call once.
+ * fails because the server cannot be reached, the server is ensured again and
+ * the call is retried once against it.
+ *
+ * It wraps every method of the client rather than listing them, so a method
+ * added to `BoardApi` is covered without touching this file.
  */
-export class ReconnectingApi implements BoardApi {
-  readonly actor: Actor;
-  #client: OpenBoardClient;
-  readonly #ensure: () => Promise<ServerInfo>;
+export function reconnectingApi(
+  actor: Actor,
+  server: ServerInfo,
+  ensure: () => Promise<ServerInfo>,
+): BoardApi {
+  let client: OpenBoardClient = connect({ url: server.url, actor });
 
-  constructor(actor: Actor, server: ServerInfo, ensure: () => Promise<ServerInfo>) {
-    this.actor = actor;
-    this.#client = connect({ url: server.url, actor });
-    this.#ensure = ensure;
-  }
-
-  async #call<T>(fn: (client: OpenBoardClient) => Promise<T>): Promise<T> {
+  const call = async (name: string | symbol, args: unknown[]): Promise<unknown> => {
+    // The client is fully typed; indexing it by a runtime method name is not.
+    const invoke = (target: OpenBoardClient) =>
+      (Reflect.get(target, name) as (...a: unknown[]) => Promise<unknown>).apply(target, args);
     try {
-      return await fn(this.#client);
+      return await invoke(client);
     } catch (error) {
       if (!isUnavailable(error)) throw error;
       let info: ServerInfo;
       try {
-        info = await this.#ensure();
+        info = await ensure();
       } catch (reason) {
         const message = reason instanceof Error ? reason.message : String(reason);
         throw new OpenBoardError('unavailable', message);
       }
-      this.#client = connect({ url: info.url, actor: this.actor });
-      return fn(this.#client);
+      client = connect({ url: info.url, actor });
+      return invoke(client);
     }
-  }
+  };
 
-  listBoards(): Promise<BoardSummary[]> {
-    return this.#call((c) => c.listBoards());
-  }
-  createBoard(input: CreateBoardInput): Promise<BoardSummary> {
-    return this.#call((c) => c.createBoard(input));
-  }
-  getBoard(boardId: string): Promise<Board> {
-    return this.#call((c) => c.getBoard(boardId));
-  }
-  outline(boardId: string, options?: OutlineOptions): Promise<Outline> {
-    return this.#call((c) => c.outline(boardId, options));
-  }
-  read(boardId: string, query?: ReadQuery): Promise<ReadResult> {
-    return this.#call((c) => c.read(boardId, query));
-  }
-  changes(boardId: string, options: ChangesOptions): Promise<ChangesResult> {
-    return this.#call((c) => c.changes(boardId, options));
-  }
-  apply(boardId: string, request: ApplyRequest): Promise<ApplyResult> {
-    return this.#call((c) => c.apply(boardId, request));
-  }
-  selection(boardId: string): Promise<SelectionResult> {
-    return this.#call((c) => c.selection(boardId));
-  }
-  layout(boardId: string, request?: LayoutRequest): Promise<LayoutResult> {
-    return this.#call((c) => c.layout(boardId, request));
-  }
+  return new Proxy({ actor } as BoardApi, {
+    get(target, name) {
+      if (name === 'actor') return target.actor;
+      if (typeof Reflect.get(client, name) !== 'function') return undefined;
+      return (...args: unknown[]) => call(name, args);
+    },
+  });
 }

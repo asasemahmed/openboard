@@ -129,6 +129,108 @@ describe('routes', () => {
       path: '/api/boards/main/layout',
       body: { scope: 'all' },
     },
+    {
+      name: 'proposals',
+      call: (a) => a.proposals('main', { status: 'all', maxTokens: 500 }),
+      method: 'GET',
+      path: '/api/boards/main/proposals?status=all&maxTokens=500',
+    },
+    {
+      name: 'proposals without options',
+      call: (a) => a.proposals('main'),
+      method: 'GET',
+      path: '/api/boards/main/proposals',
+    },
+    {
+      name: 'decideProposal',
+      call: (a) => a.decideProposal('main', 'p_1', { action: 'accept', items: [0], note: 'ok' }),
+      method: 'POST',
+      path: '/api/boards/main/proposals/p_1/decide',
+      body: { action: 'accept', items: [0], note: 'ok' },
+    },
+    {
+      name: 'withdrawProposal',
+      call: (a) => a.withdrawProposal('main', 'p_1'),
+      method: 'POST',
+      path: '/api/boards/main/proposals/p_1/withdraw',
+      body: {},
+    },
+    {
+      name: 'history',
+      call: (a) => a.history('main', { limit: 5, actor: 'bot' }),
+      method: 'POST',
+      path: '/api/boards/main/history',
+      body: { limit: 5, actor: 'bot' },
+    },
+    {
+      name: 'undo',
+      call: (a) => a.undo('main', { actorId: 'agent-1', scope: 'last' }),
+      method: 'POST',
+      path: '/api/boards/main/undo',
+      body: { actorId: 'agent-1', scope: 'last' },
+    },
+    {
+      name: 'comment',
+      call: (a) => a.comment('main', { body: 'hi', nodeId: 'n_1', mentions: ['agents'] }),
+      method: 'POST',
+      path: '/api/boards/main/comments',
+      body: { body: 'hi', nodeId: 'n_1', mentions: ['agents'] },
+    },
+    {
+      name: 'resolveThread',
+      call: (a) => a.resolveThread('main', 'c_1', false),
+      method: 'POST',
+      path: '/api/boards/main/threads/c_1/resolve',
+      body: { resolved: false },
+    },
+    {
+      name: 'inbox',
+      call: (a) => a.inbox('main', { since: 3, peek: true }),
+      method: 'POST',
+      path: '/api/boards/main/inbox',
+      body: { since: 3, peek: true },
+    },
+    {
+      name: 'ask',
+      call: (a) => a.ask('main', { question: 'Which?', options: ['a', 'b'] }),
+      method: 'POST',
+      path: '/api/boards/main/asks',
+      body: { question: 'Which?', options: ['a', 'b'] },
+    },
+    {
+      name: 'asks',
+      call: (a) => a.asks('main', { status: 'all' }),
+      method: 'GET',
+      path: '/api/boards/main/asks?status=all',
+    },
+    {
+      name: 'askResult',
+      call: (a) => a.askResult('main', 'a_1', { waitMs: 1000 }),
+      method: 'GET',
+      path: '/api/boards/main/asks/a_1?waitMs=1000',
+    },
+    {
+      name: 'answerAsk',
+      call: (a) => a.answerAsk('main', 'a_1', { option: 'a' }),
+      method: 'POST',
+      path: '/api/boards/main/asks/a_1/answer',
+      body: { option: 'a' },
+    },
+    {
+      name: 'cancelAsk',
+      call: (a) => a.cancelAsk('main', 'a_1'),
+      method: 'POST',
+      path: '/api/boards/main/asks/a_1/cancel',
+      body: {},
+    },
+    { name: 'getConfig', call: (a) => a.getConfig(), method: 'GET', path: '/api/config' },
+    {
+      name: 'setConfig',
+      call: (a) => a.setConfig({ version: 1, policy: { default: 'auto', agents: {} } }),
+      method: 'PUT',
+      path: '/api/config',
+      body: { version: 1, policy: { default: 'auto', agents: {} } },
+    },
   ];
 
   for (const c of cases) {
@@ -194,7 +296,13 @@ describe('errors', () => {
   });
 
   it('maps every known code', async () => {
-    for (const code of ['board_exists', 'invalid_request', 'forbidden', 'conflict'] as const) {
+    for (const code of [
+      'board_exists',
+      'not_found',
+      'invalid_request',
+      'forbidden',
+      'conflict',
+    ] as const) {
       const { api } = client(() => json({ error: { code, message: code } }, 400));
       expect((await failure(api.listBoards())).code).toBe(code);
     }
@@ -249,6 +357,24 @@ describe('errors', () => {
     expect(error.message).toContain('http://127.0.0.1:4747/');
   });
 
+  it('gives a long-poll more time than it waits', async () => {
+    const { api } = client(
+      (_call, init) =>
+        new Promise<Response>((resolve, reject) => {
+          const timer = setTimeout(() => resolve(json({ id: 'a_1', status: 'open' })), 60);
+          init.signal?.addEventListener('abort', () => {
+            clearTimeout(timer);
+            reject(new Error('aborted'));
+          });
+        }),
+      20,
+    );
+    await expect(api.askResult('main', 'a_1', { waitMs: 50 })).resolves.toMatchObject({
+      status: 'open',
+    });
+    expect((await failure(api.askResult('main', 'a_1'))).code).toBe('unavailable');
+  });
+
   it('times out while reading a slow body', async () => {
     const { api } = client(
       (_call, init) =>
@@ -290,6 +416,9 @@ describe('retries', () => {
       (a: OpenBoardClient) => a.apply('main', { ops: [] }),
       (a: OpenBoardClient) => a.createBoard({ name: 'x' }),
       (a: OpenBoardClient) => a.layout('main'),
+      (a: OpenBoardClient) => a.undo('main', { batchId: 'b_1' }),
+      (a: OpenBoardClient) => a.inbox('main'),
+      (a: OpenBoardClient) => a.answerAsk('main', 'a_1', { text: 'x' }),
     ]) {
       const { api, calls } = client(() => {
         throw networkError('ECONNRESET');

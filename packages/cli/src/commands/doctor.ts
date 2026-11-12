@@ -1,6 +1,8 @@
 import { execFile } from 'node:child_process';
 import { existsSync, statSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { parseConfig } from '@openboard/core';
 import { connect } from '@openboard/sdk';
 import { type CliIo, println } from '../lib/io.js';
 import { type AppLocation, cliActor, locateApp, resolveRoot } from '../lib/project.js';
@@ -25,6 +27,31 @@ export interface DoctorOptions {
 }
 
 const MIN_NODE_MAJOR = 22;
+
+/** `.openboard/config.json`, when there is one: it must parse, or the server ignores it. */
+async function configCheck(root: string, file: string): Promise<Check | undefined> {
+  let text: string;
+  try {
+    text = await readFile(file, 'utf8');
+  } catch {
+    return undefined;
+  }
+  const rel = path.relative(root, file);
+  try {
+    const config = parseConfig(text);
+    const agents = Object.keys(config.policy.agents).length;
+    return {
+      status: 'ok',
+      label: `${rel} parses (agents default to ${config.policy.default}${agents ? `; ${agents} agent${agents === 1 ? ' has its' : 's have their'} own mode` : ''})`,
+    };
+  } catch (error) {
+    return {
+      status: 'fail',
+      label: `${rel}: ${error instanceof Error ? error.message : String(error)}`,
+      hint: 'fix the file (see `openboard policy --help`), or remove it to use the default policy; until then a running server keeps the last settings that parsed',
+    };
+  }
+}
 
 /** The MCP entry point loads and builds a server with its tools. */
 async function mcpCheck(): Promise<Check> {
@@ -129,6 +156,8 @@ export async function runChecks(io: CliIo, options: DoctorOptions = {}): Promise
             },
       );
     }
+    const config = await configCheck(root, paths.config);
+    if (config) checks.push(config);
   }
 
   const app = options.app ?? locateApp();

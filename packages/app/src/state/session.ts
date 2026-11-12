@@ -129,11 +129,15 @@ export function feedResolver(
         maxTokens: MAX_MAX_TOKENS,
       });
       cursor = result.cursor;
-      const out = new Map<string, string>();
+      const out = new Map<string, { actorId: string; batchId?: string }>();
       for (const entry of result.changes) {
         if (entry.kind !== 'node_removed' && entry.kind !== 'edge_removed') continue;
         const key = itemKey(entry.kind === 'node_removed' ? 'node' : 'edge', entry.id);
-        if (wanted.has(key)) out.set(key, entry.actor);
+        if (wanted.has(key))
+          out.set(key, {
+            actorId: entry.actor,
+            ...(entry.batchId ? { batchId: entry.batchId } : {}),
+          });
       }
       return out;
     },

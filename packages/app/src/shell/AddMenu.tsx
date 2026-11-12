@@ -22,8 +22,9 @@ export function AddMenu() {
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen(!open)}
+        aria-label="Add"
       >
-        Add
+        <span className="topbar-label">Add</span>
       </Button>
       <Popover anchor={anchor} open={open} onClose={() => setOpen(false)} role="menu" label="Add">
         <MenuList label="Add a node">

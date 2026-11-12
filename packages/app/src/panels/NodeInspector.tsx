@@ -5,9 +5,11 @@ import { CARD_TYPES, STATUS_META, typeMeta } from '../lib/nodeTypes.js';
 import { useSession } from '../state/context.js';
 import { Button } from '../ui/Button.js';
 import { BodyEditor } from './BodyEditor.js';
+import { FrameAccessField } from './FrameAccessField.js';
 import { Field, IdRow, Provenance, Section } from './fields.js';
 import { LinksEditor } from './LinksEditor.js';
 import { TagsEditor } from './TagsEditor.js';
+import { NodeComments } from './Threads.js';
 import { useDraft } from './useDraft.js';
 
 export function NodeInspector({ node }: { node: BoardNode }) {
@@ -107,6 +109,7 @@ export function NodeInspector({ node }: { node: BoardNode }) {
             <TagsEditor id={id} tags={node.tags ?? []} onChange={(tags) => patch({ tags })} />
           )}
         </Field>
+        {isFrame && <FrameAccessField node={node} onChange={(props) => patch({ props })} />}
       </Section>
 
       <Section title="Description">
@@ -116,6 +119,10 @@ export function NodeInspector({ node }: { node: BoardNode }) {
           body={node.body ?? ''}
           onSave={(body) => patch({ body })}
         />
+      </Section>
+
+      <Section title="Comments">
+        <NodeComments nodeId={node.id} />
       </Section>
 
       <Section title="Links">
