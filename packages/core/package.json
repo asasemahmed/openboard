@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Board schema, operations, validation, and serialization for OpenBoard.",
-  "license": "MIT",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",

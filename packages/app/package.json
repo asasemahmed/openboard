@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "description": "The OpenBoard web canvas.",
-  "license": "MIT",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

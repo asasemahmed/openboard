@@ -1,6 +1,8 @@
 # Contributing to OpenBoard
 
-OpenBoard is private while the foundation is built and will become a public, MIT-licensed project. Work as if it is already public.
+OpenBoard is private while the foundation is built and will become a public project under the [PolyForm Noncommercial License 1.0.0](LICENSE): free to use, change and share for personal and other noncommercial purposes. Work as if it is already public.
+
+By contributing you agree that your contribution is licensed under the same terms.
 
 ## Ground rules
 

@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "description": "The open canvas for AI agents.",
-  "license": "MIT",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "bin": {
     "openboard": "./dist/bin.js"
   },

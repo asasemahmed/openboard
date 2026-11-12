@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Evaluation harness: how well an agent uses an OpenBoard, scored on task success and token cost.",
-  "license": "MIT",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "bin": {
     "openboard-evals": "./dist/bin.js"
   },
