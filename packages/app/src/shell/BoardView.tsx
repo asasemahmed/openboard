@@ -12,10 +12,12 @@ import { useShortcuts } from '../canvas/useShortcuts.js';
 import { toActor } from '../lib/identity.js';
 import { LeftPanel, RightPanel } from '../panels/PanelSlot.js';
 import { SessionProvider, useMeta, useSession } from '../state/context.js';
+import { useStoreValue } from '../state/emitter.js';
 import { identity } from '../state/identity.js';
 import type { BoardSession } from '../state/session.js';
 import { ConfirmHost } from './ConfirmHost.js';
 import { LazyDialogs } from './LazyDialogs.js';
+import { ReplayView } from './ReplayView.js';
 import { TopBar } from './TopBar.js';
 
 function Workspace({ onlyRenderVisibleElements }: { onlyRenderVisibleElements: boolean }) {
@@ -42,9 +44,12 @@ function Workspace({ onlyRenderVisibleElements }: { onlyRenderVisibleElements: b
     [session],
   );
 
+  const replaying = useStoreValue(session.replay, () => session.replay.active);
+
   return (
     <ActionsProvider value={actions}>
-      <div className="workspace">
+      {replaying && <ReplayView />}
+      <div className="workspace" inert={replaying || undefined}>
         <TopBar />
         <div className="workspace-body">
           <LeftPanel />

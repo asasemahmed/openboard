@@ -50,6 +50,17 @@ function opList(indexes: number[]): string {
 /** The guidance after a refused batch, depending on what refused it. */
 function refusalAdvice(result: ApplyResult): string {
   const errors = result.errors ?? [];
+  const claimed = [...new Set(errors.filter((e) => e.code === 'claimed').map((e) => e.index))];
+  if (claimed.length > 0) {
+    const others = errors.some((e) => e.code !== 'claimed');
+    return [
+      `Nothing was applied. ${opList(claimed)} touch${claimed.length === 1 ? 'es' : ''} nodes another agent is working on (see above for who and until when). Do not retry in a loop.`,
+      'Pick other work, ask the holder with board_comment or the user with board_ask, and come back after the claim ends.',
+      others
+        ? 'Fix the other problems and send the batch without those ops.'
+        : 'You may send the batch again without those ops.',
+    ].join(' ');
+  }
   const locked = [...new Set(errors.filter((e) => e.code === 'forbidden').map((e) => e.index))];
   if (locked.length === 0) return 'Nothing was applied. Fix these and send the whole batch again.';
   const others = errors.some((e) => e.code !== 'forbidden');

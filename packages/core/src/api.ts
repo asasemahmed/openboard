@@ -30,6 +30,14 @@ import type {
   UndoRequest,
   UndoResult,
 } from './collab.js';
+import type {
+  ActivityEvent,
+  ClaimRequest,
+  ClaimResult,
+  Session,
+  SessionsOptions,
+  SessionsResult,
+} from './live.js';
 import { type AppliedOps, OpBatchSchema, type OpError } from './ops.js';
 import {
   type Actor,
@@ -320,6 +328,20 @@ export interface BoardApi {
   answerAsk(boardId: string, askId: string, answer: AnswerInput): Promise<Ask>;
   /** The author withdraws an open question. */
   cancelAsk(boardId: string, askId: string): Promise<Ask>;
+
+  // Live work (see live.ts).
+  /** Report what the caller's tooling is doing. Project-wide, not per board. */
+  reportActivity(event: ActivityEvent): Promise<Session>;
+  /** Agent sessions the server knows about, most recently active first. */
+  sessions(options?: SessionsOptions): Promise<SessionsResult>;
+  /** Take or release claims on nodes. Agents only take claims; people may release any. */
+  claim(boardId: string, request: ClaimRequest): Promise<ClaimResult>;
+  /**
+   * The board as it was right after `cursor`, rebuilt from history. Fails with
+   * `not_found` when history does not reach back that far (see
+   * `HistoryResult.earliest`).
+   */
+  snapshotAt(boardId: string, cursor: Cursor): Promise<Board>;
 
   // Project settings.
   getConfig(): Promise<ProjectConfig>;

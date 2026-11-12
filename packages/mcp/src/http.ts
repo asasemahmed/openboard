@@ -98,7 +98,8 @@ export function createHttpHandler(options: HttpHandlerOptions): McpHttpHandler {
       return rpcError(400, -32000, 'Bad request: no session; send initialize first');
     }
 
-    const server = createMcpServer(options);
+    // The MCP session id doubles as the agent session id; it exists before the first tool call.
+    const server = createMcpServer({ ...options, session: () => transport.sessionId });
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
       onsessioninitialized: (id) => {

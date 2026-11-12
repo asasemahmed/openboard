@@ -9,6 +9,8 @@ export interface Identity {
   id: string;
   name: string;
   color: string;
+  /** The person typed this name; a name from the server never replaces it. */
+  named?: boolean;
 }
 
 /** Cursor and avatar colours. Each keeps white text above 4.5:1. */
@@ -25,6 +27,20 @@ export const IDENTITY_COLORS = [
 
 const KEY = 'identity';
 export const DEFAULT_NAME = 'Guest';
+/** Names a browser gave itself before anyone typed one (older versions used "You"). */
+const PLACEHOLDER_NAMES = new Set([DEFAULT_NAME, 'You']);
+
+/**
+ * The identity with the name the server suggests (the person running it),
+ * unless the person already chose a name. Returns the same object when
+ * nothing changes.
+ */
+export function withServerName(identity: Identity, user: string | undefined): Identity {
+  const name = user ? cleanName(user) : '';
+  if (!name || identity.named || !PLACEHOLDER_NAMES.has(identity.name) || name === identity.name)
+    return identity;
+  return { ...identity, name };
+}
 export const NAME_MAX = 80;
 
 function isIdentity(value: unknown): value is Identity {

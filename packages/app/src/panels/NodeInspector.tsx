@@ -5,6 +5,7 @@ import { CARD_TYPES, STATUS_META, typeMeta } from '../lib/nodeTypes.js';
 import { useSession } from '../state/context.js';
 import { Button } from '../ui/Button.js';
 import { BodyEditor } from './BodyEditor.js';
+import { ClaimSection } from './ClaimSection.js';
 import { FrameAccessField } from './FrameAccessField.js';
 import { Field, IdRow, Provenance, Section } from './fields.js';
 import { LinksEditor } from './LinksEditor.js';
@@ -36,6 +37,7 @@ export function NodeInspector({ node }: { node: BoardNode }) {
 
   return (
     <div className="inspector-node">
+      <ClaimSection nodeId={node.id} />
       <Section>
         <div className={`inspector-type tone-${meta.tone}`}>
           <span className="type-dot" aria-hidden="true" />

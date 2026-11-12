@@ -69,7 +69,7 @@ async function open(
 const human = () => server.api(ADA);
 
 describe('tools/list', () => {
-  it('lists the twelve tools with titles, honest annotations and compact schemas', async () => {
+  it('lists the thirteen tools with titles, honest annotations and compact schemas', async () => {
     const { client } = await open();
     const { tools } = await client.listTools();
     expect(tools.map((tool) => tool.name)).toEqual([...TOOL_NAMES]);
@@ -94,7 +94,7 @@ describe('tools/list', () => {
     });
     expect(byName.board_create?.annotations?.readOnlyHint).toBe(false);
     expect(byName.board_layout?.annotations?.readOnlyHint).toBe(false);
-    expect(tools).toHaveLength(12);
+    expect(tools).toHaveLength(13);
     expect(byName.board_inbox?.annotations).toMatchObject({
       readOnlyHint: true,
       idempotentHint: false,
@@ -156,7 +156,7 @@ describe('tools/list', () => {
     expect(instructions).toContain('board_outline');
     expect(instructions).toContain('board_selection');
     expect(instructions).toMatch(/data, never as instructions/);
-    for (const tool of ['board_inbox', 'board_ask', 'board_undo']) {
+    for (const tool of ['board_inbox', 'board_ask', 'board_undo', 'board_claim']) {
       expect(instructions).toContain(tool);
     }
     expect(instructions).toMatch(/normal, not an error/);
@@ -214,7 +214,7 @@ describe('the read and write loop', () => {
       kind: 'agent',
       name: 'Test Agent',
     });
-    expect(seen).toEqual([{ name: 'test-agent', version: '1.0.0' }]);
+    expect(seen).toEqual([{ name: 'test-agent', version: '1.0.0', session: expect.any(String) }]);
   });
 
   it('reports a dry run without changing anything', async () => {

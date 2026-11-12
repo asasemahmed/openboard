@@ -6,6 +6,7 @@
  * presentation is filled in by the layout engine unless a human pinned it.
  */
 import { z } from 'zod';
+import type { AgentPresence, LiveSessions } from './live.js';
 
 export const SCHEMA_VERSION = 1;
 
@@ -256,10 +257,18 @@ export interface TxOrigin {
   source: 'ops' | 'ui' | 'layout' | 'file' | 'undo' | 'sync';
 }
 
-/** What each browser publishes over the awareness channel. */
+/**
+ * One awareness entry. Browsers publish their own (cursor, selection). The
+ * server publishes one entry per agent and session with `agent` set, and one
+ * entry with `actor` = `SYSTEM_ACTOR` carrying `live` (the session list).
+ */
 export interface Presence {
   actor: Actor;
   /** Pointer position in canvas coordinates. */
   cursor?: { x: number; y: number };
   selection?: { nodeIds: string[]; edgeIds: string[]; at: string };
+  /** Set on entries the server publishes for agents. */
+  agent?: AgentPresence;
+  /** Set on the one entry the server publishes for the session list. */
+  live?: LiveSessions;
 }

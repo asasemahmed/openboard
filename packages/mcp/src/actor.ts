@@ -11,6 +11,27 @@ export interface ClientInfo {
   version?: string;
 }
 
+/** What `resolveApi` gets: the client, and the agent session this MCP session is. */
+export interface SessionInfo extends ClientInfo {
+  /**
+   * Stable for the life of the MCP session (one per stdio process, the MCP
+   * session id over HTTP). Pass it to the `BoardApi` (`connect({ session })`,
+   * `server.api(actor, { session })`) so the board shows one presence entry
+   * per agent session, merged with what that session's hooks report.
+   */
+  session: string;
+}
+
+const SESSION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/;
+
+/** `OPENBOARD_SESSION` when it is a valid session id, else undefined. */
+export function sessionFromEnv(
+  env: Record<string, string | undefined> = process.env,
+): string | undefined {
+  const value = env.OPENBOARD_SESSION?.trim();
+  return value && SESSION_PATTERN.test(value) ? value : undefined;
+}
+
 const FALLBACK_ID = 'agent';
 const FALLBACK_NAME = 'Agent';
 

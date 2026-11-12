@@ -6,9 +6,12 @@ import type {
   Actor,
   AnswerInput,
   Ask,
+  Board,
   BoardSummary,
   ChangesOptions,
   ChangesResult,
+  ClaimRequest,
+  ClaimResult,
   Decision,
   HistoryOptions,
   HistoryResult,
@@ -51,6 +54,14 @@ export interface ApiClient {
   undo(boardId: string, request: UndoRequest): Promise<UndoResult>;
   getConfig(): Promise<ProjectConfig>;
   setConfig(config: ProjectConfig): Promise<ProjectConfig>;
+  /**
+   * The lineage of a board's live document, which the sync socket requires.
+   * Null when the server does not say (an older server without lineages).
+   */
+  lineage(boardId: string): Promise<string | null>;
+  claim(boardId: string, request: ClaimRequest): Promise<ClaimResult>;
+  /** The board as it was right after `cursor`; aborted when `signal` fires. */
+  snapshotAt(boardId: string, cursor: number, signal?: AbortSignal): Promise<Board>;
 }
 
 /** What a failed request was about, for wording its message. */
@@ -105,6 +116,8 @@ export interface ServerInfo {
   projectName: string;
   url: string;
   mcp?: McpInfo;
+  /** The name of the person running the server, when it says. */
+  user?: string;
 }
 
 const isString = (value: unknown): value is string => typeof value === 'string';
@@ -119,6 +132,7 @@ export function parseServerInfo(raw: unknown): ServerInfo | null {
     projectName: isString(r.projectName) ? r.projectName : '',
     url: isString(r.url) ? r.url : '',
   };
+  if (isString(r.user) && r.user.trim()) info.user = r.user.trim().slice(0, 80);
   const mcp = r.mcp as Record<string, unknown> | undefined;
   const stdio = mcp?.stdio as Record<string, unknown> | undefined;
   if (
@@ -149,20 +163,35 @@ function encodeHeader(value: string): string {
 }
 
 export function createApiClient(getActor: () => Actor, base = ''): ApiClient {
-  async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-    let response: Response;
+  async function send(
+    method: string,
+    path: string,
+    body?: unknown,
+    signal?: AbortSignal,
+  ): Promise<Response> {
     try {
-      response = await fetch(base + path, {
+      return await fetch(base + path, {
         method,
         headers: {
           ...actorHeaders(getActor()),
           ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
         },
         body: body !== undefined ? JSON.stringify(body) : undefined,
+        ...(signal ? { signal } : {}),
       });
     } catch {
+      if (signal?.aborted) throw new ApiError('aborted', 'The request was cancelled.', 0);
       throw new ApiError('unreachable', 'The OpenBoard server could not be reached.', 0);
     }
+  }
+
+  async function request<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+    signal?: AbortSignal,
+  ): Promise<T> {
+    const response = await send(method, path, body, signal);
     const text = await response.text();
     let json: unknown;
     try {
@@ -220,6 +249,27 @@ export function createApiClient(getActor: () => Actor, base = ''): ApiClient {
     undo: (boardId, undoRequest) =>
       request<UndoResult>('POST', `${board(boardId)}/undo`, undoRequest),
     getConfig: () => request<ProjectConfig>('GET', '/api/config'),
+    lineage: async (boardId) => {
+      // The listing names every board's lineage; it is much smaller than the board itself.
+      const result = await request<unknown>('GET', '/api/boards');
+      const list = Array.isArray(result)
+        ? result
+        : ((result as { boards?: unknown[] } | null)?.boards ?? []);
+      for (const entry of list) {
+        const b = entry as { id?: unknown; lineage?: unknown };
+        if (b.id === boardId) return typeof b.lineage === 'string' ? b.lineage : null;
+      }
+      throw new ApiError('board_not_found', `There is no board "${boardId}".`, 404);
+    },
+    claim: (boardId, claimRequest) =>
+      request<ClaimResult>('POST', `${board(boardId)}/claims`, claimRequest),
+    snapshotAt: (boardId, cursor, signal) =>
+      request<Board>(
+        'GET',
+        `${board(boardId)}/at/${Math.max(0, Math.floor(cursor))}`,
+        undefined,
+        signal,
+      ),
     setConfig: (config) => request<ProjectConfig>('PUT', '/api/config', config),
     info: async () => {
       try {

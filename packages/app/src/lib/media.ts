@@ -15,5 +15,5 @@ export function useMediaQuery(query: string): boolean {
 }
 
 /** Below these widths the top bar folds its secondary actions into the overflow menu. */
-export const TOPBAR_FOLD = '(max-width: 1180px)';
-export const TOPBAR_NARROW = '(max-width: 900px)';
+export const TOPBAR_FOLD = '(max-width: 1480px)';
+export const TOPBAR_NARROW = '(max-width: 1100px)';

@@ -12,13 +12,13 @@ import { openSession } from '../lib/store.js';
 import { printTable } from '../lib/table.js';
 import { defaultBoardId } from './export.js';
 
-interface Live {
+export interface Live {
   client: OpenBoardClient;
   board: string;
 }
 
 /** A client for the running server and the board to use; a clear error when no server runs. */
-async function live(
+export async function live(
   io: CliIo,
   root: string | undefined,
   board: string | undefined,

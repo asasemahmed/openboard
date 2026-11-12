@@ -9,6 +9,7 @@
  *   proposals  Y.Map   plain `Proposal` objects by id
  *   asks       Y.Map   plain `Ask` objects by id
  *   comments   Y.Map   plain `Comment` objects by id
+ *   claims     Y.Map   plain `Claim` objects by node id
  *
  * `BoardDoc` is the only code that reads or writes these maps. It keeps a
  * parsed copy of every entry, refreshed after each transaction, so reads are
@@ -22,6 +23,7 @@ import type { ChangeKind } from './api.js';
 import { OpenBoardError } from './api.js';
 import { type ApplyContext, type ApplyOutcome, applyOps } from './apply.js';
 import { type Ask, AskSchema, type Proposal, ProposalSchema } from './collab.js';
+import { type Claim, ClaimSchema } from './live.js';
 import type { AppliedOps, Op } from './ops.js';
 import {
   type Actor,
@@ -79,6 +81,10 @@ export interface DocStates {
   nodes: Record<string, ItemState<BoardNode>>;
   edges: Record<string, ItemState<BoardEdge>>;
   comments: Record<string, ItemState<Comment>>;
+  /** Actor registry entries that changed. */
+  actors?: Record<string, ItemState<Actor>>;
+  /** Board metadata, when it changed. */
+  meta?: { before: BoardMeta; after: BoardMeta };
 }
 
 /** Everything one transaction changed. */
@@ -97,7 +103,12 @@ export interface DocEvent {
   asks?: string[];
   /** Ids of comments whose stored value changed. */
   comments?: string[];
-  /** Before and after states of the nodes, edges and comments that changed. */
+  /** Node ids whose claim changed. */
+  claims?: string[];
+  /**
+   * Before and after states of everything in the board JSON that changed:
+   * nodes, edges, comments, actors, metadata. Set whenever any of them did.
+   */
   states?: DocStates;
 }
 
@@ -126,6 +137,7 @@ interface Touched {
   proposals: Set<string>;
   asks: Set<string>;
   comments: Set<string>;
+  claims: Set<string>;
 }
 
 /** What `restore` sets: each listed item to exactly this state, null meaning absent. */
@@ -146,6 +158,7 @@ export class BoardDoc {
   private readonly proposalsMap: Y.Map<unknown>;
   private readonly asksMap: Y.Map<unknown>;
   private readonly commentsMap: Y.Map<unknown>;
+  private readonly claimsMap: Y.Map<unknown>;
 
   private metaState: { meta: BoardMeta; issues: string[]; ready: boolean };
   private readonly actorCache = new Map<string, Actor>();
@@ -154,6 +167,7 @@ export class BoardDoc {
   private readonly proposalCache = new Map<string, Proposal>();
   private readonly askCache = new Map<string, Ask>();
   private readonly commentCache = new Map<string, Comment>();
+  private readonly claimCache = new Map<string, Claim>();
   /** Problems with individual entries, keyed by `<collection>/<id>`, e.g. `nodes/n_1`. */
   private readonly entryIssues = new Map<string, string>();
   private boardCache: { board: Board; issues: string[] } | null = null;
@@ -173,6 +187,7 @@ export class BoardDoc {
     this.proposalsMap = ydoc.getMap('proposals');
     this.asksMap = ydoc.getMap('asks');
     this.commentsMap = ydoc.getMap('comments');
+    this.claimsMap = ydoc.getMap('claims');
 
     this.metaState = this.readMeta();
     for (const id of this.actorsMap.keys()) this.refreshActor(id);
@@ -181,6 +196,7 @@ export class BoardDoc {
     for (const id of this.proposalsMap.keys()) this.refreshPlain('proposals', id);
     for (const id of this.asksMap.keys()) this.refreshPlain('asks', id);
     for (const id of this.commentsMap.keys()) this.refreshPlain('comments', id);
+    for (const id of this.claimsMap.keys()) this.refreshClaim(id);
 
     this.watch(this.metaMap, (touched) => {
       touched.meta = true;
@@ -191,6 +207,7 @@ export class BoardDoc {
     this.watch(this.proposalsMap, (touched, id) => touched.proposals.add(id));
     this.watch(this.asksMap, (touched, id) => touched.asks.add(id));
     this.watch(this.commentsMap, (touched, id) => touched.comments.add(id));
+    this.watch(this.claimsMap, (touched, id) => touched.claims.add(id));
     const onAfter = (tr: Y.Transaction) => this.flush(tr);
     ydoc.on('afterTransaction', onAfter);
     this.detach.push(() => ydoc.off('afterTransaction', onAfter));
@@ -311,6 +328,37 @@ export class BoardDoc {
 
   getComment(id: string): Comment | undefined {
     return this.commentCache.get(id);
+  }
+
+  /** Every valid claim, expired ones included (callers compare `until` with their clock), by node id. */
+  claims(): Claim[] {
+    return [...this.claimCache.values()].sort((a, b) => compareStrings(a.nodeId, b.nodeId));
+  }
+
+  getClaim(nodeId: string): Claim | undefined {
+    return this.claimCache.get(nodeId);
+  }
+
+  /**
+   * The board JSON exactly as stored: every valid entry, with none of the
+   * repairs `toJSON()` makes (dangling parents and edges are kept). Building a
+   * document from it and calling `toJSON()` gives the same as `toJSON()` here.
+   */
+  raw(): Board {
+    const sortedRecord = <T>(cache: Map<string, T>): Record<string, T> => {
+      const out: Record<string, T> = {};
+      for (const id of [...cache.keys()].sort(compareStrings)) out[id] = cache.get(id) as T;
+      return out;
+    };
+    const board: Board = {
+      schemaVersion: SCHEMA_VERSION,
+      ...this.metaState.meta,
+      actors: sortedRecord(this.actorCache),
+      nodes: sortedRecord(this.nodeCache),
+      edges: sortedRecord(this.edgeCache),
+    };
+    if (this.commentCache.size > 0) board.comments = sortedRecord(this.commentCache);
+    return board;
   }
 
   summary(): BoardSummary {
@@ -465,6 +513,38 @@ export class BoardDoc {
     if (jsonEqual(this.actorsMap.get(parsed.data.id), parsed.data)) return false;
     this.ydoc.transact(() => this.actorsMap.set(parsed.data.id, cloneJson(parsed.data)), origin);
     return true;
+  }
+
+  /** Store a claim (replacing the one on the same node). */
+  putClaim(claim: Claim, origin: TxOrigin): void {
+    this.putClaims([claim], origin);
+  }
+
+  /** Store several claims in one transaction. Throws `invalid_request` when one fails its schema. */
+  putClaims(claims: readonly Claim[], origin: TxOrigin): void {
+    const parsed = claims.map((claim) => {
+      const result = ClaimSchema.safeParse(claim);
+      if (!result.success) {
+        throw new OpenBoardError('invalid_request', `invalid claim: ${formatIssues(result.error)}`);
+      }
+      return result.data;
+    });
+    const changed = parsed.filter((claim) => !jsonEqual(this.claimsMap.get(claim.nodeId), claim));
+    if (changed.length === 0) return;
+    this.ydoc.transact(() => {
+      for (const claim of changed) this.claimsMap.set(claim.nodeId, cloneJson(claim));
+    }, origin);
+  }
+
+  /** Remove the claims on these nodes in one transaction. Returns the node ids that had one. */
+  deleteClaims(nodeIds: readonly string[], origin: TxOrigin): string[] {
+    const present = nodeIds.filter((id) => this.claimsMap.has(id));
+    if (present.length > 0) {
+      this.ydoc.transact(() => {
+        for (const id of present) this.claimsMap.delete(id);
+      }, origin);
+    }
+    return present;
   }
 
   /** Remove a proposal. Returns false when there was none. */
@@ -735,6 +815,7 @@ export class BoardDoc {
           proposals: new Set(),
           asks: new Set(),
           comments: new Set(),
+          claims: new Set(),
         };
         this.pending.set(tr, touched);
       }
@@ -769,17 +850,30 @@ export class BoardDoc {
       oldEdges.set(id, this.edgeCache.get(id));
 
     let metaChanged = false;
+    let metaState: DocStates['meta'];
     if (touched.meta) {
       const previous = this.metaState;
       this.metaState = this.readMeta();
       metaChanged =
         !jsonEqual(previous.meta, this.metaState.meta) || previous.ready !== this.metaState.ready;
+      if (!jsonEqual(previous.meta, this.metaState.meta)) {
+        metaState = { before: previous.meta, after: this.metaState.meta };
+      }
     }
+    const actorStates: Record<string, ItemState<Actor>> = {};
     for (const id of touched.actors) {
       const previous = this.actorCache.get(id);
       this.refreshActor(id);
-      if (!jsonEqual(previous, this.actorCache.get(id))) metaChanged = true;
+      const current = this.actorCache.get(id);
+      if (!jsonEqual(previous, current)) {
+        metaChanged = true;
+        actorStates[id] = { before: previous ?? null, after: current ?? null };
+      }
     }
+    const oldClaims = new Map<string, Claim | undefined>();
+    for (const id of touched.claims) oldClaims.set(id, this.claimCache.get(id));
+    for (const id of touched.claims) this.refreshClaim(id);
+    const claims = changedIds(oldClaims, this.claimCache);
     const oldComments = new Map<string, Comment | undefined>();
     for (const id of touched.comments) oldComments.set(id, this.commentCache.get(id));
     const oldProposals = new Map<string, Proposal | undefined>();
@@ -837,14 +931,21 @@ export class BoardDoc {
     const proposals = changedIds(oldProposals, this.proposalCache);
     const asks = changedIds(oldAsks, this.askCache);
 
+    if (Object.keys(actorStates).length > 0) states.actors = actorStates;
+    if (metaState) states.meta = metaState;
     const itemsChanged =
-      Object.keys(states.nodes).length + Object.keys(states.edges).length + comments.length > 0;
+      Object.keys(states.nodes).length +
+        Object.keys(states.edges).length +
+        comments.length +
+        Object.keys(actorStates).length >
+        0 || metaState !== undefined;
     if (
       changes.length === 0 &&
       !metaChanged &&
       !itemsChanged &&
       proposals.length === 0 &&
-      asks.length === 0
+      asks.length === 0 &&
+      claims.length === 0
     ) {
       return;
     }
@@ -852,6 +953,7 @@ export class BoardDoc {
     if (proposals.length > 0) event.proposals = proposals;
     if (asks.length > 0) event.asks = asks;
     if (comments.length > 0) event.comments = comments;
+    if (claims.length > 0) event.claims = claims;
     if (itemsChanged) event.states = states;
     for (const listener of [...this.listeners]) listener(event);
   }
@@ -937,6 +1039,20 @@ export class BoardDoc {
         raw === undefined ? null : parsePlain(CommentSchema, 'comment', id, raw),
       );
     }
+  }
+
+  private refreshClaim(nodeId: string): void {
+    const raw = this.claimsMap.get(nodeId);
+    let entry: Entry<Claim> | null = null;
+    if (raw !== undefined) {
+      const parsed = ClaimSchema.safeParse(raw instanceof Y.AbstractType ? raw.toJSON() : raw);
+      if (!parsed.success) {
+        entry = { issue: `claim on "${nodeId}" skipped: ${formatIssues(parsed.error)}` };
+      } else if (parsed.data.nodeId !== nodeId) {
+        entry = { issue: `claim on "${nodeId}" skipped: it names node "${parsed.data.nodeId}"` };
+      } else entry = { value: deepFreeze(parsed.data) };
+    }
+    this.store(this.claimCache, `claims/${nodeId}`, entry);
   }
 
   private putPlain<T extends { id: string }>(

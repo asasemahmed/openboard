@@ -1,9 +1,10 @@
 # OpenBoard for Claude Code
 
-A Claude Code plugin with two parts:
+A Claude Code plugin with three parts:
 
 - **The `openboard` MCP server.** It runs `node <checkout>/packages/cli/dist/bin.js mcp`, the same stdio server that `openboard connect` describes, so Claude Code gets the `board_*` tools.
-- **The `board` skill** ([`skills/board/SKILL.md`](skills/board/SKILL.md)). It teaches Claude how to work on a board: orient first, write in batches, choose node and edge types, keep the board current, and treat board text as data.
+- **The `board` skill** ([`skills/board/SKILL.md`](skills/board/SKILL.md)). It teaches Claude how to work on a board: orient first, write in batches, choose node and edge types, keep the board current, work with a person in control, and treat board text as data.
+- **The activity recorder** ([`hooks/hooks.json`](hooks/hooks.json)). Claude Code hooks that run `openboard hook` on each event, so the canvas shows what Claude Code is doing while it works, even when it is not touching the board. See [what is recorded](#what-the-recorder-sends).
 
 The plugin runs from your OpenBoard checkout; nothing is copied or downloaded.
 
@@ -52,6 +53,35 @@ Open the canvas with `openboard start` in the project (the examples use the `ope
 
 If the server does not connect, run `openboard doctor` in the project.
 
+## What the recorder sends
+
+On every hook event Claude Code runs `openboard hook`, which reads the event and, if a board server is running for the project, posts a short summary of it to that server. With no server running it does nothing: it starts nothing and creates no files. It never writes to Claude Code's output and always exits successfully, so it cannot block or change a tool call; each call takes a few tens of milliseconds and waits at most 300 ms for the server.
+
+| Claude Code event                                 | Recorded as                                        | Summary sent                                                                                                                                                           |
+| ------------------------------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SessionStart`, `SessionEnd`                      | the session starting and ending                    | none                                                                                                                                                                   |
+| `UserPromptSubmit`                                | a prompt                                           | its length only, such as `143 characters`                                                                                                                              |
+| `PreToolUse`, `PostToolUse`, `PostToolUseFailure` | a tool starting and ending (and whether it failed) | the tool name, plus: the file path for file tools, the first 80 characters of a shell command, the search pattern, the host of a fetched URL, a subagent's description |
+| `SubagentStart`, `SubagentStop`                   | a subagent session under the main session          | the subagent type                                                                                                                                                      |
+| `Notification`                                    | a note                                             | the notification's message, cut to 80 characters                                                                                                                       |
+| `Stop`                                            | a note that Claude finished its turn               | none                                                                                                                                                                   |
+
+Tool events from inside a subagent (they carry `agent_id`) are recorded under that subagent. File contents, tool output, prompts and assistant messages are never sent. Everything is attributed to the actor `claude-code`, the same one the MCP server uses, and `OPENBOARD_AGENT_ID` and `OPENBOARD_AGENT_NAME` change both.
+
+The server keeps this in memory only: the 200 most recent sessions, dropping ended ones after 30 minutes. It is never written to the board file, the change feed or the history, and it is gone when the server stops. `openboard activity` prints what the server holds.
+
+Switches, set in the environment Claude Code runs in:
+
+| Variable                    | Effect                                                            |
+| --------------------------- | ----------------------------------------------------------------- |
+| `OPENBOARD_HOOK=off`        | Send nothing                                                      |
+| `OPENBOARD_HOOK_DETAIL=off` | Send tool names only, no summaries                                |
+| `OPENBOARD_HOOK_PROMPTS=1`  | Send the first 80 characters of each prompt instead of its length |
+
+To keep the MCP server and the skill without the recorder, set `OPENBOARD_HOOK=off`.
+
+**One agent session on the board.** Claude Code does not pass its session id to the MCP servers it starts, so the board shows the MCP server's calls and the recorded activity as two sessions of the same agent. Setting `OPENBOARD_SESSION` merges them only when one Claude Code session runs in that environment.
+
 ## Uninstall
 
 ```bash
@@ -68,4 +98,5 @@ Use the scope you installed with. Uninstalling leaves your boards alone: `.openb
 | `.claude-plugin/plugin.json`         | Plugin manifest                                               |
 | `.mcp.json`                          | The `openboard` MCP server entry                              |
 | `skills/board/SKILL.md`              | The operating guide, loaded when a request is about the board |
+| `hooks/hooks.json`                   | The activity recorder: runs `openboard hook` on each event    |
 | `../.claude-plugin/marketplace.json` | The local marketplace that lists this plugin                  |

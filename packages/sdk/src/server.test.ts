@@ -121,4 +121,32 @@ describe('against a real server', () => {
     expect((await bot.askResult('plan', other.id, { waitMs: 100 })).status).toBe('open');
     expect((await bot.cancelAsk('plan', other.id)).status).toBe('cancelled');
   });
+
+  it('round-trips activity, sessions, claims and snapshots', async () => {
+    const agent = connect({ url: server.url, actor: BOT, session: 'main' });
+    const other = connect({
+      url: server.url,
+      actor: { id: 'other', kind: 'agent', name: 'Other' },
+    });
+    await agent.reportActivity({ session: 'main', kind: 'session_start', label: 'Work' });
+    await agent.reportActivity({ session: 'sub', parent: 'main', kind: 'subagent_start' });
+    await agent.reportActivity({ session: 'sub', kind: 'tool_end', tool: 'Bash', ok: true });
+    const { sessions } = await ada.sessions();
+    expect(sessions.find((s) => s.id === 'main')?.children).toEqual(['sub']);
+
+    const cursor = (await ada.outline('plan')).cursor;
+    const claimed = await agent.claim('plan', { nodeIds: ['h1'] });
+    expect(claimed.claims.map((c) => c.nodeId)).toEqual(['h1']);
+    expect(claimed.claims[0]?.session).toBe('main');
+    const refused = await other.apply('plan', {
+      ops: [{ op: 'update_node', id: 'h1', patch: { title: 'Mine now' } }],
+    });
+    expect(refused.errors?.[0]?.code).toBe('claimed');
+    expect((await ada.claim('plan', { nodeIds: ['h1'], release: true })).released).toEqual(['h1']);
+
+    await ada.apply('plan', { ops: [{ op: 'update_node', id: 'h1', patch: { title: 'Later' } }] });
+    expect((await ada.snapshotAt('plan', cursor)).nodes.h1?.title).toBe('Payment API');
+    expect((await ada.history('plan')).earliest).toBe(0);
+    expect(await code(ada.snapshotAt('plan', 10_000))).toBe('invalid_request');
+  });
 });

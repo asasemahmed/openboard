@@ -59,7 +59,7 @@ function FrameNodeView({ id, data, selected }: NodeProps<FlowNode>) {
       aria-label={ghost ? `Proposed frame: ${node.title}. Open the review` : `Frame: ${node.title}`}
       {...focus}
     >
-      {!ghost && (
+      {!ghost && !session.ui.readOnly && (
         <NodeResizer
           isVisible={selected}
           minWidth={minW}

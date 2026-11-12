@@ -128,7 +128,9 @@ export interface OpError {
     | 'cycle'
     | 'self_edge'
     | 'duplicate_edge'
-    | 'forbidden';
+    | 'forbidden'
+    /** The node is claimed by another agent (see `Claim`). */
+    | 'claimed';
   message: string;
 }
 

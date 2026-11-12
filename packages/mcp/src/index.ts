@@ -1,4 +1,4 @@
-export { actorForClient, type ClientInfo } from './actor.js';
+export { actorForClient, type ClientInfo, type SessionInfo, sessionFromEnv } from './actor.js';
 export {
   createHttpHandler,
   DEFAULT_IDLE_TIMEOUT_MS,

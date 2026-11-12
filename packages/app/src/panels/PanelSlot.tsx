@@ -180,7 +180,7 @@ function PanelToggle({ panel }: { panel: PanelDef }) {
   return (
     <button
       type="button"
-      className="icon-btn icon-btn-md panel-toggle"
+      className={`icon-btn icon-btn-md panel-toggle panel-toggle-${panel.side}`}
       aria-pressed={pressed}
       aria-label={badge ? `${panel.title} (${badge})` : panel.title}
       title={panel.title}

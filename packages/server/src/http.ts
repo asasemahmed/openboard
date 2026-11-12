@@ -155,8 +155,11 @@ export function createHttpApp(ctx: HttpContext): Hono<{ Variables: { actor: Acto
     await next();
   });
 
-  const api = (c: Context<{ Variables: { actor: Actor } }>) =>
-    new LocalBoardApi(ctx.boards, c.get('actor'), ctx.log);
+  // `x-openboard-session` names the agent session a call belongs to (see live.ts).
+  const api = (c: Context<{ Variables: { actor: Actor } }>) => {
+    const session = c.req.header('x-openboard-session');
+    return new LocalBoardApi(ctx.boards, c.get('actor'), ctx.log, session ? { session } : {});
+  };
 
   app.get('/api/health', (c) =>
     c.json({ ok: true, version: ctx.version, pid: process.pid, root: ctx.root }),
@@ -185,6 +188,7 @@ export function createHttpApp(ctx: HttpContext): Hono<{ Variables: { actor: Acto
     const room = await ctx.boards.get(c.req.param('id'));
     const board = await api(c).getBoard(room.id);
     c.header('x-openboard-file-status', room.fileStatus);
+    c.header('x-openboard-lineage', room.lineage);
     return c.json(board);
   });
 
@@ -221,6 +225,42 @@ export function createHttpApp(ctx: HttpContext): Hono<{ Variables: { actor: Acto
   app.post('/api/boards/:id/layout', async (c) =>
     c.json(await api(c).layout(c.req.param('id'), await jsonBody(c))),
   );
+
+  // ── Live work ──────────────────────────────────────────────────────────────
+
+  app.post('/api/activity', async (c) =>
+    c.json(
+      await api(c).reportActivity(
+        (await jsonBody(c)) as unknown as Parameters<LocalBoardApi['reportActivity']>[0],
+      ),
+    ),
+  );
+
+  app.get('/api/sessions', async (c) => {
+    const includeEnded = c.req.query('includeEnded');
+    const maxTokens = c.req.query('maxTokens');
+    const options: Record<string, unknown> = {};
+    if (includeEnded !== undefined) options.includeEnded = includeEnded === 'true';
+    if (maxTokens !== undefined) options.maxTokens = Number(maxTokens);
+    return c.json(await api(c).sessions(options as Parameters<LocalBoardApi['sessions']>[0]));
+  });
+
+  app.post('/api/boards/:id/claims', async (c) =>
+    c.json(
+      await api(c).claim(
+        c.req.param('id'),
+        (await jsonBody(c)) as unknown as Parameters<LocalBoardApi['claim']>[1],
+      ),
+    ),
+  );
+
+  app.get('/api/boards/:id/at/:cursor', async (c) => {
+    const raw = c.req.param('cursor');
+    if (!/^\d+$/.test(raw)) {
+      throw new OpenBoardError('invalid_request', 'the cursor must be a whole number');
+    }
+    return c.json(await api(c).snapshotAt(c.req.param('id'), Number(raw)));
+  });
 
   // ── Settings ───────────────────────────────────────────────────────────────
   // "People only" routes trust x-openboard-actor-kind; see the note in service.ts.

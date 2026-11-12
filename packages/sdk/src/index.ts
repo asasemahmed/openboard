@@ -6,5 +6,7 @@ export {
   connect,
   DEFAULT_TIMEOUT_MS,
   type HealthInfo,
+  LONG_POLL_GRACE_MS,
   OpenBoardClient,
+  SESSION_HEADER,
 } from './client.js';

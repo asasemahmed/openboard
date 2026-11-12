@@ -79,6 +79,17 @@ Differences from stdio:
 
 The tools describe themselves, and the server sends short instructions when a client connects. For better results, add the condensed guide in [`AGENT_GUIDE.md`](AGENT_GUIDE.md) to your agent's instructions.
 
+## Reporting activity
+
+Any tool or script can show an agent at work on the canvas by piping one event per call into `openboard hook --format generic`, in the project or with `cwd` in the event:
+
+```bash
+echo '{"session": "ci-1842", "kind": "tool_start", "tool": "deploy", "summary": "staging", "cwd": "/path/to/project"}' \
+  | OPENBOARD_AGENT_ID=deploy-bot openboard hook --format generic
+```
+
+The event is an `ActivityEvent`: `session` (an id), `kind` (`session_start`, `session_end`, `prompt`, `tool_start`, `tool_end`, `subagent_start`, `subagent_end` or `note`), and optionally `parent`, `tool`, `summary`, `ok`, `label` and `at`. It goes to the board server running for the project, or nowhere when none runs; the command prints nothing and always exits 0. `OPENBOARD_AGENT_ID` and `OPENBOARD_AGENT_NAME` name the actor, as for `openboard mcp`; set the same values for the MCP server so the board shows one agent, and `OPENBOARD_SESSION` to the same session id to merge the two into one session. Ready-made wiring exists for [Claude Code](../claude-code/README.md#what-the-recorder-sends), [Cursor](../cursor/README.md) and [Codex](../codex/README.md).
+
 ## Check the connection
 
 Ask the agent to call `board_outline`. A working connection answers with a line like:

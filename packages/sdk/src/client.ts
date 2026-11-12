@@ -6,6 +6,7 @@
  * "HTTP surface" table in docs/ARCHITECTURE.md.
  */
 import {
+  type ActivityEvent,
   type Actor,
   ActorSchema,
   type AnswerInput,
@@ -20,6 +21,8 @@ import {
   type BoardSummary,
   type ChangesOptions,
   type ChangesResult,
+  type ClaimRequest,
+  type ClaimResult,
   type Comment,
   type CommentInput,
   type CreateBoardInput,
@@ -40,6 +43,9 @@ import {
   type ReadQuery,
   type ReadResult,
   type SelectionResult,
+  type Session,
+  type SessionsOptions,
+  type SessionsResult,
   type UndoRequest,
   type UndoResult,
 } from '@openboard/core';
@@ -57,6 +63,9 @@ export const ACTOR_HEADERS = {
   kind: 'x-openboard-actor-kind',
 } as const;
 
+/** Header naming the agent session a call belongs to (see `ActivityEvent.session`). */
+export const SESSION_HEADER = 'x-openboard-session';
+
 export interface ConnectOptions {
   /** Base URL of a running server, such as `http://127.0.0.1:4747`. */
   url: string;
@@ -66,6 +75,11 @@ export interface ConnectOptions {
   fetch?: typeof fetch;
   /** Per-request timeout in milliseconds. Defaults to `DEFAULT_TIMEOUT_MS`. */
   timeoutMs?: number;
+  /**
+   * The agent session calls belong to, so the canvas shows them with that
+   * session's activity. Sent as `x-openboard-session`.
+   */
+  session?: string;
 }
 
 /** What `GET /api/health` returns. */
@@ -165,6 +179,7 @@ export class OpenBoardClient implements BoardApi {
     // "Illegal invocation" when `fetch` is called with another `this`.
     this.#fetch = options.fetch ?? ((input, init) => globalThis.fetch(input, init));
     this.#headers = { accept: 'application/json', ...actorHeaders(this.actor) };
+    if (options.session !== undefined) this.#headers[SESSION_HEADER] = options.session;
   }
 
   /** Liveness and identity of the server. */
@@ -404,6 +419,53 @@ export class OpenBoardClient implements BoardApi {
       path: boardPath(boardId, `asks/${segment(askId, 'question id')}/cancel`),
       body: {},
       idempotent: false,
+      expect: 'object',
+    });
+  }
+
+  // ── Live work ─────────────────────────────────────────────────────────────
+
+  reportActivity(event: ActivityEvent): Promise<Session> {
+    return this.#request({
+      method: 'POST',
+      path: 'api/activity',
+      body: event,
+      idempotent: false,
+      expect: 'object',
+    });
+  }
+
+  sessions(options: SessionsOptions = {}): Promise<SessionsResult> {
+    const query = new URLSearchParams();
+    if (options.includeEnded !== undefined) query.set('includeEnded', String(options.includeEnded));
+    if (options.maxTokens !== undefined) query.set('maxTokens', String(options.maxTokens));
+    const qs = query.toString();
+    return this.#request({
+      method: 'GET',
+      path: `api/sessions${qs ? `?${qs}` : ''}`,
+      idempotent: true,
+      expect: 'object',
+    });
+  }
+
+  claim(boardId: string, request: ClaimRequest): Promise<ClaimResult> {
+    return this.#request({
+      method: 'POST',
+      path: boardPath(boardId, 'claims'),
+      body: request,
+      idempotent: false,
+      expect: 'object',
+    });
+  }
+
+  snapshotAt(boardId: string, cursor: number): Promise<Board> {
+    if (!Number.isInteger(cursor) || cursor < 0) {
+      throw new OpenBoardError('invalid_request', 'the cursor must be a whole number');
+    }
+    return this.#request({
+      method: 'GET',
+      path: boardPath(boardId, `at/${cursor}`),
+      idempotent: true,
       expect: 'object',
     });
   }

@@ -28,6 +28,7 @@ import { FrameNode } from '../nodes/FrameNode.js';
 import { useSession } from '../state/context.js';
 import { useStoreValue, useValue } from '../state/emitter.js';
 import { ActivityLayer } from './ActivityLayer.js';
+import { AgentCursors } from './AgentCursors.js';
 import { AskStack } from './AskStack.js';
 import { applyOrReport, type BoardActions, reducedMotion } from './actions.js';
 import { BoardEdge } from './BoardEdge.js';
@@ -49,9 +50,15 @@ export interface CanvasProps {
   actions: BoardActions;
   /** Off in tests, where jsdom has no layout to cull against. */
   onlyRenderVisibleElements?: boolean;
+  /** Replay: nothing can be moved, connected, added or edited. */
+  readOnly?: boolean;
 }
 
-export function Canvas({ actions, onlyRenderVisibleElements = true }: CanvasProps) {
+export function Canvas({
+  actions,
+  onlyRenderVisibleElements = true,
+  readOnly = false,
+}: CanvasProps) {
   const session = useSession();
   const { store, ui, presence } = session;
   const nodes = useStoreValue(store, store.getNodes);
@@ -187,14 +194,16 @@ export function Canvas({ actions, onlyRenderVisibleElements = true }: CanvasProp
         edgeTypes={edgeTypes}
         onNodesChange={store.onNodesChange}
         onEdgesChange={store.onEdgesChange}
-        onNodeDrag={onNodeDrag}
-        onNodeDragStop={onNodeDragStop}
-        onConnect={onConnect}
-        onConnectEnd={onConnectEnd}
-        onNodeDoubleClick={onNodeDoubleClick}
-        onDoubleClick={onDoubleClick}
-        onMouseMove={onMouseMove}
-        onMouseLeave={onMouseLeave}
+        onNodeDrag={readOnly ? undefined : onNodeDrag}
+        onNodeDragStop={readOnly ? undefined : onNodeDragStop}
+        onConnect={readOnly ? undefined : onConnect}
+        onConnectEnd={readOnly ? undefined : onConnectEnd}
+        onNodeDoubleClick={readOnly ? undefined : onNodeDoubleClick}
+        onDoubleClick={readOnly ? undefined : onDoubleClick}
+        nodesDraggable={!readOnly}
+        nodesConnectable={!readOnly}
+        onMouseMove={readOnly ? undefined : onMouseMove}
+        onMouseLeave={readOnly ? undefined : onMouseLeave}
         onMoveStart={onMoveStart}
         connectionMode={ConnectionMode.Loose}
         connectionRadius={28}
@@ -226,10 +235,11 @@ export function Canvas({ actions, onlyRenderVisibleElements = true }: CanvasProp
           color="var(--dot)"
           bgColor="var(--canvas)"
         />
-        <Cursors />
+        {!readOnly && <Cursors />}
+        {!readOnly && <AgentCursors />}
         <ZoomControls actions={actions} />
-        <ProposalLayer />
-        <ActivityLayer />
+        {!readOnly && <ProposalLayer />}
+        {!readOnly && <ActivityLayer />}
         {minimap && (
           <MiniMap<FlowNode>
             position="bottom-right"
@@ -243,8 +253,8 @@ export function Canvas({ actions, onlyRenderVisibleElements = true }: CanvasProp
           />
         )}
       </ReactFlow>
-      <AskStack />
-      {nodes.length === 0 && <EmptyBoard actions={actions} />}
+      {!readOnly && <AskStack />}
+      {!readOnly && nodes.length === 0 && <EmptyBoard actions={actions} />}
     </div>
   );
 }

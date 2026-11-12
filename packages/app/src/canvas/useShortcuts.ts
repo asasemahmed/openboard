@@ -51,11 +51,11 @@ const NUDGE: Record<string, [number, number]> = {
 };
 
 export function useShortcuts(actions: BoardActions): void {
-  const { ui, store } = useSession();
+  const { ui, store, replay } = useSession();
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented) return;
+      if (event.defaultPrevented || replay.active) return;
       const target = event.target as HTMLElement | null;
       const is = (spec: string) => matchesShortcut(event, spec);
 
@@ -100,5 +100,5 @@ export function useShortcuts(actions: BoardActions): void {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [actions, ui, store]);
+  }, [actions, ui, store, replay]);
 }

@@ -7,16 +7,29 @@
  * written again whenever its batch grows (coalesced browser edits, the layout
  * pass that follows an apply) or is marked undone; the last line for a batch
  * id wins. The file is compacted when it is opened.
+ *
+ * Next to batches it keeps one step per transaction that changed the board
+ * JSON (`{"step": ...}` lines), with exact before and after states, which is
+ * what `snapshotAt` replays backwards. A batch can merge several
+ * transactions, so it cannot serve that purpose itself.
+ *
+ * The first line names the document lineage the history belongs to; a file
+ * written for another lineage (the document was rebuilt from the board file)
+ * is discarded, since its states no longer chain to the live document.
  */
 import { appendFile, readFile } from 'node:fs/promises';
 import {
   type Batch,
+  type Board,
+  BoardDoc,
   type BoardEdge,
   type BoardNode,
   type Comment,
   type DocEvent,
+  type DocStates,
   type HistoryOptions,
   newId,
+  OpenBoardError,
 } from '@openboard/core';
 import { errorMessage, isErrno, writeFileAtomic } from './fsutil.js';
 import { jsonEqual } from './json.js';
@@ -25,6 +38,17 @@ import { jsonEqual } from './json.js';
 export const HISTORY_RETAIN = 2000;
 /** Browser edits by one person less than this far apart are one batch. */
 export const UI_COALESCE_MS = 5000;
+/** How many transactions are kept for `snapshotAt`. */
+export const STEPS_RETAIN = 5000;
+
+/** One transaction that changed the board JSON. */
+export interface Step {
+  seq: number;
+  /** The cursor before and after it; equal when it moved no change into the feed. */
+  from: number;
+  cursor: number;
+  states: DocStates;
+}
 
 export interface Snapshot<T> {
   before: T | null;
@@ -63,6 +87,9 @@ export interface PendingBatch {
 export class History {
   private records: BatchRecord[] = [];
   private readonly byId = new Map<string, BatchRecord>();
+  private steps: Step[] = [];
+  private stepSeq = 0;
+  private lineage = '';
   private writes: Promise<void> = Promise.resolve();
   private linesOnDisk = 0;
 
@@ -74,17 +101,31 @@ export class History {
 
   static async open(
     file: string,
-    opts: { retain?: number; log?: (line: string) => void } = {},
+    opts: { retain?: number; log?: (line: string) => void; lineage?: string } = {},
   ): Promise<History> {
     const history = new History(file, opts.retain ?? HISTORY_RETAIN, opts.log ?? (() => {}));
+    history.lineage = opts.lineage ?? '';
     let text = '';
     try {
       text = await readFile(file, 'utf8');
     } catch (error) {
       if (!isErrno(error, 'ENOENT')) throw error;
     }
-    const lines = text.split('\n').filter((line) => line.trim() !== '');
+    let lines = text.split('\n').filter((line) => line.trim() !== '');
+    const header = lines[0] === undefined ? undefined : parseLineage(lines[0]);
+    if (opts.lineage !== undefined && header !== opts.lineage) {
+      // Written for another document (or before lineages existed): start over.
+      if (lines.length > 0)
+        history.log(`history ${file} belongs to another document; starting a new one`);
+      lines = [];
+    }
     for (const line of lines) {
+      const step = parseStep(line);
+      if (step) {
+        history.steps.push(step);
+        history.stepSeq = Math.max(history.stepSeq, step.seq);
+        continue;
+      }
       const record = parseRecord(line);
       if (!record) continue; // a torn last line, or a hand edit
       const existing = history.byId.get(record.batch.id);
@@ -93,9 +134,75 @@ export class History {
       history.byId.set(record.batch.id, record);
     }
     history.trim();
-    if (lines.length > history.records.length) await history.compact();
-    else history.linesOnDisk = lines.length;
+    if (lines.length === 0 || lines.length > history.records.length + history.steps.length + 1) {
+      await history.compact();
+    } else history.linesOnDisk = lines.length;
     return history;
+  }
+
+  /** Record one transaction for replay. Called for every event that has `states`. */
+  step(states: DocStates, from: number, cursor: number): void {
+    const step: Step = { seq: ++this.stepSeq, from, cursor, states };
+    this.steps.push(step);
+    if (this.steps.length > STEPS_RETAIN) this.steps.splice(0, this.steps.length - STEPS_RETAIN);
+    this.append(`${JSON.stringify({ step })}\n`);
+  }
+
+  /** The oldest cursor `snapshot` can rebuild: the cursor before the oldest kept step. */
+  earliest(current: number): number {
+    return this.steps[0]?.from ?? current;
+  }
+
+  /**
+   * The board right after `cursor`, from `raw` (the live document's `raw()`)
+   * by undoing every later step. Throws `not_found` when `cursor` is older
+   * than `earliest`, `invalid_request` when it is in the future.
+   */
+  snapshot(raw: Board, cursor: number, current: number): Board {
+    const earliest = this.earliest(current);
+    if (cursor > current) {
+      throw new OpenBoardError(
+        'invalid_request',
+        `cursor ${cursor} is ahead of the board (cursor now ${current})`,
+      );
+    }
+    if (cursor < earliest) {
+      throw new OpenBoardError(
+        'not_found',
+        `history does not reach back to cursor ${cursor}; the earliest cursor available is ${earliest}`,
+        { earliest },
+      );
+    }
+    // The last transaction that moved the cursor to (or past, within it) `cursor`.
+    let target = 0;
+    for (const step of this.steps)
+      if (step.cursor > step.from && step.cursor <= cursor) target = step.seq;
+    const board: Board = structuredClone(raw);
+    const comments: Record<string, Comment> = { ...(board.comments ?? {}) };
+    for (let i = this.steps.length - 1; i >= 0; i--) {
+      const step = this.steps[i] as Step;
+      if (step.seq <= target) break;
+      revert(board.nodes, step.states.nodes);
+      revert(board.edges, step.states.edges);
+      revert(comments, step.states.comments);
+      revert(board.actors, step.states.actors ?? {});
+      if (step.states.meta) {
+        const before = step.states.meta.before;
+        board.id = before.id;
+        board.name = before.name;
+        board.createdAt = before.createdAt;
+        board.updatedAt = before.updatedAt;
+        if (before.description === undefined) delete board.description;
+        else board.description = before.description;
+      }
+    }
+    if (Object.keys(comments).length > 0) board.comments = comments;
+    else delete board.comments;
+    // Apply the same repairs the live document applies when reading.
+    const doc = BoardDoc.fromJSON(board);
+    const out = doc.toJSON();
+    doc.destroy();
+    return out;
   }
 
   get(id: string): BatchRecord | undefined {
@@ -113,7 +220,15 @@ export class History {
    */
   begin(event: DocEvent, ctx: TxContext | null, now = Date.now()): PendingBatch | null {
     const states = event.states;
-    if (!states) return null;
+    if (
+      !states ||
+      Object.keys(states.nodes).length +
+        Object.keys(states.edges).length +
+        Object.keys(states.comments).length ===
+        0
+    ) {
+      return null;
+    }
     const actor = event.origin?.actorId ?? 'system';
     const raw = event.origin?.source ?? 'sync';
     // Browser edits arrive over sync; they are what the person did in the UI.
@@ -219,12 +334,21 @@ export class History {
     }
   }
 
+  private snapshotText(): { text: string; lines: number } {
+    const lines = [
+      JSON.stringify({ lineage: this.lineage }),
+      ...this.records.map((record) => JSON.stringify(record)),
+      ...this.steps.map((step) => JSON.stringify({ step })),
+    ];
+    return { text: `${lines.join('\n')}\n`, lines: lines.length };
+  }
+
   private compact(): Promise<void> {
-    const text = this.records.map((record) => `${JSON.stringify(record)}\n`).join('');
+    const { text, lines } = this.snapshotText();
     this.writes = this.writes.then(async () => {
       try {
         await writeFileAtomic(this.file, text);
-        this.linesOnDisk = this.records.length;
+        this.linesOnDisk = lines;
       } catch (error) {
         this.log(`history: could not write ${this.file}: ${errorMessage(error)}`);
       }
@@ -233,13 +357,16 @@ export class History {
   }
 
   private persist(record: BatchRecord): void {
-    const line = `${JSON.stringify(record)}\n`;
+    this.append(`${JSON.stringify(record)}\n`);
+  }
+
+  private append(line: string): void {
     this.writes = this.writes.then(async () => {
       try {
-        if (this.linesOnDisk + 1 > this.retain * 2) {
-          const text = this.records.map((r) => `${JSON.stringify(r)}\n`).join('');
+        if (this.linesOnDisk + 1 > (this.retain + STEPS_RETAIN) * 2) {
+          const { text, lines } = this.snapshotText();
           await writeFileAtomic(this.file, text);
-          this.linesOnDisk = this.records.length;
+          this.linesOnDisk = lines;
         } else {
           await appendFile(this.file, line);
           this.linesOnDisk++;
@@ -248,6 +375,41 @@ export class History {
         this.log(`history: could not write ${this.file}: ${errorMessage(error)}`);
       }
     });
+  }
+}
+
+function revert<T>(into: Record<string, T>, states: Record<string, Snapshot<T>>): void {
+  for (const [id, state] of Object.entries(states)) {
+    if (state.before === null) delete into[id];
+    else into[id] = state.before;
+  }
+}
+
+function parseLineage(line: string): string | undefined {
+  try {
+    const raw = JSON.parse(line) as { lineage?: unknown };
+    return typeof raw.lineage === 'string' ? raw.lineage : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function parseStep(line: string): Step | null {
+  try {
+    const raw = JSON.parse(line) as { step?: Partial<Step> };
+    const step = raw.step;
+    if (
+      !step ||
+      typeof step.seq !== 'number' ||
+      typeof step.from !== 'number' ||
+      typeof step.cursor !== 'number' ||
+      !isRecordOf(step.states)
+    ) {
+      return null;
+    }
+    return step as Step;
+  } catch {
+    return null;
   }
 }
 

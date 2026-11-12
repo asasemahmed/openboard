@@ -137,7 +137,7 @@ async function start(
   }
 
   await mkdir(paths.dir, { recursive: true });
-  const boards = new Boards(paths, { log });
+  const boards = new Boards(paths, { log, ...(options.clock ? { clock: options.clock } : {}) });
   await boards.start();
 
   const security: SecurityConfig = { port: 0, checkHost: isLoopbackBind(host) };
@@ -221,7 +221,7 @@ async function start(
     info,
     url,
     root,
-    api: (actor: Actor) => new LocalBoardApi(boards, actor, log),
+    api: (actor: Actor, opts?: { session?: string }) => new LocalBoardApi(boards, actor, log, opts),
     mount: (mountPath: string, handler: MountHandler) => mountHandler(mounts, mountPath, handler),
     close: () => {
       closing ??= close();

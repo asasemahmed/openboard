@@ -2,7 +2,13 @@
  * Document sync and presence over WebSocket, speaking the standard
  * y-websocket protocol so the stock `WebsocketProvider` works unmodified:
  *
- *   ws://<host>/sync/<boardId>?actorId=..&actorName=..&actorKind=..
+ *   ws://<host>/sync/<boardId>?lineage=..&actorId=..&actorName=..&actorKind=..
+ *
+ * `lineage` must be the live document's lineage (from the board listing or the
+ * `x-openboard-lineage` header of `GET /api/boards/:id`). A socket without it,
+ * or with another one, is closed with `CLOSE_STALE_DOCUMENT` before anything it
+ * sent is applied: it holds a document from an earlier server or an earlier
+ * life of this board, and merging it would bring back what is gone.
  *
  * Message types: 0 sync (step 1, step 2, update), 1 awareness, 3 query
  * awareness. Auth (2) is not used.
@@ -40,6 +46,8 @@ const MESSAGE_QUERY_AWARENESS = 3;
 /** Close codes in the application range (4000-4999). */
 export const CLOSE_BOARD_NOT_FOUND = 4404;
 export const CLOSE_UNAVAILABLE = 4503;
+/** The client's document belongs to another lineage; reload the board before syncing again. */
+export const CLOSE_STALE_DOCUMENT = 4409;
 const CLOSE_BAD_MESSAGE = 1007;
 const CLOSE_GOING_AWAY = 1001;
 
@@ -117,12 +125,17 @@ export class SyncServer {
       this.sockets.add(ws);
       ws.on('close', () => this.sockets.delete(ws));
       ws.on('error', () => {});
-      void this.attach(ws, boardId, actor);
+      void this.attach(ws, boardId, actor, url.searchParams.get('lineage'));
     });
     return true;
   }
 
-  private async attach(ws: WebSocket, boardId: string, actor: Actor): Promise<void> {
+  private async attach(
+    ws: WebSocket,
+    boardId: string,
+    actor: Actor,
+    lineage: string | null,
+  ): Promise<void> {
     // Messages that arrive while the board loads are handled once it has.
     const early: RawData[] = [];
     const buffer = (data: RawData) => early.push(data);
@@ -146,7 +159,16 @@ export class SyncServer {
       ws.close(CLOSE_BOARD_NOT_FOUND, 'board not found');
       return;
     }
+    if (lineage !== room.lineage) {
+      // Messages buffered while the board loaded are dropped unread.
+      ws.close(
+        CLOSE_STALE_DOCUMENT,
+        lineage ? 'document lineage does not match; reload the board' : 'lineage is required',
+      );
+      return;
+    }
     if (ws.readyState !== ws.OPEN) return;
+    room.viewers++;
 
     room.knownActors.set(actor.id, actor);
     const conn: Connection = {
@@ -256,6 +278,7 @@ export class SyncServer {
   private detach(conn: Connection): void {
     const hub = this.hubs.get(conn.room);
     if (!hub || !hub.connections.delete(conn)) return;
+    conn.room.viewers = Math.max(0, conn.room.viewers - 1);
     if (conn.clients.size > 0) {
       removeAwarenessStates(conn.room.awareness, [...conn.clients], null);
     }

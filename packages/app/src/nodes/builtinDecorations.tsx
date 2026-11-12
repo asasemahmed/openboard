@@ -10,6 +10,7 @@ import { type DecorationProps, registerNodeDecoration } from './decorations.js';
 function PinBadge({ node }: DecorationProps) {
   const session = useSession();
   const unpin = () => {
+    if (session.ui.readOnly) return;
     const outcome = session.store.apply(
       [{ op: 'move_node', id: node.id, view: { pinned: false } }],
       session.actor(),

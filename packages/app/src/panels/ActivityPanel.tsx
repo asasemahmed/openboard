@@ -216,6 +216,14 @@ export function ActivityPanel() {
             </option>
           ))}
         </select>
+        <Button
+          size="sm"
+          icon="play"
+          title="Watch the board change, batch by batch"
+          onClick={() => void session.replay.open()}
+        >
+          Replay
+        </Button>
         <label className="check-label">
           <input
             type="checkbox"

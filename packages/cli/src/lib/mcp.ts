@@ -120,14 +120,17 @@ function isUnavailable(error: unknown): boolean {
  * the call is retried once against it.
  *
  * It wraps every method of the client rather than listing them, so a method
- * added to `BoardApi` is covered without touching this file.
+ * added to `BoardApi` is covered without touching this file. Every client it
+ * makes carries `session`, so the server sees one agent session throughout.
  */
 export function reconnectingApi(
   actor: Actor,
   server: ServerInfo,
   ensure: () => Promise<ServerInfo>,
+  session?: string,
 ): BoardApi {
-  let client: OpenBoardClient = connect({ url: server.url, actor });
+  const open = (url: string) => connect({ url, actor, ...(session ? { session } : {}) });
+  let client: OpenBoardClient = open(server.url);
 
   const call = async (name: string | symbol, args: unknown[]): Promise<unknown> => {
     // The client is fully typed; indexing it by a runtime method name is not.
@@ -144,7 +147,7 @@ export function reconnectingApi(
         const message = reason instanceof Error ? reason.message : String(reason);
         throw new OpenBoardError('unavailable', message);
       }
-      client = connect({ url: info.url, actor });
+      client = open(info.url);
       return invoke(client);
     }
   };

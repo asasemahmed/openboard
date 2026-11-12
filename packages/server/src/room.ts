@@ -15,6 +15,7 @@ import {
   type Comment,
   type DocEvent,
   MENTION_AGENTS,
+  newId,
   type Op,
   type Presence,
   type TxOrigin,
@@ -22,7 +23,7 @@ import {
 import { Awareness } from 'y-protocols/awareness';
 import { ConfigStore } from './config.js';
 import { ChangeFeed } from './feed.js';
-import { errorMessage } from './fsutil.js';
+import { errorMessage, readIfExists, writeFileAtomic } from './fsutil.js';
 import { History, type TxContext } from './history.js';
 import { Inbox } from './inbox.js';
 import { Mutex } from './mutex.js';
@@ -32,6 +33,8 @@ export interface RoomFiles extends StoreFiles {
   changes: string;
   history: string;
   inbox: string;
+  /** The document lineage, next to the `.ydoc` snapshot it belongs to. */
+  lineage: string;
 }
 
 export interface RoomOptions {
@@ -41,6 +44,8 @@ export interface RoomOptions {
   config?: ConfigStore;
   /** Called (debounced) when nodes or edges that pending proposals touch have changed. */
   onProposalsStale?: (room: Room) => Promise<void>;
+  /** Milliseconds since the epoch; injectable for tests. */
+  clock?: () => number;
 }
 
 /** A human's current selection, as published over awareness. */
@@ -65,11 +70,19 @@ export class Room {
   private readonly askStatus = new Map<string, Ask['status']>();
   private readonly askWaiters = new Map<string, Set<() => void>>();
   private refreshTimer: NodeJS.Timeout | null = null;
+  /** Browser connections currently syncing this board. */
+  viewers = 0;
   private closed = false;
   private readonly log: (line: string) => void;
 
   private constructor(
     readonly id: string,
+    /**
+     * Random id of this live document, made when it was created or rebuilt
+     * from the board file. A browser must present it to sync, so a tab holding
+     * a document from another lineage cannot merge it into this one.
+     */
+    readonly lineage: string,
     readonly doc: BoardDoc,
     readonly store: BoardStore,
     readonly feed: ChangeFeed,
@@ -90,11 +103,12 @@ export class Room {
   static async open(id: string, files: RoomFiles, opts: RoomOptions = {}): Promise<Room | null> {
     const loaded = await loadBoard(files);
     if (!loaded) return null;
+    const lineage = await lineageFor(files.lineage, loaded.restored);
     const feed = await ChangeFeed.open(files.changes, { log: opts.log });
-    const history = await History.open(files.history, { log: opts.log });
+    const history = await History.open(files.history, { log: opts.log, lineage });
     const inbox = await Inbox.open(files.inbox, { log: opts.log });
     const store = new BoardStore(loaded.doc, files, loaded, opts);
-    const room = new Room(id, loaded.doc, store, feed, history, inbox, opts);
+    const room = new Room(id, lineage, loaded.doc, store, feed, history, inbox, opts);
     // The file changed while the server was not running: catch up, and let the
     // feed and history record what changed.
     if (loaded.reconcileTo) loaded.doc.reconcile(loaded.reconcileTo, room.fileOrigin);
@@ -109,11 +123,12 @@ export class Room {
     opts: RoomOptions = {},
   ): Promise<Room> {
     await BoardStore.discardSnapshot(files);
+    const lineage = await lineageFor(files.lineage, false);
     const feed = await ChangeFeed.open(files.changes, { log: opts.log });
-    const history = await History.open(files.history, { log: opts.log });
+    const history = await History.open(files.history, { log: opts.log, lineage });
     const inbox = await Inbox.open(files.inbox, { log: opts.log });
     const store = new BoardStore(doc, files, { fileText: null }, opts);
-    const room = new Room(id, doc, store, feed, history, inbox, opts);
+    const room = new Room(id, lineage, doc, store, feed, history, inbox, opts);
     await store.writeNow();
     return room;
   }
@@ -251,8 +266,20 @@ export class Room {
     const reason = pending?.record?.batch.reason ?? ctx?.reason;
     if (reason !== undefined) tag.reason = reason;
     if (pending) tag.batchId = pending.id;
+    const from = this.feed.cursor;
     this.feed.record(event, tag);
+    if (event.states) this.history.step(event.states, from, this.feed.cursor);
     if (pending) this.history.commit(pending, event, ctx, this.feed.cursor);
+
+    // A removed node takes its claim with it. Written after this transaction.
+    const gone = Object.entries(event.states?.nodes ?? {})
+      .filter(([id, state]) => state.after === null && this.doc.getClaim(id))
+      .map(([id]) => id);
+    if (gone.length > 0) {
+      queueMicrotask(() => {
+        if (!this.closed) this.doc.deleteClaims(gone, this.doc.origin('system', 'ops'));
+      });
+    }
 
     try {
       if (event.comments && event.origin?.source !== 'undo') {
@@ -408,4 +435,15 @@ function readSelection(state: unknown): HumanSelection | null {
   if (nodeIds.length === 0 && edgeIds.length === 0) return null;
   const at = typeof raw.at === 'string' ? raw.at : '';
   return { by: actor.data, nodeIds, edgeIds, at };
+}
+
+/** The lineage stored next to a restored snapshot, or a new one (written right away). */
+async function lineageFor(file: string, restored: boolean): Promise<string> {
+  if (restored) {
+    const stored = (await readIfExists(file))?.toString('utf8').trim();
+    if (stored && /^[a-z0-9_]{6,64}$/.test(stored)) return stored;
+  }
+  const lineage = newId('l');
+  await writeFileAtomic(file, `${lineage}\n`);
+  return lineage;
 }

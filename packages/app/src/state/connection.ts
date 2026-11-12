@@ -12,6 +12,8 @@ export interface ConnectionSnapshot {
   everLive: boolean;
   /** The server reported that the board no longer exists. */
   gone: boolean;
+  /** The server refused this tab's document as out of date; it must be replaced. */
+  stale: boolean;
 }
 
 export class ConnectionStore extends Emitter {
@@ -30,7 +32,8 @@ export class ConnectionStore extends Emitter {
         next.status !== s.status ||
         next.synced !== s.synced ||
         next.everLive !== s.everLive ||
-        next.gone !== s.gone
+        next.gone !== s.gone ||
+        next.stale !== s.stale
       ) {
         this.snapshot = next;
         this.emit();
@@ -48,10 +51,16 @@ export class ConnectionStore extends Emitter {
       synced,
       everLive: everLive || link === 'connected',
       gone: this.transport.gone(),
+      stale: this.transport.stale(),
     };
   }
 
   readonly get = (): ConnectionSnapshot => this.snapshot;
+
+  /** Local edits the server has not seen. */
+  dirty(): boolean {
+    return this.transport.dirty();
+  }
 
   reconnect(): void {
     this.transport.reconnect();

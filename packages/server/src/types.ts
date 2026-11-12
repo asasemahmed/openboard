@@ -21,6 +21,11 @@ export interface ServerOptions {
   info?:
     | Record<string, unknown>
     | ((server: { url: string; root: string }) => Record<string, unknown>);
+  /**
+   * Milliseconds since the epoch, used for presence, sessions and claims.
+   * Defaults to `Date.now`; tests inject their own.
+   */
+  clock?: () => number;
 }
 
 /** Handles every request under a mounted path. */
@@ -40,8 +45,11 @@ export interface OpenBoardServer {
   readonly info: ServerInfo;
   readonly url: string;
   readonly root: string;
-  /** An in-process session on this server, bound to `actor`. */
-  api(actor: Actor): BoardApi;
+  /**
+   * An in-process session on this server, bound to `actor`. `session` names
+   * the agent session its calls belong to (see `ActivityEvent`).
+   */
+  api(actor: Actor, options?: { session?: string }): BoardApi;
   /**
    * Route `path` and everything below it (all methods) to `handler`, ahead of
    * the web app. The Host and Origin checks still apply. `path` is a fixed

@@ -1,6 +1,13 @@
 /** The current person, shared by every screen. */
 import type { Actor } from '@openboard/core';
-import { cleanName, type Identity, loadIdentity, saveIdentity, toActor } from '../lib/identity.js';
+import {
+  cleanName,
+  type Identity,
+  loadIdentity,
+  saveIdentity,
+  toActor,
+  withServerName,
+} from '../lib/identity.js';
 import { useValue, Value } from './emitter.js';
 
 export const identity = new Value<Identity>(loadIdentity());
@@ -21,6 +28,7 @@ export function updateIdentity(patch: Partial<Pick<Identity, 'name' | 'color'>>)
     ...(patch.name !== undefined ? { name: cleanName(patch.name) } : {}),
     ...(patch.color !== undefined ? { color: patch.color } : {}),
   };
+  if (patch.name !== undefined && next.name !== current.name) next.named = true;
   if (next.name === current.name && next.color === current.color) return;
   saveIdentity(next);
   identity.set(next);
@@ -28,4 +36,13 @@ export function updateIdentity(patch: Partial<Pick<Identity, 'name' | 'color'>>)
 
 export function useIdentity(): Identity {
   return useValue(identity);
+}
+
+/** Use the server's name for the person (`GET /api/info` `user`) until they choose their own. */
+export function adoptServerName(user: string | undefined): void {
+  const current = identity.get();
+  const next = withServerName(current, user);
+  if (next === current) return;
+  saveIdentity(next);
+  identity.set(next);
 }
