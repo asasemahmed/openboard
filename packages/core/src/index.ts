@@ -1,4 +1,5 @@
 export * from './api.js';
+export * from './geometry.js';
 export * from './ids.js';
 export * from './ops.js';
 export * from './schema.js';
