@@ -62,6 +62,8 @@ export function Canvas({
 }: CanvasProps) {
   const session = useSession();
   const { store, ui, presence } = session;
+  // Replay and compare views are read-only, and so is the live board for people who may not edit it.
+  const editable = !readOnly && !ui.readOnly;
   const nodes = useStoreValue(store, store.getNodes);
   const edges = useStoreValue(store, store.getEdges);
   const minimap = useValue(ui.minimap);
@@ -202,10 +204,10 @@ export function Canvas({
 
   return (
     <div
-      className="canvas-root"
+      className={`canvas-root${editable ? '' : ' is-readonly'}`}
       onKeyDown={onKeyDown}
-      onDragOver={readOnly ? undefined : onFileDragOver}
-      onDrop={readOnly ? undefined : onFileDrop}
+      onDragOver={!editable ? undefined : onFileDragOver}
+      onDrop={!editable ? undefined : onFileDrop}
     >
       <EdgeMarkers />
       <ReactFlow<FlowNode, FlowEdge>
@@ -215,14 +217,14 @@ export function Canvas({
         edgeTypes={edgeTypes}
         onNodesChange={store.onNodesChange}
         onEdgesChange={store.onEdgesChange}
-        onNodeDrag={readOnly ? undefined : onNodeDrag}
-        onNodeDragStop={readOnly ? undefined : onNodeDragStop}
-        onConnect={readOnly ? undefined : onConnect}
-        onConnectEnd={readOnly ? undefined : onConnectEnd}
-        onNodeDoubleClick={readOnly ? undefined : onNodeDoubleClick}
-        onDoubleClick={readOnly ? undefined : onDoubleClick}
-        nodesDraggable={!readOnly}
-        nodesConnectable={!readOnly}
+        onNodeDrag={!editable ? undefined : onNodeDrag}
+        onNodeDragStop={!editable ? undefined : onNodeDragStop}
+        onConnect={!editable ? undefined : onConnect}
+        onConnectEnd={!editable ? undefined : onConnectEnd}
+        onNodeDoubleClick={!editable ? undefined : onNodeDoubleClick}
+        onDoubleClick={!editable ? undefined : onDoubleClick}
+        nodesDraggable={editable}
+        nodesConnectable={editable}
         onMouseMove={readOnly ? undefined : onMouseMove}
         onMouseLeave={readOnly ? undefined : onMouseLeave}
         onMoveStart={onMoveStart}
@@ -275,7 +277,7 @@ export function Canvas({
         )}
       </ReactFlow>
       {!readOnly && <AskStack />}
-      {!readOnly && nodes.length === 0 && <EmptyBoard actions={actions} />}
+      {editable && nodes.length === 0 && <EmptyBoard actions={actions} />}
     </div>
   );
 }

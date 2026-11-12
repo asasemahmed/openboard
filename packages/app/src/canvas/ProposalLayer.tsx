@@ -12,6 +12,7 @@ import { absoluteRect, boundsOf, type Rect } from '../lib/geometry.js';
 import { placeControls, toScreen } from '../lib/overlay.js';
 import { futureOutlines, type ProposalGroup, withFutureViews } from '../lib/review.js';
 import { relativeTime } from '../lib/time.js';
+import { useCan } from '../state/access.js';
 import { useSession } from '../state/context.js';
 import { useStoreValue } from '../state/emitter.js';
 import { decide, openReview } from '../state/review.js';
@@ -154,6 +155,7 @@ const InlineDecision = memo(function InlineDecision({
   const author = useStoreValue(session.store, () => session.store.meta.actors[proposal.author]);
   const name = author?.name ?? proposal.author;
   const [busy, setBusy] = useState<'accept' | 'reject' | null>(null);
+  const canDecide = useCan('proposal.decide');
   const [error, setError] = useState<string | null>(null);
   const pending = proposal.items.filter((item) => item.status === 'pending').length;
   const conflicts = proposal.items.filter((item) => item.status === 'conflict').length;
@@ -198,22 +200,26 @@ const InlineDecision = memo(function InlineDecision({
         </p>
       )}
       <div className="inline-decision-actions">
-        <button
-          type="button"
-          className="pill pill-accept"
-          disabled={busy !== null || pending === 0}
-          onClick={() => void run('accept')}
-        >
-          {busy === 'accept' ? 'Accepting…' : 'Accept'}
-        </button>
-        <button
-          type="button"
-          className="pill pill-reject"
-          disabled={busy !== null || pending === 0}
-          onClick={() => void run('reject')}
-        >
-          {busy === 'reject' ? 'Rejecting…' : 'Reject'}
-        </button>
+        {canDecide && (
+          <>
+            <button
+              type="button"
+              className="pill pill-accept"
+              disabled={busy !== null || pending === 0}
+              onClick={() => void run('accept')}
+            >
+              {busy === 'accept' ? 'Accepting…' : 'Accept'}
+            </button>
+            <button
+              type="button"
+              className="pill pill-reject"
+              disabled={busy !== null || pending === 0}
+              onClick={() => void run('reject')}
+            >
+              {busy === 'reject' ? 'Rejecting…' : 'Reject'}
+            </button>
+          </>
+        )}
         <button
           type="button"
           className="pill pill-quiet"

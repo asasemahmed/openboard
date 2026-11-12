@@ -17,7 +17,7 @@ import {
   slugify,
 } from '@openboard/core';
 import { connect, type OpenBoardClient } from '@openboard/sdk';
-import { isNodeError } from './errors.js';
+import { CliError, isNodeError } from './errors.js';
 import { type CliIo, println } from './io.js';
 import { cliActor } from './project.js';
 import { findRunningServer, type ProjectPaths, projectPaths, type ServerInfo } from './server.js';
@@ -176,10 +176,53 @@ export interface Session {
   client?: OpenBoardClient;
 }
 
-/** Talk to the running server for `root` if there is one, otherwise to the files. */
+/**
+ * A client for `url` as the person at this terminal: with `OPENBOARD_TOKEN`
+ * when it is set (the server then says who that is), else as the local owner,
+ * which only a server on this machine accepts.
+ */
+export function clientFor(io: CliIo, url: string): OpenBoardClient {
+  const actor = cliActor(io.env);
+  const token = io.env.OPENBOARD_TOKEN?.trim();
+  if (token) assertTokenTransport(url);
+  return token ? connect({ url, token, name: actor.name }) : connect({ url, actor });
+}
+
+/**
+ * Refuse to send a token to `url` over plain http unless it is this machine:
+ * https, or http to a loopback name only (as for `openboard hook`).
+ */
+export function assertTokenTransport(url: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new CliError(`${url}: not a URL`);
+  }
+  if (parsed.protocol === 'https:') return;
+  const host = parsed.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (
+    parsed.protocol === 'http:' &&
+    (host === 'localhost' || host === '::1' || /^127\./.test(host))
+  )
+    return;
+  throw new CliError(
+    `refusing to send OPENBOARD_TOKEN to ${parsed.origin}: use https (plain http is only for this machine), so the token does not cross the network unencrypted`,
+  );
+}
+
+/**
+ * Talk to the remote server named by `--url`, else to the running server for
+ * `root` if there is one, otherwise to the files.
+ */
 export async function openSession(io: CliIo, root: string): Promise<Session> {
+  if (io.remoteUrl) {
+    const client = clientFor(io, io.remoteUrl);
+    return { root, server: null, store: { source: 'server', ...bindStore(client) }, client };
+  }
   const server = await findRunningServer(root);
   if (server) {
+    // The project's own server trusts this machine; a token meant for a remote one is not sent.
     const client = connect({ url: server.url, actor: cliActor(io.env) });
     return { root, server, store: { source: 'server', ...bindStore(client) }, client };
   }

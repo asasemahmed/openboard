@@ -14,6 +14,8 @@ export interface ConnectionSnapshot {
   gone: boolean;
   /** The server refused this tab's document as out of date; it must be replaced. */
   stale: boolean;
+  /** The server ended this connection's access. */
+  revoked: boolean;
 }
 
 export class ConnectionStore extends Emitter {
@@ -33,7 +35,8 @@ export class ConnectionStore extends Emitter {
         next.synced !== s.synced ||
         next.everLive !== s.everLive ||
         next.gone !== s.gone ||
-        next.stale !== s.stale
+        next.stale !== s.stale ||
+        next.revoked !== s.revoked
       ) {
         this.snapshot = next;
         this.emit();
@@ -52,6 +55,7 @@ export class ConnectionStore extends Emitter {
       everLive: everLive || link === 'connected',
       gone: this.transport.gone(),
       stale: this.transport.stale(),
+      revoked: this.transport.revoked(),
     };
   }
 

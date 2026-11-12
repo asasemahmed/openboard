@@ -17,6 +17,8 @@ import {
   type PolicyForm,
   policyForm,
 } from '../lib/policy.js';
+import { ReadOnlyNote } from '../panels/ReadOnlyNote.js';
+import { useCan } from '../state/access.js';
 import { serverInfo } from '../state/boards.js';
 import { useSession } from '../state/context.js';
 import { useStoreValue, useValue } from '../state/emitter.js';
@@ -43,6 +45,7 @@ export function SettingsDialog() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const defaultId = useId();
+  const canWrite = useCan('config.write');
 
   // Read the settings fresh on every open, so changes made elsewhere show up.
   useEffect(() => {
@@ -104,8 +107,9 @@ export function SettingsDialog() {
         </p>
         {load.status === 'loading' && <p className="muted small">Loading settings…</p>}
         {load.status === 'error' && <p className="inline-error">{load.message}</p>}
+        {!canWrite && <ReadOnlyNote action="config.write" />}
         {load.status === 'ready' && form && (
-          <>
+          <fieldset className="inspector-fieldset" disabled={!canWrite}>
             <div className="policy-row policy-row-default">
               <label htmlFor={defaultId} className="policy-who">
                 <strong>Default</strong>
@@ -132,7 +136,7 @@ export function SettingsDialog() {
                 />
               ))
             )}
-          </>
+          </fieldset>
         )}
       </section>
       {error && (
@@ -141,9 +145,10 @@ export function SettingsDialog() {
         </p>
       )}
       <div className="dialog-actions">
-        <Button onClick={close}>Cancel</Button>
+        <Button onClick={close}>{canWrite ? 'Cancel' : 'Close'}</Button>
         <Button
           variant="primary"
+          hidden={!canWrite}
           disabled={saving || load.status !== 'ready' || !form || !formChanged(form, load.config)}
           onClick={() => void save()}
         >

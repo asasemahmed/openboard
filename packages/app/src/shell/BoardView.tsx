@@ -9,11 +9,10 @@ import { ActionsProvider, useBoardActions } from '../canvas/actions.js';
 import { Canvas } from '../canvas/Canvas.js';
 import { useBoardCommentNotices, useReviewAutoOpen } from '../canvas/TrustHooks.js';
 import { useShortcuts } from '../canvas/useShortcuts.js';
-import { toActor } from '../lib/identity.js';
 import { LeftPanel, RightPanel } from '../panels/PanelSlot.js';
 import { SessionProvider, useMeta, useSession } from '../state/context.js';
 import { useStoreValue } from '../state/emitter.js';
-import { identity } from '../state/identity.js';
+import { currentActor, identity } from '../state/identity.js';
 import type { BoardSession } from '../state/session.js';
 import { CompareView } from './CompareView.js';
 import { ConfirmHost } from './ConfirmHost.js';
@@ -40,7 +39,7 @@ function Workspace({ onlyRenderVisibleElements }: { onlyRenderVisibleElements: b
   useEffect(
     () =>
       identity.subscribe(() => {
-        session.setActor(toActor(identity.get()));
+        session.setActor(currentActor());
       }),
     [session],
   );

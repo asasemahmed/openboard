@@ -6,9 +6,10 @@
  */
 import { useSyncExternalStore } from 'react';
 
-export type Route = { name: 'home' } | { name: 'board'; boardId: string };
+export type Route = { name: 'home' } | { name: 'board'; boardId: string } | { name: 'join' };
 
 export function parseRoute(pathname: string): Route {
+  if (pathname.replace(/\/+$/, '') === '/join') return { name: 'join' };
   const match = /^\/b\/([^/]+)\/?$/.exec(pathname);
   if (match?.[1]) {
     try {

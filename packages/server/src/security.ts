@@ -8,6 +8,10 @@
  * - A request that carries `Origin` (every cross-site browser request does)
  *   must come from the server's own origin, so another site open in the
  *   browser cannot drive the API or join a board's socket.
+ *
+ * In shared mode the public URL's host and origin are accepted as well (and
+ * nothing else that is not loopback); authentication is a separate step on
+ * top (auth.ts).
  */
 
 const LOOPBACK_NAMES = ['localhost', '127.0.0.1', '[::1]'];
@@ -29,6 +33,8 @@ export interface SecurityConfig {
   port: number;
   /** False when the server was bound to a non-loopback interface on purpose. */
   checkHost: boolean;
+  /** Shared mode: the public URL's `host` (as in a `Host` header) and origin, lowercase. */
+  shared?: { host: string; origin: string };
 }
 
 export type Verdict = { ok: true } | { ok: false; reason: string };
@@ -53,6 +59,7 @@ export function checkRequest(
   devAllowed: boolean,
 ): Verdict {
   const host = headers.host?.toLowerCase();
+  if (config.shared) return checkShared(config, config.shared, host, headers, devAllowed);
   if (config.checkHost) {
     if (!host || !allowedHosts(config.port).has(host)) {
       return { ok: false, reason: `host ${JSON.stringify(headers.host ?? '')} is not allowed` };
@@ -63,6 +70,24 @@ export function checkRequest(
   const normalized = origin.toLowerCase();
   if (host && normalized === `http://${host}`) return { ok: true };
   if (config.checkHost && isOwnOrigin(normalized, config.port)) return { ok: true };
+  if (devAllowed && ALLOW_DEV_ORIGINS.has(normalized)) return { ok: true };
+  return { ok: false, reason: `origin ${JSON.stringify(origin)} is not allowed` };
+}
+
+function checkShared(
+  config: SecurityConfig,
+  shared: { host: string; origin: string },
+  host: string | undefined,
+  headers: { host: string | undefined; origin: string | undefined },
+  devAllowed: boolean,
+): Verdict {
+  if (!host || !(host === shared.host || allowedHosts(config.port).has(host))) {
+    return { ok: false, reason: `host ${JSON.stringify(headers.host ?? '')} is not allowed` };
+  }
+  const origin = headers.origin;
+  if (origin === undefined) return { ok: true };
+  const normalized = origin.toLowerCase();
+  if (normalized === shared.origin || isOwnOrigin(normalized, config.port)) return { ok: true };
   if (devAllowed && ALLOW_DEV_ORIGINS.has(normalized)) return { ok: true };
   return { ok: false, reason: `origin ${JSON.stringify(origin)} is not allowed` };
 }

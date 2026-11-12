@@ -542,3 +542,217 @@
 .activity-filters {
   flex-wrap: wrap;
 }
+
+/* A board this person may not edit: no connection handles to grab. */
+.canvas-root.is-readonly .card-handle {
+  display: none;
+}
+
+.inspector-actions[hidden] {
+  display: none;
+}
+.inspector-fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.readonly-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 12px 16px 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--sunken);
+  color: var(--ink-2);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.readonly-note svg {
+  flex: none;
+  margin-top: 1px;
+}
+.access-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.board-name-static {
+  margin: 0;
+  cursor: default;
+}
+.board-name-static:hover {
+  background: transparent;
+}
+
+/* `hidden` wins over a component's own display. */
+[hidden] {
+  display: none !important;
+}
+
+/* ── Sharing ──────────────────────────────────────────────────────────────── */
+
+.share,
+.share-local {
+  display: grid;
+  gap: 18px;
+  margin-top: 14px;
+  font-size: 13px;
+}
+.share-local p + p {
+  margin-top: -8px;
+}
+.share-section {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.share-section > * {
+  justify-self: stretch;
+}
+.share-section > .btn {
+  justify-self: start;
+}
+.share-section h3 {
+  font-size: 14px;
+  font-weight: 650;
+}
+.share-roles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.share-roles legend {
+  margin-bottom: 6px;
+}
+.share-role {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.share-role.is-active {
+  border-color: var(--accent-ink);
+  background: var(--accent-soft);
+}
+.share-role input {
+  margin-top: 3px;
+  accent-color: var(--accent-fill);
+}
+.share-role span {
+  display: grid;
+  gap: 2px;
+}
+.share-row {
+  display: grid;
+  grid-template-columns: 1fr 160px;
+  gap: 10px;
+}
+.share-row .field + .field {
+  margin-top: 0;
+}
+.share-reveal {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  padding: 12px;
+  border: 1px solid var(--accent-ink);
+  border-radius: 10px;
+  background: var(--card);
+}
+.share-reveal > * {
+  justify-self: stretch;
+}
+.share-reveal > .btn {
+  justify-self: start;
+}
+.share-reveal ol {
+  margin: 4px 0;
+  padding-left: 18px;
+}
+.share-secret {
+  display: flex;
+  gap: 6px;
+}
+.share-secret .input {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.grant-list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.grant-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 10px;
+  align-items: center;
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--line);
+}
+.grant-row .btn {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+}
+.grant-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.grant-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  color: var(--ink-3);
+  font-size: 11.5px;
+}
+.grant-row.status-revoked,
+.grant-row.status-expired {
+  color: var(--ink-2);
+}
+.grants-ended summary {
+  color: var(--ink-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.signed-in {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+}
+.join-name {
+  margin-top: 4px;
+}
+@media (max-width: 560px) {
+  .share-row {
+    grid-template-columns: 1fr;
+  }
+}

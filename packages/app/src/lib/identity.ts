@@ -80,9 +80,13 @@ export function toActor(identity: Identity): Actor {
   return { id: identity.id, kind: 'human', name: identity.name, color: identity.color };
 }
 
+const HEX_COLOR = /^#[0-9a-fA-F]{3,8}$/;
+
 /** A stable colour for an actor that did not choose one. */
 export function colorFor(actor: Pick<Actor, 'id' | 'color' | 'kind'>): string {
-  if (actor.color) return actor.color;
+  // The colour comes from the shared document and ends up in CSS, so only a
+  // plain hex colour is trusted; anything else falls back to a derived one.
+  if (actor.color && HEX_COLOR.test(actor.color)) return actor.color;
   if (actor.kind === 'agent') return '#C2410C';
   let hash = 0;
   for (let i = 0; i < actor.id.length; i++) hash = (hash * 31 + actor.id.charCodeAt(i)) | 0;

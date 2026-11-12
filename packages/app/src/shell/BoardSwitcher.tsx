@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { boardPath, navigate } from '../lib/router.js';
+import { useCan } from '../state/access.js';
 import { boards, useBoards } from '../state/boards.js';
 import { useSession } from '../state/context.js';
 import { Icon } from '../ui/Icon.js';
@@ -15,6 +16,8 @@ export function BoardSwitcher() {
   const [open, setOpen] = useState(false);
   const anchor = useRef<HTMLButtonElement>(null);
   const close = () => setOpen(false);
+  const canEdit = useCan('board.edit');
+  const canCreate = useCan('board.create');
 
   return (
     <>
@@ -55,16 +58,18 @@ export function BoardSwitcher() {
           {list.status === 'error' && <p className="menu-note">Could not load boards.</p>}
           <MenuSeparator />
           <MenuHeading>This board</MenuHeading>
-          <MenuItem
-            icon="plus"
-            hint="Mermaid or JSON Canvas"
-            onSelect={() => {
-              close();
-              session.ui.importDialog.set({});
-            }}
-          >
-            Import…
-          </MenuItem>
+          {canEdit && (
+            <MenuItem
+              icon="plus"
+              hint="Mermaid or JSON Canvas"
+              onSelect={() => {
+                close();
+                session.ui.importDialog.set({});
+              }}
+            >
+              Import…
+            </MenuItem>
+          )}
           {EXPORT_CHOICES.map(({ label, choice }) => (
             <MenuItem
               key={label}
@@ -105,15 +110,17 @@ export function BoardSwitcher() {
             Compare with a git revision…
           </MenuItem>
           <MenuSeparator />
-          <MenuItem
-            icon="plus"
-            onSelect={() => {
-              close();
-              session.ui.newBoard.set(true);
-            }}
-          >
-            New board…
-          </MenuItem>
+          {canCreate && (
+            <MenuItem
+              icon="plus"
+              onSelect={() => {
+                close();
+                session.ui.newBoard.set(true);
+              }}
+            >
+              New board…
+            </MenuItem>
+          )}
           <MenuItem
             icon="boards"
             onSelect={() => {

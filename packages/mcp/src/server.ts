@@ -36,7 +36,7 @@ import {
   type UndoRequest,
 } from '@openboard/core';
 import { z } from 'zod';
-import type { SessionInfo } from './actor.js';
+import type { McpCaller, SessionInfo } from './actor.js';
 import {
   changeCount,
   formatApply,
@@ -69,6 +69,8 @@ export interface McpServerOptions {
    * instance.
    */
   session?: string | (() => string | undefined);
+  /** Who opened this MCP session over HTTP; handed to `resolveApi`. */
+  caller?: McpCaller;
   /** Board used when a tool call names none. Otherwise: the only board, else `main`. */
   defaultBoard?: string;
   /** Version reported to clients. Defaults to this package's version. */
@@ -154,6 +156,7 @@ class Session {
           ? this.options.session()
           : this.options.session) ?? this.#fallbackSession;
       const client: SessionInfo = { name: reported?.name ?? '', session };
+      if (this.options.caller) client.caller = this.options.caller;
       if (reported?.version) client.version = reported.version;
       const pending = Promise.resolve().then(() => this.options.resolveApi(client));
       // A failed resolution is not cached: the next call tries again.
@@ -298,6 +301,10 @@ class Session {
         return `${message}. Use that board, or choose another id.`;
       case 'forbidden':
         return `Refused: ${message}.`;
+      case 'unauthorized':
+        return `Not allowed in: ${message}. Your access to this OpenBoard was revoked, has expired, or the token is wrong. Tell the user; they can ask the board's owner for a new token (openboard access invite --agent). Do not retry.`;
+      case 'rate_limited':
+        return `Too many failed attempts: ${message}. Wait before trying again, and check the token.`;
       case 'not_found':
       case 'conflict':
         return `${message}.`;
@@ -762,6 +769,8 @@ export function createMcpServer(options: McpServerOptions): McpServer {
       },
       (error) => {
         const message = sentence(error.message);
+        // A role that lacks the permission: the generic wording names it.
+        if (/^your access/i.test(error.message)) return undefined;
         if (error.code === 'forbidden' && /locked/.test(error.message)) {
           return `Refused: ${message}. If something of yours should be taken back, ask the user to do it.`;
         }

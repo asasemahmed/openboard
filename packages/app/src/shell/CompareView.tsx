@@ -42,7 +42,7 @@ const KIND_NAME: Record<DiffKind, string> = {
 };
 
 /** Build the read-only comparison: the live board now, against the revision's file. */
-function useComparison(live: BoardSession, target: CompareTarget): Load {
+function useComparison(live: BoardSession, target: CompareTarget, version: number): Load {
   const [load, setLoad] = useState<Load>({ status: 'loading' });
   useEffect(() => {
     let alive = true;
@@ -73,7 +73,7 @@ function useComparison(live: BoardSession, target: CompareTarget): Load {
       alive = false;
       session?.destroy();
     };
-  }, [live, target.rev]);
+  }, [live, target.rev, version]);
   return load;
 }
 
@@ -86,8 +86,21 @@ export function CompareView() {
 
 function Comparison({ target }: { target: CompareTarget }) {
   const live = useSession();
-  const load = useComparison(live, target);
+  const [version, setVersion] = useState(0);
+  const [changed, setChanged] = useState(false);
+  const load = useComparison(live, target, version);
   const exit = () => live.ui.compare.set(null);
+  // The comparison is of the board as it was when it opened; say so when it moves on.
+  useEffect(() => {
+    setChanged(false);
+    return live.doc.observe((event) => {
+      if (event.changes.length > 0 || event.comments) setChanged(true);
+    });
+  }, [live, version]);
+  const refresh = () => {
+    setChanged(false);
+    setVersion((v) => v + 1);
+  };
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key === 'Escape' && !event.defaultPrevented) {
       event.preventDefault();
@@ -104,6 +117,7 @@ function Comparison({ target }: { target: CompareTarget }) {
         target={target}
         view={load.status === 'ready' ? load.view : null}
         onExit={exit}
+        {...(changed ? { onRefresh: refresh } : {})}
       />
       {load.status === 'ready' ? (
         <SessionProvider session={load.session}>
@@ -138,10 +152,13 @@ export function CompareBanner({
   target,
   view,
   onExit,
+  onRefresh,
 }: {
   target: CompareTarget;
   view: DiffView | null;
   onExit: () => void;
+  /** Given when the live board changed since the comparison was made. */
+  onRefresh?: () => void;
 }) {
   return (
     <header className="replay-banner" role="status">
@@ -159,6 +176,14 @@ export function CompareBanner({
           This shows the board now. Nothing here can be edited.
         </span>
       </div>
+      {onRefresh && (
+        <span className="compare-stale">
+          Board changed
+          <Button size="sm" icon="refresh" onClick={onRefresh}>
+            Refresh comparison
+          </Button>
+        </span>
+      )}
       <Button variant="primary" size="sm" onClick={onExit}>
         Back to live
       </Button>

@@ -6,6 +6,8 @@
  * "HTTP surface" table in docs/ARCHITECTURE.md.
  */
 import {
+  type AccessGrant,
+  type AccessList,
   type ActivityEvent,
   type Actor,
   ActorSchema,
@@ -31,6 +33,8 @@ import {
   type DiffResult,
   type ExportOptions,
   type ExportResult,
+  type GrantAccessInput,
+  type GrantAccessResult,
   type HistoryOptions,
   type HistoryResult,
   type ImportIntoResult,
@@ -59,6 +63,7 @@ import {
   type SessionsResult,
   type UndoRequest,
   type UndoResult,
+  type WhoAmI,
 } from '@openboard/core';
 
 /** Requests that take longer than this fail with an `unavailable` error. */
@@ -80,8 +85,20 @@ export const SESSION_HEADER = 'x-openboard-session';
 export interface ConnectOptions {
   /** Base URL of a running server, such as `http://127.0.0.1:4747`. */
   url: string;
-  /** Everything done through the client is attributed to this actor. */
-  actor: Actor;
+  /**
+   * Local mode: everything done through the client is attributed to this
+   * actor, sent in the `x-openboard-actor-*` headers. Required unless `token`
+   * is given; with a token only its name is used (as `name`).
+   */
+  actor?: Actor;
+  /**
+   * An access token (`ob_...`) for a server in shared mode, sent as
+   * `Authorization: Bearer`. The server then decides who the client is: the
+   * first call asks it (`whoami`) and sets `actor`.
+   */
+  token?: string;
+  /** The display name to show for a token's actor; its id and kind come from the grant. */
+  name?: string;
   /** Custom `fetch`, for tests or runtimes without a global one. */
   fetch?: typeof fetch;
   /** Per-request timeout in milliseconds. Defaults to `DEFAULT_TIMEOUT_MS`. */
@@ -93,12 +110,22 @@ export interface ConnectOptions {
   session?: string;
 }
 
-/** What `GET /api/health` returns. */
+/**
+ * What `GET /api/health` returns. A shared server tells callers other than
+ * the owner at its machine only `ok`, `version` and `shared`.
+ */
 export interface HealthInfo {
   ok: boolean;
   version: string;
-  pid: number;
-  root: string;
+  pid?: number;
+  root?: string;
+  shared?: boolean;
+}
+
+/** What `POST /api/auth/ticket` returns: a single-use ticket for one sync socket (`?ticket=`). */
+export interface SyncTicket {
+  ticket: string;
+  expiresAt: string;
 }
 
 const ERROR_CODES: ReadonlySet<string> = new Set<OpenBoardErrorCode>([
@@ -106,8 +133,10 @@ const ERROR_CODES: ReadonlySet<string> = new Set<OpenBoardErrorCode>([
   'not_found',
   'board_exists',
   'invalid_request',
+  'unauthorized',
   'forbidden',
   'conflict',
+  'rate_limited',
   'unavailable',
   'internal',
 ]);
@@ -123,7 +152,7 @@ const RESET_CODES: ReadonlySet<string> = new Set([
 const RETRY_DELAY_MS = 50;
 
 interface RequestSpec {
-  method: 'GET' | 'POST' | 'PUT';
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE';
   path: string;
   body?: unknown;
   /** Safe to send twice. Only idempotent reads are retried, and only once. */
@@ -148,16 +177,33 @@ export function actorHeaders(actor: Actor): Record<string, string> {
   };
 }
 
+/** Stands in for a token's actor until the server has said who it is. */
+const UNKNOWN_ACTOR: Actor = { id: 'unknown', kind: 'agent', name: 'Unknown' };
+
 export class OpenBoardClient implements BoardApi {
-  readonly actor: Actor;
+  #actor: Actor;
   /** The server's base URL, normalized to end with `/`. */
   readonly url: string;
   readonly timeoutMs: number;
   readonly #fetch: typeof fetch;
   readonly #headers: Record<string, string>;
+  readonly #token: boolean;
+  #identity: Promise<WhoAmI> | null = null;
 
   constructor(options: ConnectOptions) {
-    const actor = ActorSchema.safeParse(options.actor);
+    const token = options.token;
+    if (token !== undefined && (typeof token !== 'string' || !/^\S+$/.test(token))) {
+      throw new OpenBoardError('invalid_request', 'the access token must be a non-empty string');
+    }
+    if (options.actor === undefined && token === undefined) {
+      throw new OpenBoardError(
+        'invalid_request',
+        'pass an actor (local mode) or a token (shared mode)',
+      );
+    }
+    const fallback =
+      options.name !== undefined ? { ...UNKNOWN_ACTOR, name: options.name } : UNKNOWN_ACTOR;
+    const actor = ActorSchema.safeParse(options.actor ?? fallback);
     if (!actor.success) {
       throw new OpenBoardError('invalid_request', 'invalid actor for the OpenBoard client', {
         issues: actor.error.issues,
@@ -183,14 +229,80 @@ export class OpenBoardClient implements BoardApi {
       throw new OpenBoardError('invalid_request', 'timeoutMs must be a positive number');
     }
 
-    this.actor = actor.data;
+    this.#actor = actor.data;
     this.url = base.toString();
     this.timeoutMs = timeoutMs;
     // Resolve the global lazily and call it unbound-free: some runtimes throw
     // "Illegal invocation" when `fetch` is called with another `this`.
     this.#fetch = options.fetch ?? ((input, init) => globalThis.fetch(input, init));
-    this.#headers = { accept: 'application/json', ...actorHeaders(this.actor) };
+    this.#token = token !== undefined;
+    if (token !== undefined) {
+      // The grant decides the actor's id and kind; only a display name is sent.
+      this.#headers = { accept: 'application/json', authorization: `Bearer ${token}` };
+      const name = options.name ?? options.actor?.name;
+      if (name !== undefined) this.#headers[ACTOR_HEADERS.name] = encodeURIComponent(name);
+    } else {
+      this.#headers = { accept: 'application/json', ...actorHeaders(this.#actor) };
+    }
     if (options.session !== undefined) this.#headers[SESSION_HEADER] = options.session;
+  }
+
+  /**
+   * Who calls go out as. With a token this is the grant's actor once the
+   * server has answered the first call (`whoami`), and a placeholder before.
+   */
+  get actor(): Actor {
+    return this.#actor;
+  }
+
+  // ── Access ────────────────────────────────────────────────────────────────
+
+  /** Who the server takes this client to be. With a token, also sets `actor`. */
+  async whoami(): Promise<WhoAmI> {
+    const who = await this.#request<WhoAmI>({
+      method: 'GET',
+      path: 'api/whoami',
+      idempotent: true,
+      expect: 'object',
+    });
+    if (this.#token) this.#actor = who.actor;
+    return who;
+  }
+
+  listAccess(): Promise<AccessList> {
+    return this.#request({ method: 'GET', path: 'api/access', idempotent: true, expect: 'object' });
+  }
+
+  grantAccess(input: GrantAccessInput): Promise<GrantAccessResult> {
+    return this.#request({
+      method: 'POST',
+      path: 'api/access',
+      body: input,
+      idempotent: false,
+      expect: 'object',
+    });
+  }
+
+  revokeAccess(grantId: string): Promise<AccessGrant> {
+    return this.#request({
+      method: 'DELETE',
+      path: `api/access/${segment(grantId, 'grant id')}`,
+      idempotent: true,
+      expect: 'object',
+    });
+  }
+
+  /**
+   * A single-use ticket for one sync socket, valid for a minute, for
+   * WebSocket clients that cannot send headers: `/sync/<board>?ticket=...`.
+   */
+  syncTicket(): Promise<SyncTicket> {
+    return this.#request({
+      method: 'POST',
+      path: 'api/auth/ticket',
+      idempotent: false,
+      expect: 'object',
+    });
   }
 
   /** Liveness and identity of the server. */
@@ -574,6 +686,16 @@ export class OpenBoardClient implements BoardApi {
   }
 
   async #request<T>(spec: RequestSpec): Promise<T> {
+    // With a token, learn who we are before the first call, once.
+    if (this.#token && spec.path !== 'api/whoami' && spec.path !== 'api/health') {
+      this.#identity ??= this.whoami();
+      try {
+        await this.#identity;
+      } catch (error) {
+        this.#identity = null;
+        throw error;
+      }
+    }
     const target = new URL(spec.path, this.url).toString();
     try {
       return await this.#attempt<T>(spec, target);
@@ -623,7 +745,9 @@ export class OpenBoardClient implements BoardApi {
       }
 
       const parsed = parseJson(text);
-      if (!response.ok) throw toError(response.status, parsed, where);
+      if (!response.ok) {
+        throw toError(response.status, parsed, where, response.headers.get('retry-after'));
+      }
       if (spec.expect === 'text') {
         const raw: RawBody = {
           text,
@@ -660,7 +784,10 @@ export class OpenBoardClient implements BoardApi {
   }
 }
 
-/** A client bound to `options.actor` for the server at `options.url`. */
+/**
+ * A client for the server at `options.url`: bound to `options.actor` in local
+ * mode, or to the grant of `options.token` in shared mode.
+ */
 export function connect(options: ConnectOptions): OpenBoardClient {
   return new OpenBoardClient(options);
 }
@@ -706,7 +833,12 @@ function parseJson(text: string): unknown {
   }
 }
 
-function toError(status: number, body: unknown, where: string): OpenBoardError {
+function toError(
+  status: number,
+  body: unknown,
+  where: string,
+  retryAfter: string | null = null,
+): OpenBoardError {
   const error = isRecord(body) && isRecord(body.error) ? body.error : undefined;
   if (error && typeof error.code === 'string' && ERROR_CODES.has(error.code)) {
     const message =
@@ -714,6 +846,18 @@ function toError(status: number, body: unknown, where: string): OpenBoardError {
         ? error.message
         : `${error.code} (HTTP ${status})`;
     return new OpenBoardError(error.code as OpenBoardErrorCode, message, error.details);
+  }
+  // A proxy in front of a shared server may answer these without our error body.
+  if (status === 401) {
+    return new OpenBoardError('unauthorized', `${where} needs valid credentials (HTTP 401)`);
+  }
+  if (status === 429) {
+    const seconds = Number(retryAfter);
+    return new OpenBoardError(
+      'rate_limited',
+      `${where} was refused: too many requests (HTTP 429)`,
+      retryAfter !== null && Number.isFinite(seconds) ? { retryAfterSeconds: seconds } : undefined,
+    );
   }
   const what = body === undefined ? 'a non-JSON' : 'an unrecognized';
   return new OpenBoardError(

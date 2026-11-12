@@ -18,6 +18,7 @@ import {
   undoOutcome,
 } from '../lib/historyRows.js';
 import { absoluteTime, relativeTime } from '../lib/time.js';
+import { useCan } from '../state/access.js';
 import { useSession } from '../state/context.js';
 import { useStoreValue } from '../state/emitter.js';
 import { undoBatch } from '../state/review.js';
@@ -178,6 +179,7 @@ export function ActivityPanel() {
   const session = useSession();
   const actors = useStoreValue(session.store, () => session.store.meta.actors);
   const [filters, setFilters] = useState<Filters>({ actor: '', includeMoves: false });
+  const canUndo = useCan('board.undo');
   const history = useHistory(session, filters);
   const sentinel = useRef<HTMLDivElement>(null);
   const actorFieldId = useId();
@@ -241,7 +243,7 @@ export function ActivityPanel() {
           Moves and layout
         </label>
       </div>
-      {filters.actor && (
+      {filters.actor && canUndo && (
         <div className="activity-actor-bar">
           <Button
             size="sm"
@@ -297,6 +299,7 @@ function HistoryItem({ row, onChanged }: { row: HistoryRow; onChanged: () => voi
   const actor = useStoreValue(store, () => store.meta.actors[row.batch.actor]);
   const name = actor?.name ?? (row.batch.actor === 'system' ? 'OpenBoard' : row.batch.actor);
   const [busy, setBusy] = useState(false);
+  const canUndo = useCan('board.undo');
   const [result, setResult] = useState<{ text: string; tone: 'info' | 'error' } | null>(null);
   const existing = () => row.nodeIds.filter((id) => store.node(id));
 
@@ -364,7 +367,7 @@ function HistoryItem({ row, onChanged }: { row: HistoryRow; onChanged: () => voi
                 {BADGE_LABEL[badge]}
               </span>
             ))}
-            {row.action && (
+            {row.action && canUndo && (
               <Button
                 size="sm"
                 variant="ghost"

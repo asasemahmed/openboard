@@ -14,6 +14,116 @@ export type AgentName = (typeof AGENTS)[number];
 export interface ConnectOptions {
   root?: string;
   json?: boolean;
+  /** Print the setup for a remote, shared server instead of this project's local one. */
+  remote?: boolean;
+  /** With `remote`: the server's public URL. Defaults to the running server's. */
+  url?: string;
+}
+
+/** What remote setups show where the token goes. Never a real token. */
+export const TOKEN_PLACEHOLDER = '<token from: openboard access invite --agent>';
+
+/** The stdio proxy to a remote server: this CLI's `mcp --url`, with the token in the environment. */
+export function remoteLaunch(url: string): Launch {
+  const base = mcpLaunch('');
+  return { command: base.command, args: [base.args[0] as string, 'mcp', '--url', url] };
+}
+
+export function remoteSetups(publicUrl: string): Record<AgentName, AgentSetup> {
+  const base = publicUrl.replace(/\/$/, '');
+  const mcp = `${base}/mcp`;
+  const proxy = remoteLaunch(base);
+  const proxyJson = JSON.stringify(
+    {
+      mcpServers: {
+        openboard: {
+          command: proxy.command,
+          args: proxy.args,
+          env: { OPENBOARD_TOKEN: TOKEN_PLACEHOLDER },
+        },
+      },
+    },
+    null,
+    2,
+  );
+  return {
+    'claude-code': {
+      label: 'Claude Code',
+      command: `claude mcp add --transport http openboard ${mcp} --header "Authorization: Bearer \${OPENBOARD_TOKEN}"`,
+      file: '.mcp.json',
+      config: JSON.stringify(
+        {
+          mcpServers: {
+            openboard: {
+              type: 'http',
+              url: mcp,
+              headers: { Authorization: 'Bearer ${OPENBOARD_TOKEN}' },
+            },
+          },
+        },
+        null,
+        2,
+      ),
+    },
+    cursor: { label: 'Cursor', file: '.cursor/mcp.json', config: proxyJson },
+    codex: {
+      label: 'Codex',
+      file: '~/.codex/config.toml',
+      config: [
+        '[mcp_servers.openboard]',
+        `command = ${JSON.stringify(proxy.command)}`,
+        `args = [${proxy.args.map((arg) => JSON.stringify(arg)).join(', ')}]`,
+        `env = { OPENBOARD_TOKEN = ${JSON.stringify(TOKEN_PLACEHOLDER)} }`,
+      ].join('\n'),
+    },
+    generic: {
+      label: 'Any MCP client',
+      command: `OPENBOARD_TOKEN=... ${shellCommand(proxy)}`,
+      config: `HTTP:  ${mcp} with the header "Authorization: Bearer <token>"\nstdio: ${shellCommand(proxy)} with OPENBOARD_TOKEN in its environment`,
+    },
+  };
+}
+
+async function remoteCommand(
+  io: CliIo,
+  agent: AgentName | undefined,
+  options: ConnectOptions,
+): Promise<number> {
+  let publicUrl = options.url;
+  if (publicUrl === undefined) {
+    const running = await findRunningServer(resolveRoot(io, options.root));
+    publicUrl = running?.publicUrl ?? running?.url ?? 'https://board.example.com';
+  }
+  const setups = remoteSetups(publicUrl);
+  const chosen = agent ? { [agent]: setups[agent] } : setups;
+  if (options.json) {
+    println(
+      io.stdout,
+      JSON.stringify(
+        { url: publicUrl, mcp: `${publicUrl.replace(/\/$/, '')}/mcp`, agents: chosen },
+        null,
+        2,
+      ),
+    );
+    return 0;
+  }
+  const out = (line = '') => println(io.stdout, line);
+  out(`Connect an agent on another machine to ${publicUrl}:`);
+  out();
+  out("First create a token for it on the server's machine: openboard access invite --agent");
+  out('Put the token in OPENBOARD_TOKEN where the agent runs. Nothing below contains a token.');
+  for (const [name, setup] of Object.entries(chosen)) {
+    out();
+    out(`${setup.label}:`);
+    if (setup.command) out(indent(setup.command, '  '));
+    if (setup.config && setup.file) {
+      out(`  or in ${setup.file}:`);
+      out(indent(setup.config, '    '));
+    } else if (setup.config && name === 'generic') out(indent(setup.config, '  '));
+  }
+  out();
+  out("The stdio form runs this CLI on the agent's machine and works with any MCP client.");
+  return 0;
 }
 
 export interface AgentSetup {
@@ -94,6 +204,7 @@ export async function connectCommand(
   if (agent !== undefined && !(AGENTS as readonly string[]).includes(agent)) {
     throw new CliError(`unknown agent "${agent}" (choose one of: ${AGENTS.join(', ')})`);
   }
+  if (options.remote) return remoteCommand(io, agent as AgentName | undefined, options);
   const root = resolveRoot(io, options.root);
   const info = await getConnectionInfo(root, agent as AgentName | undefined);
   if (options.json) {

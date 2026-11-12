@@ -113,7 +113,7 @@ Everyone who proposes, asks, answers, decides, comments or undoes is added to th
 
 **Comments, inbox and questions.** Comments live in the document (browsers write them directly) and in the board file. Mentions, replies, answers to questions, decisions on proposals and undone batches become inbox items for the actor concerned, never for the one who acted. Agents ask people questions through `ask`, and can long-poll `askResult` for the answer; an answer that `askResult` returned to its author is not delivered again by the inbox (a read with `since` still shows it). `asks` lists the open questions.
 
-**"People only" is a guard, not a boundary.** Deciding proposals, answering questions and changing settings require an actor of kind `human`. The kind is whatever the caller declares (the `x-openboard-actor-kind` header); the server has no authentication on loopback. The check stops an agent from approving its own work by mistake, not a program that lies about who it is.
+**"People only": a guard in local mode, a control in shared mode.** Deciding proposals, answering questions, changing settings and managing access require an actor of kind `human`. In local mode the kind is whatever the caller declares (the `x-openboard-actor-kind` header) and the server has no authentication, so the check stops an agent from approving its own work by mistake, not a program that lies about who it is. In [shared mode](#shared-mode) a remote caller's kind comes from its access grant, so an agent grant can never decide a proposal or answer a question, whatever it sends.
 
 ## Work in progress
 
@@ -171,52 +171,61 @@ One server process serves one project root.
 
 ### HTTP surface
 
-| Method and path                                       | Purpose                                                             |
-| ----------------------------------------------------- | ------------------------------------------------------------------- |
-| `GET /api/health`                                     | `{ ok, version, pid, root }`                                        |
-| `GET /api/info`                                       | `{ version, root, projectName, url, ...ServerOptions.info }`        |
-| `GET /api/boards` · `POST /api/boards`                | List and create boards                                              |
-| `GET /api/boards/:id`                                 | Full board JSON                                                     |
-| `POST /api/boards/:id/outline`                        | `BoardApi.outline`                                                  |
-| `POST /api/boards/:id/read`                           | `BoardApi.read`                                                     |
-| `POST /api/boards/:id/changes`                        | `BoardApi.changes`                                                  |
-| `POST /api/boards/:id/apply`                          | `BoardApi.apply`                                                    |
-| `GET /api/boards/:id/selection`                       | `BoardApi.selection`                                                |
-| `POST /api/boards/:id/layout`                         | `BoardApi.layout`                                                   |
-| `GET /api/config` · `PUT /api/config`                 | `BoardApi.getConfig` · `setConfig` (people only)                    |
-| `GET /api/boards/:id/proposals?status=&maxTokens=`    | `BoardApi.proposals` (`status` is `pending` or `all`)               |
-| `POST /api/boards/:id/proposals/:pid/decide`          | `BoardApi.decideProposal` (body: `Decision`; people only)           |
-| `POST /api/boards/:id/proposals/:pid/withdraw`        | `BoardApi.withdrawProposal` (author only)                           |
-| `POST /api/boards/:id/history`                        | `BoardApi.history` (body: `HistoryOptions`)                         |
-| `POST /api/boards/:id/undo`                           | `BoardApi.undo` (body: `UndoRequest`)                               |
-| `POST /api/boards/:id/comments`                       | `BoardApi.comment` (body: `CommentInput`; 201 with the `Comment`)   |
-| `POST /api/boards/:id/threads/:thread/resolve`        | `BoardApi.resolveThread` (body: `{ resolved }`, default true)       |
-| `POST /api/boards/:id/inbox`                          | `BoardApi.inbox` (body: `InboxOptions`)                             |
-| `POST /api/boards/:id/asks`                           | `BoardApi.ask` (body: `AskInput`; 201 with the `Ask`)               |
-| `GET /api/boards/:id/asks?status=&maxTokens=`         | `BoardApi.asks` (`status` is `open`, the default, or `all`)         |
-| `GET /api/boards/:id/asks/:aid?waitMs=`               | `BoardApi.askResult`; a long-poll of at most `MAX_ASK_WAIT_MS`      |
-| `POST /api/boards/:id/asks/:aid/answer`               | `BoardApi.answerAsk` (body: `AnswerInput`; people only)             |
-| `POST /api/boards/:id/asks/:aid/cancel`               | `BoardApi.cancelAsk` (the author or a person)                       |
-| `POST /api/activity`                                  | `BoardApi.reportActivity` (body: `ActivityEvent`)                   |
-| `GET /api/sessions?includeEnded=&maxTokens=`          | `BoardApi.sessions`                                                 |
-| `POST /api/boards/:id/claims`                         | `BoardApi.claim` (body: `ClaimRequest`)                             |
-| `GET /api/boards/:id/at/:cursor`                      | `BoardApi.snapshotAt`: the `Board` right after that cursor          |
-| `POST /api/boards/:id/links`                          | `BoardApi.links` (body: `LinksOptions`)                             |
-| `POST /api/boards/:id/links/refresh`                  | `BoardApi.refreshLinks` (body: `RefreshLinksRequest`)               |
-| `GET /api/boards/:id/revisions?limit=`                | `BoardApi.revisions`                                                |
-| `GET /api/boards/:id/revisions/:rev`                  | `BoardApi.boardAtRevision`                                          |
-| `POST /api/boards/:id/diff`                           | `BoardApi.diffRevisions` (body: `DiffRequest`)                      |
-| `POST /api/boards/:id/import`                         | `BoardApi.importInto` (body: `ImportRequest`)                       |
-| `GET /api/boards/:id/export?format=&theme=&diffFrom=` | The exporter's output as a download (its own content type)          |
-| `GET /sync/:id?lineage=` (WebSocket)                  | Document sync and presence, using the standard y-websocket protocol |
-| `ALL /mcp`                                            | MCP over Streamable HTTP, mounted with `OpenBoardServer.mount`      |
-| `GET /*`                                              | The web app                                                         |
+| Method and path                                       | Purpose                                                                 |
+| ----------------------------------------------------- | ----------------------------------------------------------------------- |
+| `GET /api/health`                                     | `{ ok, version, pid, root }` (shared mode: see below)                   |
+| `GET /api/info`                                       | `{ version, root, projectName, url, ...ServerOptions.info }`            |
+| `GET /api/whoami`                                     | `BoardApi.whoami`: `{ actor, role, shared, via, grantId?, expiresAt? }` |
+| `GET /api/access` · `POST /api/access`                | `BoardApi.listAccess` · `grantAccess` (201; people with `owner`)        |
+| `DELETE /api/access/:grant`                           | `BoardApi.revokeAccess` (people with `owner`)                           |
+| `POST /api/auth/session` · `POST /api/auth/logout`    | Trade an invite token for a session cookie · end it (shared mode)       |
+| `POST /api/auth/ticket`                               | A single-use ticket for one sync socket (201; shared mode)              |
+| `GET /api/boards` · `POST /api/boards`                | List and create boards                                                  |
+| `GET /api/boards/:id`                                 | Full board JSON                                                         |
+| `POST /api/boards/:id/outline`                        | `BoardApi.outline`                                                      |
+| `POST /api/boards/:id/read`                           | `BoardApi.read`                                                         |
+| `POST /api/boards/:id/changes`                        | `BoardApi.changes`                                                      |
+| `POST /api/boards/:id/apply`                          | `BoardApi.apply`                                                        |
+| `GET /api/boards/:id/selection`                       | `BoardApi.selection`                                                    |
+| `POST /api/boards/:id/layout`                         | `BoardApi.layout`                                                       |
+| `GET /api/config` · `PUT /api/config`                 | `BoardApi.getConfig` · `setConfig` (people only)                        |
+| `GET /api/boards/:id/proposals?status=&maxTokens=`    | `BoardApi.proposals` (`status` is `pending` or `all`)                   |
+| `POST /api/boards/:id/proposals/:pid/decide`          | `BoardApi.decideProposal` (body: `Decision`; people only)               |
+| `POST /api/boards/:id/proposals/:pid/withdraw`        | `BoardApi.withdrawProposal` (author only)                               |
+| `POST /api/boards/:id/history`                        | `BoardApi.history` (body: `HistoryOptions`)                             |
+| `POST /api/boards/:id/undo`                           | `BoardApi.undo` (body: `UndoRequest`)                                   |
+| `POST /api/boards/:id/comments`                       | `BoardApi.comment` (body: `CommentInput`; 201 with the `Comment`)       |
+| `POST /api/boards/:id/threads/:thread/resolve`        | `BoardApi.resolveThread` (body: `{ resolved }`, default true)           |
+| `POST /api/boards/:id/inbox`                          | `BoardApi.inbox` (body: `InboxOptions`)                                 |
+| `POST /api/boards/:id/asks`                           | `BoardApi.ask` (body: `AskInput`; 201 with the `Ask`)                   |
+| `GET /api/boards/:id/asks?status=&maxTokens=`         | `BoardApi.asks` (`status` is `open`, the default, or `all`)             |
+| `GET /api/boards/:id/asks/:aid?waitMs=`               | `BoardApi.askResult`; a long-poll of at most `MAX_ASK_WAIT_MS`          |
+| `POST /api/boards/:id/asks/:aid/answer`               | `BoardApi.answerAsk` (body: `AnswerInput`; people only)                 |
+| `POST /api/boards/:id/asks/:aid/cancel`               | `BoardApi.cancelAsk` (the author or a person)                           |
+| `POST /api/activity`                                  | `BoardApi.reportActivity` (body: `ActivityEvent`)                       |
+| `GET /api/sessions?includeEnded=&maxTokens=`          | `BoardApi.sessions`                                                     |
+| `POST /api/boards/:id/claims`                         | `BoardApi.claim` (body: `ClaimRequest`)                                 |
+| `GET /api/boards/:id/at/:cursor`                      | `BoardApi.snapshotAt`: the `Board` right after that cursor              |
+| `POST /api/boards/:id/links`                          | `BoardApi.links` (body: `LinksOptions`)                                 |
+| `POST /api/boards/:id/links/refresh`                  | `BoardApi.refreshLinks` (body: `RefreshLinksRequest`)                   |
+| `GET /api/boards/:id/revisions?limit=`                | `BoardApi.revisions`                                                    |
+| `GET /api/boards/:id/revisions/:rev`                  | `BoardApi.boardAtRevision`                                              |
+| `POST /api/boards/:id/diff`                           | `BoardApi.diffRevisions` (body: `DiffRequest`)                          |
+| `POST /api/boards/:id/import`                         | `BoardApi.importInto` (body: `ImportRequest`)                           |
+| `GET /api/boards/:id/export?format=&theme=&diffFrom=` | The exporter's output as a download (its own content type)              |
+| `GET /sync/:id?lineage=` (WebSocket)                  | Document sync and presence, using the standard y-websocket protocol     |
+| `ALL /mcp`                                            | MCP over Streamable HTTP, mounted with `OpenBoardServer.mount`          |
+| `GET /*`                                              | The web app                                                             |
 
 Request and response bodies are the JSON forms of the `BoardApi` types. Errors are `{ "error": { "code", "message", "details" } }` with the HTTP status from `OpenBoardError.status`.
 
 The long-poll is not cut by a server-side timeout (Node's request timeout only covers receiving the request), and a client that disconnects ends the wait at once. Missing proposals, batches and questions are `not_found` (404); acting on something already decided, answered or undone is `conflict` (409); a people-only or author-only call by someone else is `forbidden` (403).
 
-The caller's actor is taken from the headers `x-openboard-actor-id`, `x-openboard-actor-name`, and `x-openboard-actor-kind`, and its agent session from `x-openboard-session`. Over the WebSocket the actor arrives as query parameters `actorId`, `actorName`, `actorKind`, next to the required `lineage`.
+In local mode the caller's actor is taken from the headers `x-openboard-actor-id`, `x-openboard-actor-name`, and `x-openboard-actor-kind`, and its agent session from `x-openboard-session`. Over the WebSocket the actor arrives as query parameters `actorId`, `actorName`, `actorKind`, next to the required `lineage`. In shared mode these are read only for the owner at this machine; a caller with credentials is the grant's actor (see below).
+
+Every route is registered with the permission it needs (the `BoardApi` method's entry in `API_ACTIONS`, see [roles](#roles)), and the caller's role is checked before the handler runs; `LocalBoardApi` checks the same table again, so in-process sessions given a role are held to it too. No `GET` route changes board content.
+
+`OpenBoardServer.mount(path, handler)` routes a path (such as `/mcp`) to `handler(request, caller)`; request bodies are capped at `MAX_BODY_BYTES` (2 MB, `413` beyond) as on the API. `caller` is `{ actor, role, via, shared, anonymous, grantId? }` as the server established it; in shared mode a request without valid credentials never reaches the handler, and for a remote caller the server removes `Authorization`, `Cookie` and the actor id and kind headers from the request first. A handler acts for the caller with `server.api(caller.actor, { session, role: caller.role, via: caller.via, grantId: caller.grantId })`, never with identity read from headers; such a session fails with `unauthorized` once the grant is revoked or expires.
 
 ### Presence and selection
 
@@ -240,7 +249,11 @@ The server reads awareness to answer `BoardApi.selection` with the most recent n
     <board id>.board.json     the board; deterministic, meant for git
     config.json               project settings (review policy); deterministic, meant for git
     .local/                   runtime state; ignored by git
-      server.json             { pid, port, url, root, version, startedAt } of the running server
+      server.json             { pid, port, url, root, version, startedAt, shared?, publicUrl? } of the running server;
+                              the CLI and `openboard hook` only contact a `url` of this machine (plain http to a
+                              loopback name or a local interface address), since a repository can ship this file
+      access.json             access grants with the SHA-256 of their secrets (shared mode; mode 0600)
+      sessions.json           browser sessions, by the SHA-256 of their ids (shared mode; mode 0600)
       <board id>.ydoc         document state with history (and pending proposals and questions)
       <board id>.changes.jsonl  the change feed
       <board id>.history.jsonl  batches (last 2000) and transactions (last 5000) with before/after
@@ -257,7 +270,48 @@ The project root is the nearest ancestor directory that contains `.openboard/`, 
 
 ### Local security
 
-The server binds to `127.0.0.1` by default. It rejects requests whose `Host` is not a loopback name, and rejects browser requests whose `Origin` is not its own, which closes the DNS-rebinding and cross-site paths to a local server. Board content is treated as untrusted input throughout: reads label who wrote what, so an agent can tell a teammate's note from an instruction.
+The server binds to `127.0.0.1` by default. It rejects requests whose `Host` is not a loopback name, and rejects browser requests whose `Origin` is not its own, which closes the DNS-rebinding and cross-site paths to a local server. One exception, for working on the web app: on `/api/` and `/sync/` the origin of its dev server, `http://localhost:5173` and `http://127.0.0.1:5173` (`ALLOW_DEV_ORIGINS`), is accepted too, so a page served at that origin by any program on the machine can use the API and the socket as a local caller. Board content is treated as untrusted input throughout: reads label who wrote what, so an agent can tell a teammate's note from an instruction.
+
+Presence from clients is checked in both modes: an awareness entry may only use a client id its connection owns (or a fresh one, at most 4 per connection; the same actor reconnecting may take its old entry over), at most 16 KB of JSON, and its `actor` is rewritten to the connection's actor id and kind (the name may be the client's, and so may the color when it is `#hex`, a name or a number: `ColorSchema`, which stored actors and views follow too, so no color can carry `url(...)` into CSS). `agent` and `live`, which only the server publishes, are removed, so no client can pose as another person, an agent or the `system` actor.
+
+### Shared mode
+
+Defined in [`packages/core/src/access.ts`](../packages/core/src/access.ts) (roles, grants) and `packages/server/src/{auth,access}.ts`.
+
+Shared mode lets people on other machines, and agents running elsewhere, work on the boards. It is on with `ServerOptions.shared: true`, and implied by a non-loopback `host`; there is no unauthenticated remote mode (`shared: false` with a non-loopback host is refused, and so is a wildcard host such as `0.0.0.0` without `publicUrl`). `ServerOptions.publicUrl` is the origin people use (for example `https://board.example.com` behind a tunnel or a reverse proxy with TLS; no path). Its host and origin are accepted besides loopback by the `Host`/`Origin` check, it is the base of invite links, and with https the session cookie is `Secure`. Without it, the server's own URL is used.
+
+**Who gets in.** Every request needs credentials except static app files, `GET /api/health` (which then answers `{ ok, version, shared: true }`, plus `pid` and `root` for the owner at this machine), `POST /api/auth/session` and `POST /api/auth/logout`. Without credentials, `401 unauthorized`. A request that presents credentials is judged by them alone (a bad token is never rescued by local trust); without any, the **local-trust rule** (`isLocalOwnerRequest`) applies: the request is the owner at this machine, with the actor from headers as in local mode, only when the socket's peer address is loopback, AND `Host` is a loopback name on the server's port, AND there is no header a relay adds (`isForwardingHeader`: `Forwarded`, `Via`, `X-Real-IP`, `Cdn-Loop`, the client-IP headers of common CDNs, and any name starting with `X-Forwarded-`, `X-Original-`, `CF-`, `Fly-`, `X-Envoy-` or `Tailscale-`). A tunnel or reverse proxy on the same machine connects from loopback, so the first condition alone would hand everyone the owner's role; such relays keep the public `Host` or add forwarding headers. A relay that rewrites `Host` to localhost and strips every forwarding header cannot be told apart from a local program: do not run one in front of a shared server. This keeps the local CLI, the local MCP server and a browser on the server's machine working unchanged.
+
+**Grants and tokens.** An access grant (`AccessGrant`: `id, label, role, kind, actorId, createdAt, createdBy, expiresAt?, revokedAt?, lastUsedAt?`) is made by a person with `owner` access (`grantAccess({ label, role, kind, expiresInHours? })`). Its token is `ob_<grant id>_<secret>`, the secret 32 random bytes in base64url; only its SHA-256 is stored, in `access.json`, and the token is returned once, with `inviteUrl` (`<publicUrl>/join#<token>`) for people. Checking a token costs one constant-time hash comparison whether the grant id or the secret is wrong, and every failure gets the same message. `actorId` is made from the label and the grant id (`ada-k3x9a0`); it is what the review policy's per-agent modes name. Revoking takes effect at once: the grant's requests fail with `401`, its sessions and tickets end, its sockets close with `4401`, and on every open board its claims are released and its open questions cancelled (nobody can collect the answer). Its pending proposals stay for people to accept or reject. An expired grant fails the same way; its open sockets close within 30 seconds.
+
+**Identity.** An authenticated caller's actor is `{ id: grant.actorId, kind: grant.kind, name }`. The name is the one a ticket was issued with, else the `x-openboard-actor-name` header (on a socket upgrade too; `actorName` is not read for them), else the name given at sign-in, else the grant's label; the id and kind headers are ignored. So the people-only checks are real in shared mode, and an agent grant stays under the review policy exactly as in local mode: its role caps what it may attempt, the policy decides what needs review.
+
+**Presenting credentials.**
+
+- Programs (the SDK, remote MCP clients): `Authorization: Bearer <token>`.
+- Browsers: an invite link `<publicUrl>/join#<token>` carries the token in the fragment, which never reaches the server, proxies, logs or `Referer`. The app posts it to `POST /api/auth/session` with `{ token, name? }` (the request must carry the app's `Origin`); the answer is the `WhoAmI` and the cookie `__Host-openboard_session` (with https; `openboard_session` with http) set with `Path=/; HttpOnly; SameSite=Strict; Max-Age` (30 days, or until the grant expires) and `Secure` with https. The value is a fresh random session id, never one the client brought; any previous session of the browser ends. The server keeps sessions in memory and their hashes in `sessions.json`, so a restart keeps people signed in; a session ends with its grant, on logout, after 30 days without use, or when the grant opens more than 50. `POST /api/auth/logout` ends it and clears the cookie. A cookie-authenticated request other than `GET`/`HEAD` must carry `Origin` (and the `Origin` check requires it to be the app's), so another site can neither ride the cookie (it is `SameSite=Strict` as well) nor sign a visitor in to a grant of its choosing.
+- Sync sockets: browsers send the cookie on the upgrade (with their `Origin`); programs send `Authorization: Bearer`, or, when their WebSocket client cannot set headers, `?ticket=` with a ticket from `POST /api/auth/ticket` (`{ ticket, expiresAt }`, single use, valid 60 seconds, at most 20 outstanding per grant). A token in a socket URL (`?token=`) is refused with 400.
+
+Failed credentials (a wrong token, ticket or cookie) are counted per client, the peer address or, behind a relay on this machine, the last `X-Forwarded-For` entry: after 20 in 10 minutes, attempts from that client get `429 rate_limited` with `Retry-After`. Log lines and error messages never carry a token, ticket or cookie (`scrubSecrets`). Responses carry `Referrer-Policy: no-referrer` and `X-Frame-Options: DENY`.
+
+**Read-only sync.** A connection whose role cannot edit boards (`viewer`, `commenter`), or whose actor is an agent (agents change boards through the API, where the policy applies), is read-only: the server answers its sync step 1 but drops its step 2 and update messages unapplied, and answers the first dropped update with one y-protocols auth message, "permission denied", whose reason starts with `read-only:` (`WebsocketProvider` logs it). Presence still works. A commenter therefore comments through `POST /api/boards/:id/comments`, not the document. The owner at this machine and people with `editor` or `owner` access write through sync as in local mode. One grant may hold at most 32 open sockets (`429` on the upgrade beyond that).
+
+**Close codes.** `4401` (`CLOSE_ACCESS_REVOKED`): the connection's credentials no longer hold (revoked, expired, signed out); sign in again rather than reconnecting. Upgrades without valid credentials are refused before the socket opens, with HTTP `401`, `403`, `429` or `400`.
+
+**What owners alone see.** `GET /api/info` gives others only `{ version, projectName, url, shared }` (`url` is the public URL): no local paths, user name or launch commands.
+
+**Agent activity detail.** What agents report about their work (session labels, `current` and `recent` steps with their summaries, and the `detail` and `focus` of agent presence) may quote file paths and commands. Only callers whose role can edit boards (`editor`, `owner`) and the owner at this machine see it (`seesActivityDetail` in `live.ts`). For viewers and commenters, `GET /api/sessions` returns each session without `label` and `current`, with `recent: []`; and every awareness message to their sync connections is built from redacted copies of the server's entries (`redactPresenceState`), so they see that an agent is there and its coarse status only. All awareness messages a connection receives (the first snapshot, updates, answers to a query) go through one function that applies this.
+
+### Roles
+
+| Action (`AccessAction`)                                       | owner | editor | commenter | viewer |
+| ------------------------------------------------------------- | :---: | :----: | :-------: | :----: |
+| `board.read`, `presence`, `config.read`                       |  yes  |  yes   |    yes    |  yes   |
+| `comment`, `ask.create`, `ask.answer`                         |  yes  |  yes   |    yes    |   no   |
+| `board.create`, `board.edit`, `board.undo`, `proposal.decide` |  yes  |  yes   |    no     |   no   |
+| `config.write`, `access.manage`                               |  yes  |   no   |    no     |   no   |
+
+`can(role, action)` is the whole table; `API_ACTIONS` maps every `BoardApi` method to one action (`null` for `whoami`). Agent grants may be `editor`, `commenter` or `viewer`. A missing permission is `403 forbidden` with a message that names it (`your access (viewer) does not include "board.edit" ...`); missing or invalid credentials are `401 unauthorized`. In local mode every caller is the owner.
 
 ## Conventions
 

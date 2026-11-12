@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { plainLine } from '../lib/agents.js';
 import { calmMessage } from '../lib/api.js';
+import { useCan } from '../state/access.js';
 import { useSession } from '../state/context.js';
 import { useStoreValue } from '../state/emitter.js';
 import { Avatar } from '../ui/Avatar.js';
@@ -19,6 +20,7 @@ export function ClaimSection({ nodeId }: { nodeId: string }) {
   const actor = useStoreValue(store, () => (claim ? store.meta.actors[claim.by] : undefined));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const canRelease = useCan('board.edit');
   if (!claim) return null;
   const name = actor?.name ?? claim.by;
 
@@ -60,7 +62,7 @@ export function ClaimSection({ nodeId }: { nodeId: string }) {
           {error}
         </p>
       )}
-      <div className="inspector-actions">
+      <div className="inspector-actions" hidden={!canRelease}>
         <Button size="sm" disabled={busy} onClick={release}>
           Release claim
         </Button>

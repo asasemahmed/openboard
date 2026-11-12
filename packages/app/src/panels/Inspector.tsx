@@ -5,6 +5,7 @@
  */
 import { LIMITS } from '@openboard/core';
 import { lazy, Suspense, useEffect } from 'react';
+import { useCan } from '../state/access.js';
 import { useBoardEdge, useBoardNode, useMeta, useSelection, useSession } from '../state/context.js';
 import { useStoreValue } from '../state/emitter.js';
 import { toasts } from '../state/toasts.js';
@@ -31,6 +32,7 @@ function usePreloadEditors(): void {
 
 function BoardInfo() {
   const session = useSession();
+  const canEdit = useCan('board.edit');
   const { meta } = useMeta();
   const counts = useStoreValue(
     session.store,
@@ -58,6 +60,7 @@ function BoardInfo() {
           {(id) => (
             <textarea
               id={id}
+              readOnly={!canEdit}
               className="input"
               rows={4}
               maxLength={2000}

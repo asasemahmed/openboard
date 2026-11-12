@@ -9,4 +9,5 @@ export {
   LONG_POLL_GRACE_MS,
   OpenBoardClient,
   SESSION_HEADER,
+  type SyncTicket,
 } from './client.js';

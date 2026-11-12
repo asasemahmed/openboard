@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { actorForClient, createHttpHandler } from '@openboard/mcp';
+import { actorForSession, createHttpHandler } from '@openboard/mcp';
 import { boardUrl, openBrowser, waitForSignal } from '../lib/browser.js';
 import { CliError } from '../lib/errors.js';
 import { type CliIo, isDebug, println } from '../lib/io.js';
@@ -15,8 +15,18 @@ export interface StartOptions {
   open?: boolean;
   /** Open this board instead of the default view. */
   board?: string;
+  /** Shared mode: everyone except this machine signs in (see docs/sharing.md). */
+  share?: boolean;
+  /** The URL people use to reach the server, such as an https tunnel or reverse proxy. */
+  publicUrl?: string;
   /** Called once the server is up, with its URL. For tests and embedding. */
   onReady?: (url: string) => void;
+}
+
+/** Whether `host` names this machine only. */
+export function isLoopback(host: string): boolean {
+  const h = host.replace(/^\[|\]$/g, '').toLowerCase();
+  return h === 'localhost' || h === '::1' || /^127\./.test(h);
 }
 
 /**
@@ -34,6 +44,15 @@ export async function startCommand(io: CliIo, options: StartOptions = {}): Promi
     return 0;
   }
 
+  if (options.host !== undefined && !isLoopback(options.host) && !options.share) {
+    throw new CliError(
+      `binding to ${options.host} would let other machines reach the boards; add --share so everyone but this machine must sign in (there is no open remote mode)`,
+    );
+  }
+  if (options.publicUrl !== undefined && !options.share) {
+    throw new CliError('--public-url only applies to shared mode; add --share');
+  }
+
   const app = locateApp();
   if (!app.built) {
     println(
@@ -49,18 +68,32 @@ export async function startCommand(io: CliIo, options: StartOptions = {}): Promi
     info: ({ url }) => ({ user: cliActor(io.env).name, mcp: { httpUrl: `${url}/mcp`, stdio } }),
     ...(options.port !== undefined ? { port: options.port } : {}),
     ...(options.host !== undefined ? { host: options.host } : {}),
+    ...(options.share ? { shared: true } : {}),
+    ...(options.publicUrl !== undefined ? { publicUrl: options.publicUrl } : {}),
     ...(app.built && app.dir ? { appDir: app.dir } : {}),
     log: (line) => {
       if (isDebug(io)) println(io.stderr, line);
     },
   });
 
-  // MCP over HTTP, in process: each session gets its own actor from its client name.
+  // MCP over HTTP, in process. Each session acts as its caller: the grant's
+  // actor and role for a remote caller, an actor named after the client for
+  // the owner at this machine. Sessions stay bound to the caller that opened them.
   const mcp = createHttpHandler({
-    resolveApi: (client) => server.api(actorForClient(client, {}), { session: client.session }),
+    resolveApi: (client) =>
+      server.api(actorForSession(client, {}), {
+        session: client.session,
+        ...(client.caller
+          ? {
+              role: client.caller.role,
+              via: client.caller.via,
+              ...(client.caller.grantId ? { grantId: client.caller.grantId } : {}),
+            }
+          : {}),
+      }),
     version: cliVersion(),
   });
-  server.mount('/mcp', mcp);
+  server.mount('/mcp', (request, caller) => mcp(request, caller));
 
   try {
     const api = server.api(cliActor(io.env));
@@ -77,6 +110,24 @@ export async function startCommand(io: CliIo, options: StartOptions = {}): Promi
     const boardsDir = path.relative(io.cwd, projectPaths(root).dir) || '.openboard';
     println(io.stdout, `OpenBoard is running at ${url}`);
     println(io.stdout, `Boards: ${boardsDir}`);
+    if (server.shared) {
+      println(io.stdout, '');
+      println(io.stdout, `Shared mode. People and agents reach it at ${server.publicUrl}`);
+      println(io.stdout, 'Everyone must sign in with an invite, except you at this machine.');
+      println(
+        io.stdout,
+        'Invite someone: openboard access invite (people), openboard access invite --agent (agents).',
+      );
+      if (
+        server.publicUrl.startsWith('http://') &&
+        !isLoopback(new URL(server.publicUrl).hostname)
+      ) {
+        println(
+          io.stdout,
+          'Warning: the public URL is plain http, so tokens and cookies cross the network unencrypted; put a TLS proxy or tunnel in front (see docs/sharing.md).',
+        );
+      }
+    }
     println(io.stdout, '');
     println(io.stdout, 'Connect an agent (`openboard connect` shows the setup for each agent):');
     println(io.stdout, `  MCP over HTTP   ${server.url}/mcp`);

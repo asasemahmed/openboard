@@ -28,6 +28,7 @@ import {
   toggleItem,
 } from '../lib/review.js';
 import { absoluteTime, relativeTime } from '../lib/time.js';
+import { canNow, useCan } from '../state/access.js';
 import { useSession } from '../state/context.js';
 import { useStoreValue, useValue } from '../state/emitter.js';
 import { decide } from '../state/review.js';
@@ -35,6 +36,7 @@ import type { BoardSession } from '../state/session.js';
 import { Avatar } from '../ui/Avatar.js';
 import { Button } from '../ui/Button.js';
 import { Icon } from '../ui/Icon.js';
+import { ReadOnlyNote } from './ReadOnlyNote.js';
 
 const OUTCOME_MS = 9000;
 const DECIDED_SHOWN = 6;
@@ -217,6 +219,7 @@ export function ProposalCard({
   const ref = useRef<HTMLElement>(null);
   const noteId = useId();
   const pan = usePan(session);
+  const canDecide = useCan('proposal.decide');
 
   const pending = proposal.items.filter(selectable);
   const chosen = pending.filter((item) => selected.has(item.index)).map((item) => item.index);
@@ -231,7 +234,7 @@ export function ProposalCard({
 
   const run = useCallback(
     async (action: 'accept' | 'reject', items?: number[]) => {
-      if (busy) return;
+      if (busy || !canNow('proposal.decide')) return;
       if (items && items.length === 0) return;
       setBusy(true);
       setError(null);
@@ -307,6 +310,7 @@ export function ProposalCard({
                   type="checkbox"
                   data-review-item=""
                   checked={selected.has(item.index)}
+                  disabled={!canDecide}
                   aria-label={item.summary}
                   onFocus={() => ui.pointAt(ids)}
                   onBlur={() => ui.pointAt([])}
@@ -365,79 +369,85 @@ export function ProposalCard({
         })}
       </ul>
 
-      {noteOpen ? (
-        <div className="field proposal-note">
-          <label className="field-label" htmlFor={noteId}>
-            Note for {name}
-          </label>
-          <textarea
-            id={noteId}
-            className="input"
-            rows={2}
-            maxLength={1000}
-            value={note}
-            placeholder="Why, or what to do instead"
-            onChange={(event) => setNote(event.target.value)}
-          />
-          <p className="field-hint">{name} will see this note with your decision.</p>
-        </div>
+      {canDecide ? (
+        <>
+          {noteOpen ? (
+            <div className="field proposal-note">
+              <label className="field-label" htmlFor={noteId}>
+                Note for {name}
+              </label>
+              <textarea
+                id={noteId}
+                className="input"
+                rows={2}
+                maxLength={1000}
+                value={note}
+                placeholder="Why, or what to do instead"
+                onChange={(event) => setNote(event.target.value)}
+              />
+              <p className="field-hint">{name} will see this note with your decision.</p>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="link-btn proposal-note-toggle"
+              onClick={() => setNoteOpen(true)}
+            >
+              Add a note for {name}
+            </button>
+          )}
+
+          {error && (
+            <p className="inline-error" role="alert">
+              {error}
+            </p>
+          )}
+
+          <div className="proposal-actions">
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={busy || chosen.length === 0}
+              onClick={() => void run('accept', chosen)}
+            >
+              Accept selected ({chosen.length})
+            </Button>
+            <Button
+              size="sm"
+              disabled={busy || chosen.length === 0}
+              onClick={() => void run('reject', chosen)}
+            >
+              Reject selected
+            </Button>
+          </div>
+          <div className="proposal-actions proposal-actions-all">
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={busy || pending.length === 0}
+              onClick={() => void run('accept')}
+            >
+              Accept all
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={busy || pending.length === 0}
+              onClick={() => void run('reject')}
+            >
+              Reject all
+            </Button>
+            {alsoRejected > 0 && (
+              <span className="proposal-actions-hint">
+                Rejecting also rejects {alsoRejected} item{alsoRejected === 1 ? '' : 's'} that need
+                {alsoRejected === 1 ? 's' : ''} these.
+              </span>
+            )}
+          </div>
+        </>
       ) : (
-        <button
-          type="button"
-          className="link-btn proposal-note-toggle"
-          onClick={() => setNoteOpen(true)}
-        >
-          Add a note for {name}
-        </button>
+        <ReadOnlyNote action="proposal.decide" />
       )}
-
-      {error && (
-        <p className="inline-error" role="alert">
-          {error}
-        </p>
-      )}
-
-      <div className="proposal-actions">
-        <Button
-          variant="primary"
-          size="sm"
-          disabled={busy || chosen.length === 0}
-          onClick={() => void run('accept', chosen)}
-        >
-          Accept selected ({chosen.length})
-        </Button>
-        <Button
-          size="sm"
-          disabled={busy || chosen.length === 0}
-          onClick={() => void run('reject', chosen)}
-        >
-          Reject selected
-        </Button>
-      </div>
-      <div className="proposal-actions proposal-actions-all">
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={busy || pending.length === 0}
-          onClick={() => void run('accept')}
-        >
-          Accept all
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={busy || pending.length === 0}
-          onClick={() => void run('reject')}
-        >
-          Reject all
-        </Button>
-        {alsoRejected > 0 && (
-          <span className="proposal-actions-hint">
-            Rejecting also rejects {alsoRejected} item{alsoRejected === 1 ? '' : 's'} that need
-            {alsoRejected === 1 ? 's' : ''} these.
-          </span>
-        )}
-      </div>
     </section>
   );
 }

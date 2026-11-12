@@ -4,17 +4,30 @@
  * file or the new one, never a truncated mix.
  */
 import { createHash, randomBytes } from 'node:crypto';
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-/** Write to a temp file next to `file`, then rename it over `file`. */
-export async function writeFileAtomic(file: string, data: string | Uint8Array): Promise<void> {
+/**
+ * Write to a temp file next to `file`, then rename it over `file`. With
+ * `mode` (such as `0o600` for secrets), the temp file is created with it, so
+ * the content is never readable by others, not even for a moment.
+ */
+export async function writeFileAtomic(
+  file: string,
+  data: string | Uint8Array,
+  options: { mode?: number } = {},
+): Promise<void> {
   const temp = path.join(
     path.dirname(file),
     `.${path.basename(file)}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`,
   );
   try {
-    await writeFile(temp, data);
+    if (options.mode === undefined) await writeFile(temp, data);
+    else {
+      await writeFile(temp, data, { mode: options.mode });
+      // The umask may have taken bits away, never added any; set it exactly.
+      await chmod(temp, options.mode);
+    }
     await rename(temp, file);
   } catch (error) {
     await rm(temp, { force: true }).catch(() => {});

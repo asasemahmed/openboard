@@ -36,12 +36,22 @@ export type ActorId = string;
 export const ActorKindSchema = z.enum(['human', 'agent', 'system']);
 export type ActorKind = z.infer<typeof ActorKindSchema>;
 
+/**
+ * A color as clients use it in CSS: `#rgb` to `#rrggbbaa`, a color name, or a
+ * preset number. Nothing else, so a stored color can never be `url(...)` or
+ * close a declaration.
+ */
+export const ColorSchema = z
+  .string()
+  .max(32)
+  .regex(/^(#[0-9a-fA-F]{3,8}|[A-Za-z0-9]{1,32})$/, 'a color is #hex, a name or a number');
+
 /** Anyone or anything that can change a board. */
 export const ActorSchema = z.object({
   id: IdSchema,
   kind: ActorKindSchema,
   name: z.string().min(1).max(80),
-  color: z.string().max(32).optional(),
+  color: ColorSchema.optional(),
 });
 export type Actor = z.infer<typeof ActorSchema>;
 
@@ -134,7 +144,7 @@ export const ViewSchema = z.object({
   h: z.number().finite().positive().optional(),
   /** A pinned node was placed by a human and is never moved by auto-layout. */
   pinned: z.boolean().optional(),
-  color: z.string().max(32).optional(),
+  color: ColorSchema.optional(),
   collapsed: z.boolean().optional(),
 });
 export type View = z.infer<typeof ViewSchema>;

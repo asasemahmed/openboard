@@ -16,6 +16,11 @@ export interface CliIo {
   /** Opens a URL in the user's browser. Defaults to the system browser. */
   openUrl?: (url: string) => Promise<void>;
   /**
+   * A remote server to talk to instead of the project's local one (`--url`).
+   * Its token comes from `OPENBOARD_TOKEN` in `env`, never from arguments.
+   */
+  remoteUrl?: string;
+  /**
    * Resolves when the process is asked to shut down (SIGINT or SIGTERM).
    * Defaults to listening for those signals.
    */

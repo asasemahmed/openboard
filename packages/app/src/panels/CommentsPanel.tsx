@@ -6,6 +6,7 @@ import { useReactFlow } from '@xyflow/react';
 import { useState } from 'react';
 import { reducedMotion } from '../canvas/actions.js';
 import { filterThreads, type Thread, type ThreadFilter } from '../lib/comments.js';
+import { useCan } from '../state/access.js';
 import { useSession } from '../state/context.js';
 import { useStoreValue } from '../state/emitter.js';
 import { Icon } from '../ui/Icon.js';
@@ -50,6 +51,7 @@ export function CommentsPanel() {
   const session = useSession();
   const index = useStoreValue(session.store, session.store.comments);
   const [filter, setFilter] = useState<ThreadFilter>('open');
+  const canComment = useCan('comment');
   const threads = filterThreads(index.threads, filter, session.actor().id);
 
   return (
@@ -69,13 +71,15 @@ export function CommentsPanel() {
           ))}
         </div>
       </div>
-      <div className="comments-new">
-        <Composer
-          label="New comment on the board"
-          placeholder="Comment on the whole board"
-          onSubmit={(body, mentions) => postComment(session, body, mentions, {})}
-        />
-      </div>
+      {canComment && (
+        <div className="comments-new">
+          <Composer
+            label="New comment on the board"
+            placeholder="Comment on the whole board"
+            onSubmit={(body, mentions) => postComment(session, body, mentions, {})}
+          />
+        </div>
+      )}
       {index.threads.length === 0 ? (
         <div className="panel-empty">
           <Icon name="comment" size={20} />

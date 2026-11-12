@@ -2,6 +2,7 @@ import { AskIndicator } from '../canvas/AskStack.js';
 import { useActions } from '../canvas/actions.js';
 import { navigate } from '../lib/router.js';
 import { PanelToggles } from '../panels/PanelSlot.js';
+import { useCan } from '../state/access.js';
 import { useSession, useUndoState } from '../state/context.js';
 import { useValue } from '../state/emitter.js';
 import { IconButton, Kbd } from '../ui/Button.js';
@@ -15,6 +16,7 @@ import { ConnectionStatus } from './ConnectionStatus.js';
 import { OverflowMenu } from './OverflowMenu.js';
 import { AgentsWorking, Participants } from './Participants.js';
 import { ProfileMenu } from './ProfileMenu.js';
+import { AccessBadge, ShareButton } from './ShareDialog.js';
 import { ThemeToggle } from './ThemeToggle.js';
 import { TidyMenu } from './TidyMenu.js';
 
@@ -23,6 +25,8 @@ export function TopBar() {
   const actions = useActions();
   const undo = useUndoState();
   const inspectorOpen = useValue(ui.inspectorOpen);
+  const canEdit = useCan('board.edit');
+  const canUndo = useCan('board.undo');
 
   return (
     <header className="topbar">
@@ -44,26 +48,34 @@ export function TopBar() {
           <BoardSwitcher />
         </div>
         <span className="topbar-sep" aria-hidden="true" />
-        <div className="toolbar-group" role="group" aria-label="History">
-          <IconButton
-            icon="undo"
-            label="Undo"
-            shortcut="mod+z"
-            disabled={!undo.canUndo}
-            onClick={actions.undo}
-          />
-          <IconButton
-            icon="redo"
-            label="Redo"
-            shortcut="shift+mod+z"
-            disabled={!undo.canRedo}
-            onClick={actions.redo}
-          />
-        </div>
-        <AddMenu />
-        <span className="topbar-roomy">
-          <TidyMenu />
-        </span>
+        {canUndo && (
+          <div className="toolbar-group" role="group" aria-label="History">
+            <IconButton
+              icon="undo"
+              label="Undo"
+              shortcut="mod+z"
+              disabled={!undo.canUndo}
+              onClick={actions.undo}
+            />
+            <IconButton
+              icon="redo"
+              label="Redo"
+              shortcut="shift+mod+z"
+              disabled={!undo.canRedo}
+              onClick={actions.redo}
+            />
+          </div>
+        )}
+        {canEdit ? (
+          <>
+            <AddMenu />
+            <span className="topbar-roomy">
+              <TidyMenu />
+            </span>
+          </>
+        ) : (
+          <AccessBadge />
+        )}
         <button
           type="button"
           className="search-btn"
@@ -83,6 +95,7 @@ export function TopBar() {
           <FollowToggle />
         </div>
         <CodeStatus />
+        <ShareButton />
         <AgentsWorking />
         <AskIndicator />
         <PanelToggles />

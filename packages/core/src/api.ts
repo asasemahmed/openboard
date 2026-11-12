@@ -12,6 +12,15 @@
  *    structured data meant for code.
  */
 import { z } from 'zod';
+import {
+  type AccessAction,
+  type AccessGrant,
+  type AccessList,
+  API_ACTIONS,
+  type GrantAccessInput,
+  type GrantAccessResult,
+  type WhoAmI,
+} from './access.js';
 import type {
   DiffRequest,
   DiffResult,
@@ -390,7 +399,25 @@ export interface BoardApi {
   getConfig(): Promise<ProjectConfig>;
   /** People only. */
   setConfig(config: ProjectConfig): Promise<ProjectConfig>;
+
+  // Access (see access.ts).
+  /** Who the server takes this session to be, with its role. Any caller. */
+  whoami(): Promise<WhoAmI>;
+  /** Every access grant, revoked and expired ones included. People with `owner` only. */
+  listAccess(): Promise<AccessList>;
+  /** A new grant; the token in the result is shown this once. People with `owner` only. */
+  grantAccess(input: GrantAccessInput): Promise<GrantAccessResult>;
+  /** Revoke a grant at once: its sessions end and its sockets close. People with `owner` only. */
+  revokeAccess(grantId: string): Promise<AccessGrant>;
 }
+
+/**
+ * The permission each `BoardApi` method needs (`API_ACTIONS` from access.ts),
+ * typed so that adding a method here without a permission fails to compile.
+ */
+export const BOARD_API_ACTIONS: Readonly<
+  Record<Exclude<keyof BoardApi, 'actor'>, AccessAction | null>
+> = API_ACTIONS;
 
 // ── Errors ───────────────────────────────────────────────────────────────────
 
@@ -399,8 +426,10 @@ export type OpenBoardErrorCode =
   | 'not_found'
   | 'board_exists'
   | 'invalid_request'
+  | 'unauthorized'
   | 'forbidden'
   | 'conflict'
+  | 'rate_limited'
   | 'unavailable'
   | 'internal';
 
@@ -427,8 +456,12 @@ export class OpenBoardError extends Error {
         return 409;
       case 'invalid_request':
         return 400;
+      case 'unauthorized':
+        return 401;
       case 'forbidden':
         return 403;
+      case 'rate_limited':
+        return 429;
       case 'unavailable':
         return 503;
       default:

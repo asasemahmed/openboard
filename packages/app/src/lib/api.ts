@@ -3,6 +3,8 @@
  * actor headers; errors arrive as `{ error: { code, message } }`.
  */
 import type {
+  AccessGrant,
+  AccessList,
   Actor,
   AnswerInput,
   ApplyResult,
@@ -13,8 +15,12 @@ import type {
   ChangesResult,
   ClaimRequest,
   ClaimResult,
+  Comment,
+  CommentInput,
   Decision,
   DiffResult,
+  GrantAccessInput,
+  GrantAccessResult,
   HistoryOptions,
   HistoryResult,
   ImportIntoResult,
@@ -29,6 +35,7 @@ import type {
   RevisionsResult,
   UndoRequest,
   UndoResult,
+  WhoAmI,
 } from '@openboard/core';
 
 export class ApiError extends Error {
@@ -49,6 +56,24 @@ export class ApiError extends Error {
   get unreachable(): boolean {
     return this.code === 'unreachable';
   }
+}
+
+/**
+ * Called when a request is answered with 401: the person is signed out, or
+ * their access ended. The app shows its signed-out page; nothing retries.
+ */
+let unauthorizedHandler: ((message: string) => void) | null = null;
+
+export function onUnauthorized(handler: ((message: string) => void) | null): void {
+  unauthorizedHandler = handler;
+}
+
+/** Seconds to wait before trying again, from a 429's details, if it says. */
+export function retryAfterSeconds(error: unknown): number | null {
+  if (!(error instanceof ApiError) || error.status !== 429) return null;
+  const details = error.details as { retryAfterSeconds?: unknown } | undefined;
+  const n = details?.retryAfterSeconds;
+  return typeof n === 'number' && Number.isFinite(n) && n >= 0 ? Math.ceil(n) : null;
 }
 
 export interface ApiClient {
@@ -79,6 +104,17 @@ export interface ApiClient {
   boardAtRevision(boardId: string, rev: string): Promise<Board>;
   diff(boardId: string, from: string, to?: string): Promise<DiffResult>;
   importInto(boardId: string, request: ImportRequest): Promise<ImportIntoResult>;
+  /** Who the server takes this browser to be. */
+  whoami(): Promise<WhoAmI>;
+  /** Trade an invite token for a session cookie (shared mode). */
+  signIn(token: string, name?: string): Promise<WhoAmI>;
+  signOut(): Promise<void>;
+  listAccess(): Promise<AccessList>;
+  grantAccess(input: GrantAccessInput): Promise<GrantAccessResult>;
+  revokeAccess(grantId: string): Promise<AccessGrant>;
+  /** Comment through the API, for people whose document writes the server does not take. */
+  comment(boardId: string, input: CommentInput): Promise<Comment>;
+  resolveThread(boardId: string, thread: string, resolved: boolean): Promise<Comment>;
   /** An export as the server renders it, ready to save. */
   exportBoard(
     boardId: string,
@@ -124,7 +160,18 @@ export function calmMessage(error: unknown, subject: ApiSubject = 'request'): st
   if (error.unreachable) return 'The server is not reachable right now. Try again in a moment.';
   switch (error.status) {
     case 403:
+      // In shared mode the server names the permission that is missing.
+      if (/does not include/.test(error.message))
+        return `Your access does not allow this: ${error.message}.`;
       return 'Only people can do this, and the server did not see this browser as a person.';
+    case 401:
+      return 'You are signed out, or your access has ended.';
+    case 429: {
+      const wait = retryAfterSeconds(error);
+      return wait
+        ? `Too many attempts. Try again in ${wait} seconds.`
+        : 'Too many attempts. Try again shortly.';
+    }
     case 404:
       return `${name} no longer exists. It may have been withdrawn or removed.`;
     case 409:
@@ -230,13 +277,17 @@ export function createApiClient(getActor: () => Actor, base = ''): ApiClient {
   }
 
   /** Throw the error a failed response describes. */
-  function fail(response: Response, json: unknown): never {
+  /** `quiet`: a 401 here is an answer (a bad invite link), not a sign-out. */
+  function fail(response: Response, json: unknown, quiet = false): never {
     const error = (
       json as { error?: { code?: unknown; message?: unknown; details?: unknown } } | undefined
     )?.error;
     // A proxy answering for a server that is not running reports a gateway error.
     if (!error && (response.status === 502 || response.status === 503 || response.status === 504))
       throw new ApiError('unreachable', 'The OpenBoard server could not be reached.', 0);
+    if (response.status === 401 && !quiet) {
+      unauthorizedHandler?.(typeof error?.message === 'string' ? error.message : '');
+    }
     throw new ApiError(
       typeof error?.code === 'string' ? error.code : 'http_error',
       typeof error?.message === 'string' ? error.message : `Request failed (${response.status}).`,
@@ -254,10 +305,11 @@ export function createApiClient(getActor: () => Actor, base = ''): ApiClient {
     path: string,
     body?: unknown,
     signal?: AbortSignal,
+    quiet = false,
   ): Promise<T> {
     const response = await send(method, path, body, signal);
     const json = parse(await response.text());
-    if (!response.ok) fail(response, json);
+    if (!response.ok) fail(response, json, quiet);
     if (json === undefined)
       throw new ApiError('bad_response', 'The server sent an empty response.', response.status);
     return json as T;
@@ -297,6 +349,27 @@ export function createApiClient(getActor: () => Actor, base = ''): ApiClient {
     undo: (boardId, undoRequest) =>
       request<UndoResult>('POST', `${board(boardId)}/undo`, undoRequest),
     getConfig: () => request<ProjectConfig>('GET', '/api/config'),
+    whoami: () => request<WhoAmI>('GET', '/api/whoami'),
+    signIn: (token, name) =>
+      request<WhoAmI>(
+        'POST',
+        '/api/auth/session',
+        name ? { token, name } : { token },
+        undefined,
+        true,
+      ),
+    signOut: async () => {
+      await request<unknown>('POST', '/api/auth/logout', {});
+    },
+    listAccess: () => request<AccessList>('GET', '/api/access'),
+    grantAccess: (input) => request<GrantAccessResult>('POST', '/api/access', input),
+    revokeAccess: (grantId) =>
+      request<AccessGrant>('DELETE', `/api/access/${encodeURIComponent(grantId)}`),
+    comment: (boardId, input) => request<Comment>('POST', `${board(boardId)}/comments`, input),
+    resolveThread: (boardId, thread, resolved) =>
+      request<Comment>('POST', `${board(boardId)}/threads/${encodeURIComponent(thread)}/resolve`, {
+        resolved,
+      }),
     lineage: async (boardId) => {
       // The listing names every board's lineage; it is much smaller than the board itself.
       const result = await request<unknown>('GET', '/api/boards');

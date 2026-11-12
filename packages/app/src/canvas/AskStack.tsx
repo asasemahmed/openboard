@@ -8,7 +8,9 @@ import { useReactFlow } from '@xyflow/react';
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { calmMessage } from '../lib/api.js';
 import { answerPayload, askOptions } from '../lib/asks.js';
+import { disabledReason } from '../lib/roles.js';
 import { absoluteTime, relativeTime } from '../lib/time.js';
+import { useCan, useRole } from '../state/access.js';
 import { useSession } from '../state/context.js';
 import { useStoreValue, useValue } from '../state/emitter.js';
 import { Avatar } from '../ui/Avatar.js';
@@ -124,6 +126,9 @@ export function AskCard({ ask, onAnswered }: { ask: Ask; onAnswered?: (text: str
   const flow = useReactFlow();
   const fieldId = useId();
   const options = askOptions(ask);
+  const canAnswer = useCan('ask.answer');
+  const canDismiss = useCan('ask.create');
+  const role = useRole();
   const nodeIds = ask.nodeIds ?? [];
 
   const send = async (option?: string) => {
@@ -187,63 +192,71 @@ export function AskCard({ ask, onAnswered }: { ask: Ask; onAnswered?: (text: str
         <time dateTime={ask.createdAt} title={absoluteTime(ask.createdAt)}>
           {relativeTime(ask.createdAt)}
         </time>
-        <IconButton icon="close" label="Dismiss question" size="sm" onClick={withdraw} />
+        {canDismiss && (
+          <IconButton icon="close" label="Dismiss question" size="sm" onClick={withdraw} />
+        )}
       </header>
       <p className="ask-question">{ask.question}</p>
-      {options.length > 0 && (
-        <div className="ask-options">
-          {options.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              className={`pill ${option.primary ? 'pill-accept' : 'pill-reject'}`}
-              disabled={busy}
-              onClick={() => void send(option.value)}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-      )}
-      <form
-        className="ask-answer"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void send();
-        }}
-      >
-        <label htmlFor={fieldId} className="visually-hidden">
-          {options.length > 0
-            ? 'Answer in your own words (sent with an option, or alone)'
-            : 'Answer'}
-        </label>
-        <input
-          id={fieldId}
-          className="input input-sm"
-          placeholder="Answer…"
-          maxLength={2000}
-          value={text}
-          disabled={busy}
-          onChange={(event) => setText(event.target.value)}
-        />
-        <button type="submit" className="pill pill-quiet" disabled={busy || text.trim() === ''}>
-          Send
-        </button>
-        {nodeIds.length > 0 && (
-          <button
-            type="button"
-            className="pill pill-quiet"
-            onClick={point}
-            onPointerEnter={() => ui.pointAt(nodeIds)}
-            onPointerLeave={() => ui.pointAt([])}
-            onFocus={() => ui.pointAt(nodeIds)}
-            onBlur={() => ui.pointAt([])}
+      {canAnswer ? (
+        <>
+          {options.length > 0 && (
+            <div className="ask-options">
+              {options.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={`pill ${option.primary ? 'pill-accept' : 'pill-reject'}`}
+                  disabled={busy}
+                  onClick={() => void send(option.value)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          )}
+          <form
+            className="ask-answer"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void send();
+            }}
           >
-            <Icon name="locate" size={13} />
-            Point
-          </button>
-        )}
-      </form>
+            <label htmlFor={fieldId} className="visually-hidden">
+              {options.length > 0
+                ? 'Answer in your own words (sent with an option, or alone)'
+                : 'Answer'}
+            </label>
+            <input
+              id={fieldId}
+              className="input input-sm"
+              placeholder="Answer…"
+              maxLength={2000}
+              value={text}
+              disabled={busy}
+              onChange={(event) => setText(event.target.value)}
+            />
+            <button type="submit" className="pill pill-quiet" disabled={busy || text.trim() === ''}>
+              Send
+            </button>
+            {nodeIds.length > 0 && (
+              <button
+                type="button"
+                className="pill pill-quiet"
+                onClick={point}
+                onPointerEnter={() => ui.pointAt(nodeIds)}
+                onPointerLeave={() => ui.pointAt([])}
+                onFocus={() => ui.pointAt(nodeIds)}
+                onBlur={() => ui.pointAt([])}
+              >
+                <Icon name="locate" size={13} />
+                Point
+              </button>
+            )}
+          </form>
+        </>
+      ) : (
+        <p className="ask-hint">{disabledReason(role, 'ask.answer')}</p>
+      )}
       {options.length > 0 && text.trim() !== '' && (
         <p className="ask-hint">Your text goes along with the option you pick.</p>
       )}

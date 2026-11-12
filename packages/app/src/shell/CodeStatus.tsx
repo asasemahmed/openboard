@@ -11,6 +11,7 @@ import { plainLine } from '../lib/agents.js';
 import { calmMessage } from '../lib/api.js';
 import { outOfDate } from '../lib/codeLinks.js';
 import { lineRange } from '../lib/editor.js';
+import { useCan } from '../state/access.js';
 import { useSession } from '../state/context.js';
 import { useStoreValue } from '../state/emitter.js';
 import { toasts } from '../state/toasts.js';
@@ -27,6 +28,7 @@ export function CodeStatus() {
     return n;
   });
   const [open, setOpen] = useState(false);
+  const canEdit = useCan('board.edit');
   const [entries, setEntries] = useState<LinkEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const anchor = useRef<HTMLButtonElement>(null);
@@ -144,7 +146,7 @@ export function CodeStatus() {
             </li>
           ))}
         </ul>
-        {byNode.size > 0 && (
+        {byNode.size > 0 && canEdit && (
           <Button size="sm" onClick={refreshAll}>
             Mark all as up to date…
           </Button>

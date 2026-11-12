@@ -6,6 +6,7 @@
 import { GRID } from '@openboard/core';
 import { useEffect } from 'react';
 import { isTypingTarget, matchesShortcut } from '../lib/shortcuts.js';
+import { canNow } from '../state/access.js';
 import { useSession } from '../state/context.js';
 import type { BoardActions } from './actions.js';
 
@@ -77,10 +78,7 @@ export function useShortcuts(actions: BoardActions): void {
       };
 
       if (is('?')) return run(() => ui.shortcuts.set(true));
-      if (is('mod+z')) return run(actions.undo);
-      if (is('shift+mod+z') || is('mod+y')) return run(actions.redo);
       if (is('mod+a')) return run(() => store.selectAll());
-      if (is('mod+d')) return run(actions.duplicateSelection);
       if (is('shift+1')) return run(actions.fit);
       if (is('escape')) {
         return run(() => {
@@ -88,6 +86,12 @@ export function useShortcuts(actions: BoardActions): void {
           else store.clearSelection();
         });
       }
+      // Everything below changes the board: inert for people who may not.
+      if (!canNow('board.undo') && (is('mod+z') || is('shift+mod+z') || is('mod+y'))) return;
+      if (is('mod+z')) return run(actions.undo);
+      if (is('shift+mod+z') || is('mod+y')) return run(actions.redo);
+      if (!canNow('board.edit')) return;
+      if (is('mod+d')) return run(actions.duplicateSelection);
       if (is('n')) return run(() => actions.addNode('note'));
       if (is('t')) return run(() => actions.addNode('task'));
       if (is('f')) return run(actions.frameSelection);

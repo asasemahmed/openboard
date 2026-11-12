@@ -7,9 +7,9 @@ import { Awareness } from 'y-protocols/awareness';
 import { WebsocketProvider } from 'y-websocket';
 import type * as Y from 'yjs';
 
-import { CLOSE_BOARD_NOT_FOUND, CLOSE_STALE_DOCUMENT } from './lineage.js';
+import { CLOSE_ACCESS_REVOKED, CLOSE_BOARD_NOT_FOUND, CLOSE_STALE_DOCUMENT } from './lineage.js';
 
-export { CLOSE_BOARD_NOT_FOUND, CLOSE_STALE_DOCUMENT };
+export { CLOSE_ACCESS_REVOKED, CLOSE_BOARD_NOT_FOUND, CLOSE_STALE_DOCUMENT };
 
 export type LinkStatus = 'connecting' | 'connected' | 'disconnected';
 
@@ -26,6 +26,8 @@ export interface Transport {
   stale(): boolean;
   /** Local edits were made that the server has not seen (made while not connected and synced). */
   dirty(): boolean;
+  /** True once the server ended this connection's access (it then stops reconnecting). */
+  revoked(): boolean;
   /** Called whenever `status()` or `synced()` may have changed. */
   onChange(listener: () => void): () => void;
   /** Try to connect again now instead of waiting for the next backoff. */
@@ -69,10 +71,18 @@ export function createWebsocketTransport(
   let gone = false;
   let stale = false;
   let dirty = false;
+  let revoked = false;
   const onClose = (event: CloseEvent | null) => {
-    if (event?.code === CLOSE_BOARD_NOT_FOUND || event?.code === CLOSE_STALE_DOCUMENT) {
-      if (event.code === CLOSE_BOARD_NOT_FOUND) gone = true;
-      else stale = true;
+    const code = event?.code;
+    if (
+      code === CLOSE_BOARD_NOT_FOUND ||
+      code === CLOSE_STALE_DOCUMENT ||
+      code === CLOSE_ACCESS_REVOKED
+    ) {
+      if (code === CLOSE_BOARD_NOT_FOUND) gone = true;
+      else if (code === CLOSE_STALE_DOCUMENT) stale = true;
+      // Access ended: reconnecting would only be refused again. Sign in anew instead.
+      else revoked = true;
       provider.disconnect();
       notify();
     }
@@ -103,6 +113,7 @@ export function createWebsocketTransport(
     gone: () => gone,
     stale: () => stale,
     dirty: () => dirty,
+    revoked: () => revoked,
     onChange: (listener) => {
       listeners.add(listener);
       return () => listeners.delete(listener);
@@ -133,6 +144,7 @@ export function createLocalTransport(ydoc: Y.Doc): Transport {
     gone: () => false,
     stale: () => false,
     dirty: () => false,
+    revoked: () => false,
     onChange: () => () => {},
     reconnect: () => {},
     destroy: () => awareness.destroy(),

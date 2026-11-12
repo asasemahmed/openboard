@@ -204,7 +204,7 @@ describe('ask card', () => {
 });
 
 describe('comment composer', () => {
-  it('writes a valid comment with mentions into the board document', () => {
+  it('writes a valid comment with mentions into the board document', async () => {
     const doc = sampleDoc();
     const { wrap, session } = setup({}, doc);
     render(
@@ -225,7 +225,9 @@ describe('comment composer', () => {
     });
     fireEvent.keyDown(box, { key: 'Enter' });
     expect(box.value).toBe(`Please check @${AGENT.name} and @All agents `);
-    fireEvent.keyDown(box, { key: 'Enter', metaKey: true });
+    await act(async () => {
+      fireEvent.keyDown(box, { key: 'Enter', metaKey: true });
+    });
 
     const [comment] = doc.comments();
     expect(comment).toMatchObject({

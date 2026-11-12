@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import path from 'node:path';
@@ -12,10 +12,12 @@ import { describe, expect, it } from 'vitest';
 import {
   detectFormat,
   hookActor,
+  isOwnMachineUrl,
   mapClaudeCode,
   mapCursor,
   mapGeneric,
   postActivity,
+  remoteTarget,
   runHook,
   shorten,
 } from './hook.js';
@@ -327,6 +329,25 @@ describe('generic events', () => {
 
 const stdin = (value: unknown) => Readable.from([Buffer.from(JSON.stringify(value))]);
 
+describe('remote reporting', () => {
+  it('sends a token only over https, or http on this machine', () => {
+    const token = 'ob_aaaaaaaaaaaaaaaa_x';
+    expect(
+      remoteTarget({ OPENBOARD_URL: 'https://board.example.com', OPENBOARD_TOKEN: token }),
+    ).toEqual({
+      url: 'https://board.example.com',
+      token,
+    });
+    expect(
+      remoteTarget({ OPENBOARD_URL: 'http://127.0.0.1:4747', OPENBOARD_TOKEN: token })?.url,
+    ).toBe('http://127.0.0.1:4747');
+    expect(
+      remoteTarget({ OPENBOARD_URL: 'http://board.example.com', OPENBOARD_TOKEN: token }),
+    ).toBeUndefined();
+    expect(remoteTarget({ OPENBOARD_URL: 'https://board.example.com' })).toBeUndefined();
+  });
+});
+
 describe('runHook', () => {
   it('sends nothing without a running server, and never creates .openboard', async () => {
     const root = await tempDir();
@@ -343,6 +364,43 @@ describe('runHook', () => {
     expect(result).toEqual({ code: 0 });
     expect(posted).toBe(0);
     expect(existsSync(path.join(root, '.openboard'))).toBe(false);
+  });
+
+  it("never posts to another machine that a project's server.json names", async () => {
+    // A repository can ship .openboard/.local/server.json; its URL must not
+    // turn the hook into a feed of the agent's commands to that host.
+    const root = await tempDir();
+    await mkdir(path.join(root, '.openboard', '.local'), { recursive: true });
+    const posted: string[] = [];
+    const run = async (url: string) => {
+      await writeFile(
+        path.join(root, '.openboard', '.local', 'server.json'),
+        JSON.stringify({ pid: process.pid, port: 80, url, root }),
+      );
+      await runHook([], {
+        stdin: stdin({ ...fixtures.bashPre, cwd: root }),
+        env: {},
+        cwd: root,
+        post: async (target) => {
+          posted.push(target);
+          return true;
+        },
+      });
+    };
+    for (const url of [
+      'http://attacker.example',
+      'http://203.0.113.7:4747',
+      'http://127.0.0.1.attacker.example:4747',
+      'http://user@attacker.example',
+      'https://attacker.example',
+    ]) {
+      await run(url);
+    }
+    expect(posted).toEqual([]);
+    await run('http://127.0.0.1:4747');
+    expect(posted).toEqual(['http://127.0.0.1:4747']);
+    expect(isOwnMachineUrl('http://[::1]:4747')).toBe(true);
+    expect(isOwnMachineUrl('http://localhost:4747')).toBe(true);
   });
 
   it('does nothing when switched off, and survives garbage', async () => {

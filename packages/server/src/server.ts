@@ -9,6 +9,7 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { getRequestListener } from '@hono/node-server';
 import { type Actor, OpenBoardError } from '@openboard/core';
+import { Auth, scrubSecrets } from './auth.js';
 import { Boards } from './boards.js';
 import { errorMessage, isErrno, writeFileAtomic } from './fsutil.js';
 import { createHttpApp, mountHandler } from './http.js';
@@ -17,6 +18,7 @@ import { isLoopbackBind, type SecurityConfig } from './security.js';
 import { LocalBoardApi } from './service.js';
 import { SyncServer } from './sync.js';
 import {
+  type ApiOptions,
   DEFAULT_PORT,
   type MountHandler,
   type OpenBoardServer,
@@ -96,11 +98,56 @@ function urlHost(host: string): string {
   return host.includes(':') && !host.startsWith('[') ? `[${host}]` : host;
 }
 
+const WILDCARD_HOSTS = new Set(['0.0.0.0', '::', '[::]', '']);
+
+/** The origin of a public URL, checked: http(s), no credentials, path, query or fragment. */
+export function parsePublicUrl(raw: string): URL {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new OpenBoardError('invalid_request', `publicUrl ${JSON.stringify(raw)} is not a URL`);
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new OpenBoardError('invalid_request', 'publicUrl must start with http:// or https://');
+  }
+  if (
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash ||
+    (url.pathname !== '/' && url.pathname !== '')
+  ) {
+    throw new OpenBoardError(
+      'invalid_request',
+      `publicUrl must be an origin such as https://board.example.com, without path, query or credentials (got ${JSON.stringify(raw)})`,
+    );
+  }
+  return url;
+}
+
 /** Start a server for one project root. */
 export async function startServer(options: ServerOptions = {}): Promise<OpenBoardServer> {
-  const log = options.log ?? (() => {});
+  const rawLog = options.log ?? (() => {});
+  // Tokens, tickets and cookies never reach a log line, whoever wrote it.
+  const log = (line: string) => rawLog(scrubSecrets(line));
   const root = canonicalRoot(options.root ?? findProjectRoot());
   const host = options.host ?? DEFAULT_HOST;
+  const loopback = isLoopbackBind(host);
+  if (!loopback && options.shared === false) {
+    throw new OpenBoardError(
+      'invalid_request',
+      `refusing to listen on ${host} without shared mode: there is no unauthenticated remote mode; start in shared mode, or bind to 127.0.0.1`,
+    );
+  }
+  const shared = options.shared === true || !loopback;
+  if (options.publicUrl !== undefined) parsePublicUrl(options.publicUrl);
+  if (shared && WILDCARD_HOSTS.has(host) && options.publicUrl === undefined) {
+    throw new OpenBoardError(
+      'invalid_request',
+      `listening on ${host || 'every interface'} needs publicUrl, the URL people will use, so the server knows which Host and Origin to accept`,
+    );
+  }
 
   if (activeRoots.has(root)) {
     const url = activeRoots.get(root);
@@ -127,6 +174,8 @@ async function start(
   log: (line: string) => void,
 ): Promise<OpenBoardServer> {
   const paths = projectPaths(root);
+  const loopback = isLoopbackBind(host);
+  const shared = options.shared === true || !loopback;
   const running = await findRunningServer(root);
   if (running) {
     throw new OpenBoardError(
@@ -137,12 +186,26 @@ async function start(
   }
 
   await mkdir(paths.dir, { recursive: true });
-  const boards = new Boards(paths, { log, ...(options.clock ? { clock: options.clock } : {}) });
+  const boards = new Boards(paths, {
+    log,
+    shared,
+    ...(options.clock ? { clock: options.clock } : {}),
+  });
   await boards.start();
 
-  const security: SecurityConfig = { port: 0, checkHost: isLoopbackBind(host) };
+  const security: SecurityConfig = { port: 0, checkHost: loopback };
   const mounts = new Map<string, MountHandler>();
   let url = '';
+  let publicUrl = '';
+  const secureCookies =
+    options.publicUrl !== undefined && parsePublicUrl(options.publicUrl).protocol === 'https:';
+  const auth = new Auth({
+    store: boards.access,
+    shared,
+    secureCookies,
+    port: () => security.port,
+    ...(options.clock ? { clock: options.clock } : {}),
+  });
   const extraInfo = options.info;
   const app = createHttpApp({
     boards,
@@ -152,6 +215,8 @@ async function start(
     security: () => security,
     log,
     url: () => url,
+    auth,
+    publicUrl: () => publicUrl,
     ...(extraInfo === undefined
       ? {}
       : {
@@ -159,7 +224,7 @@ async function start(
         }),
     mounts,
   });
-  const sync = new SyncServer(boards, { security: () => security, log });
+  const sync = new SyncServer(boards, { security: () => security, log, auth });
   const server = createServer(getRequestListener(app.fetch));
   server.on('upgrade', (request, socket, head) => {
     if (!sync.handleUpgrade(request, socket, head)) {
@@ -182,6 +247,12 @@ async function start(
   security.port = port;
 
   url = `http://${urlHost(host)}:${port}`;
+  publicUrl = options.publicUrl === undefined ? url : parsePublicUrl(options.publicUrl).origin;
+  boards.publicUrl = publicUrl;
+  if (shared) {
+    const pub = new URL(publicUrl);
+    security.shared = { host: pub.host.toLowerCase(), origin: pub.origin.toLowerCase() };
+  }
   const info: ServerInfo = {
     pid: process.pid,
     port,
@@ -189,10 +260,13 @@ async function start(
     root,
     version: VERSION,
     startedAt: new Date().toISOString(),
+    ...(shared ? { shared: true, publicUrl } : {}),
   };
   await writeFileAtomic(paths.serverInfo, `${JSON.stringify(info, null, 2)}\n`);
   activeRoots.set(root, url);
-  log(`openboard ${VERSION} serving ${root} at ${url}`);
+  log(
+    `openboard ${VERSION} serving ${root} at ${url}${shared ? ` in shared mode (public URL ${publicUrl})` : ''}`,
+  );
 
   let closing: Promise<void> | null = null;
   const close = async () => {
@@ -221,7 +295,15 @@ async function start(
     info,
     url,
     root,
-    api: (actor: Actor, opts?: { session?: string }) => new LocalBoardApi(boards, actor, log, opts),
+    shared,
+    publicUrl,
+    api: (actor: Actor, opts: ApiOptions = {}) =>
+      new LocalBoardApi(boards, actor, log, {
+        ...(opts.session !== undefined ? { session: opts.session } : {}),
+        ...(opts.role !== undefined ? { role: opts.role } : {}),
+        ...(opts.via !== undefined ? { via: opts.via } : {}),
+        ...(opts.grantId !== undefined ? { grantId: opts.grantId } : {}),
+      }),
     mount: (mountPath: string, handler: MountHandler) => mountHandler(mounts, mountPath, handler),
     close: () => {
       closing ??= close();
