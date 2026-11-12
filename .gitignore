@@ -1,0 +1,28 @@
+# Local research and reference material — never published
+/research/
+
+# Dependencies and build output
+node_modules/
+dist/
+build/
+coverage/
+.turbo/
+*.tsbuildinfo
+
+# Local OpenBoard runtime data (history and activity stay out of git)
+.openboard/.local/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# OS and editor
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
