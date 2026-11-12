@@ -42,6 +42,8 @@ export interface NewBoardOptions {
   /** Board id; derived from the name when omitted. */
   id?: string;
   description?: string;
+  /** Start it from this template. */
+  template?: string;
   json?: boolean;
 }
 
@@ -57,8 +59,14 @@ export async function newBoardCommand(
     name,
     ...(options.id !== undefined ? { id: options.id } : {}),
     ...(options.description !== undefined ? { description: options.description } : {}),
+    ...(options.template !== undefined ? { template: options.template } : {}),
   });
   if (options.json) println(io.stdout, JSON.stringify(summary, null, 2));
-  else println(io.stdout, `Created board ${summary.id}`);
+  else {
+    println(
+      io.stdout,
+      `Created board ${summary.id}${options.template ? ` from the template ${options.template}` : ''}`,
+    );
+  }
   return 0;
 }

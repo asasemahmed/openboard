@@ -26,4 +26,4 @@ export {
 } from './registry.js';
 export { type SvgOptions, toSvg } from './svg.js';
 export { DARK_THEME, LIGHT_THEME, type SvgTheme } from './svg-theme.js';
-export type { Exporter, Importer, ImportResult } from './types.js';
+export type { Exporter, Importer, ImportOptions, ImportResult } from './types.js';

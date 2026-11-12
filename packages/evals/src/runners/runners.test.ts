@@ -79,7 +79,7 @@ describe('claude-code', () => {
       'Glob',
       'Grep',
     ]);
-    expect(CLAUDE_BOARD_TOOLS).toHaveLength(14);
+    expect(CLAUDE_BOARD_TOOLS).toHaveLength(16);
     expect(CLAUDE_BOARD_TOOLS[0]).toBe('mcp__openboard__board_list');
     expect(value('--model')).toBe('haiku');
     expect(value('--append-system-prompt')).toBe('GUIDE');

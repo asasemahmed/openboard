@@ -21,6 +21,9 @@ const SettingsDialog = lazy(() =>
 const ImportDialog = lazy(() =>
   import('./ImportDialog.js').then((m) => ({ default: m.ImportDialog })),
 );
+const TemplateDialog = lazy(() =>
+  import('./TemplateDialog.js').then((m) => ({ default: m.TemplateDialog })),
+);
 const ComparePicker = lazy(() =>
   import('./ComparePicker.js').then((m) => ({ default: m.ComparePicker })),
 );
@@ -69,6 +72,9 @@ export function LazyDialogs() {
       </OnceOpened>
       <OnceOpened store={ui.importDialog} isOpen={() => ui.importDialog.get() !== null}>
         <ImportDialog />
+      </OnceOpened>
+      <OnceOpened store={ui.templateDialog} isOpen={() => ui.templateDialog.get() !== null}>
+        <TemplateDialog />
       </OnceOpened>
       <OnceOpened store={ui.comparePicker} isOpen={ui.comparePicker.get}>
         <ComparePicker />

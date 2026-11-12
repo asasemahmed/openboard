@@ -62,7 +62,7 @@ With a real agent, every scenario also runs once with the scripted reference, so
 ## The runners
 
 - **`scripted`** plays each scenario's `reference`: the ideal sequence of tool calls, sent through the same recording endpoint. It proves the scenario is solvable, calibrates the checks (a reference must score 1.0, and a test enforces it), and gives the board-token cost of a perfect run.
-- **`claude-code`** runs `claude -p <prompt> --output-format json --mcp-config <file> --strict-mcp-config --tools Read,Glob,Grep --allowedTools <the 14 board tools>,Read,Glob,Grep --permission-mode dontAsk --no-session-persistence --setting-sources project [--model] [--append-system-prompt]` in the project directory, and reads turns, token usage and cost from its JSON result. `--setting-sources project` keeps personal hooks, plugins and memory out of the measurement.
+- **`claude-code`** runs `claude -p <prompt> --output-format json --mcp-config <file> --strict-mcp-config --tools Read,Glob,Grep --allowedTools <the 16 board tools>,Read,Glob,Grep --permission-mode dontAsk --no-session-persistence --setting-sources project [--model] [--append-system-prompt]` in the project directory, and reads turns, token usage and cost from its JSON result. `--setting-sources project` keeps personal hooks, plugins and memory out of the measurement.
 - **`command`** runs any other agent CLI from a template, without a shell. The template is split into words like a shell would, then placeholders are replaced inside each word, so a prompt with spaces stays one argument:
 
   | Placeholder                    | Value                                                                         |

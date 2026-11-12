@@ -57,6 +57,8 @@ export interface NewNode {
   status?: Status;
   /** Canvas point the new node is centred on. */
   at: XY;
+  /** Reserve the two-line body area (declared types show field values there). */
+  bodyRoom?: boolean;
 }
 
 /** Add a node centred on a canvas point, inside whatever frame is under it. */
@@ -65,13 +67,15 @@ export function addNodeOps(spec: NewNode, map: PlacementMap): Op[] {
   const size = isFrame
     ? { ...FRAME_MIN }
     : defaultNodeSize({ type: spec.type, title: spec.title, status: spec.status });
+  // The body preview is 48px in `defaultNodeSize`; a declared type's fields use it.
+  if (!isFrame && spec.bodyRoom) size.h += 48;
   const parent = frameAt(spec.at, map);
   let pos = snapXY(
     toParentSpace({ x: spec.at.x - size.w / 2, y: spec.at.y - size.h / 2 }, parent, map),
   );
   if (parent !== undefined) pos = landingInFrame({ ...pos, ...size }, parent, map);
   const view: View = { x: pos.x, y: pos.y, pinned: true };
-  if (isFrame) {
+  if (isFrame || spec.bodyRoom) {
     view.w = size.w;
     view.h = size.h;
   }

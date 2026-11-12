@@ -104,6 +104,8 @@ Clients that support MCP prompts also offer `map_codebase` and `plan_work`, whic
 
 [Staying in control](agents.md#staying-in-control) and [seeing agents work](agents.md#seeing-agents-work) explain the details.
 
+To start a board with a good structure, use a template: `openboard new "CSV export" --template feature-plan`, or ask your agent to (see [Templates](templates.md)). To give the board your own vocabulary, declare node types in `.openboard/config.json` ([Extending OpenBoard](extending.md)).
+
 ## Where boards live
 
 ```text

@@ -6,13 +6,18 @@
     <meta name="color-scheme" content="light dark" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>OpenBoard</title>
-    <script>
-      // Apply the saved theme before first paint so the page never flashes the wrong colours.
-      try {
-        var pref = JSON.parse(localStorage.getItem('openboard.theme') || '"system"');
-        if (pref === 'light' || pref === 'dark') document.documentElement.dataset.theme = pref;
-      } catch (e) {}
-    </script>
+    <!--
+      Content-Security-Policy. Inline styles stay allowed in attributes only: the canvas
+      positions every node with a style attribute. frame-ancestors cannot be set from a meta
+      tag; it needs a response header from the server. The Vite dev server relaxes
+      script-src and style-src-elem for its own injected code (see vite.config.ts); builds keep
+      this policy as written.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; style-src-elem 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' ws: wss:; worker-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'self'"
+    />
+    <script src="/theme.js"></script>
   </head>
   <body>
     <div id="root"></div>

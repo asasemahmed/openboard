@@ -64,7 +64,18 @@ describe('inspector links', () => {
       truncated: false,
     }));
     const { wrap, session } = setup({ links, refreshLinks });
-    act(() => serverInfo.set({ version: '', root: '/work/shop', projectName: 'shop', url: '' }));
+    act(() =>
+      serverInfo.set({
+        version: '',
+        root: '/work/shop',
+        projectName: 'shop',
+        url: '',
+        shared: false,
+        plugins: [],
+        exporters: [],
+        importers: [],
+      }),
+    );
     render(
       wrap(<LinksEditor nodeId="risk1" links={[stale, fresh, web, bad]} onChange={() => {}} />),
     );

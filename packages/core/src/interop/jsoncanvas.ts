@@ -36,7 +36,7 @@ import {
   statusFromWords,
   typeWords,
 } from './text.js';
-import type { ImportResult } from './types.js';
+import type { ImportOptions, ImportResult } from './types.js';
 
 type Side = 'top' | 'right' | 'bottom' | 'left';
 
@@ -285,7 +285,8 @@ function cleanTags(tags: string[] | undefined): string[] | undefined {
 }
 
 /** Read JSON Canvas text into operations that recreate it. */
-export function fromJsonCanvas(text: string): ImportResult {
+export function fromJsonCanvas(text: string, options: ImportOptions = {}): ImportResult {
+  const maxOps = options.maxOps ?? LIMITS.opsPerBatch;
   const warnings: string[] = [];
   let data: unknown;
   try {
@@ -493,11 +494,11 @@ export function fromJsonCanvas(text: string): ImportResult {
     });
   });
 
-  if (ops.length > LIMITS.opsPerBatch) {
+  if (ops.length > maxOps) {
     warnings.push(
-      `the canvas needs ${ops.length} operations but one batch holds ${LIMITS.opsPerBatch}; only the first ${LIMITS.opsPerBatch} were kept.`,
+      `the canvas needs ${ops.length} operations but one batch holds ${maxOps}; only the first ${maxOps} were kept.`,
     );
-    return { ops: ops.slice(0, LIMITS.opsPerBatch), warnings };
+    return { ops: ops.slice(0, maxOps), warnings };
   }
   return { ops, warnings };
 }

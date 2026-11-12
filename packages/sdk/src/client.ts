@@ -479,14 +479,19 @@ export class OpenBoardClient implements BoardApi {
   }
 
   /** Marks the returned items seen unless `peek`, so only a peek is retried after a dropped connection. */
+  /** With `waitMs`, a long-poll; its timeout is `waitMs` plus `LONG_POLL_GRACE_MS` (at least the client's). */
   inbox(boardId: string, options: InboxOptions = {}): Promise<InboxResult> {
-    return this.#request({
+    const spec: RequestSpec = {
       method: 'POST',
       path: boardPath(boardId, 'inbox'),
       body: options,
       idempotent: options.peek === true,
       expect: 'object',
-    });
+    };
+    if (options.waitMs !== undefined && options.waitMs > 0) {
+      spec.timeoutMs = Math.max(this.timeoutMs, options.waitMs + LONG_POLL_GRACE_MS);
+    }
+    return this.#request(spec);
   }
 
   // ── Questions ─────────────────────────────────────────────────────────────

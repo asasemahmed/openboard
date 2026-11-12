@@ -40,6 +40,11 @@ export interface ApplyContext {
   now?: Date;
   /** Id generator for new nodes (`n`) and edges (`e`). Defaults to {@link defaultNewId}. */
   newId?: (prefix: string) => string;
+  /**
+   * Most operations accepted in one batch; defaults to `LIMITS.opsPerBatch`.
+   * Only for the server's own writes (layout, imports), never for callers' batches.
+   */
+  maxOps?: number;
 }
 
 export type ApplyOutcome =
@@ -54,14 +59,15 @@ export function applyOps(board: Board, ops: readonly Op[], ctx: ApplyContext): A
   if (!actor.success) {
     throw new OpenBoardError('invalid_request', `invalid actor: ${formatIssues(actor.error)}`);
   }
-  if (ops.length > LIMITS.opsPerBatch) {
+  const maxOps = ctx.maxOps ?? LIMITS.opsPerBatch;
+  if (ops.length > maxOps) {
     return {
       ok: false,
       errors: [
         {
-          index: LIMITS.opsPerBatch,
+          index: maxOps,
           code: 'invalid',
-          message: `a batch holds at most ${LIMITS.opsPerBatch} operations, this one has ${ops.length}; split it into smaller batches`,
+          message: `a batch holds at most ${maxOps} operations, this one has ${ops.length}; split it into smaller batches`,
         },
       ],
     };

@@ -4,6 +4,7 @@ import { EDGE_TYPES, edgeMeta } from '../lib/edgeTypes.js';
 import { typeMeta } from '../lib/nodeTypes.js';
 import { useCan } from '../state/access.js';
 import { useBoardNode, useSession } from '../state/context.js';
+import { useTypes } from '../state/schema.js';
 import { Button } from '../ui/Button.js';
 import { Field, IdRow, Provenance, Section } from './fields.js';
 import { ReadOnlyNote } from './ReadOnlyNote.js';
@@ -37,7 +38,10 @@ export function EdgeInspector({ edge }: { edge: BoardEdge }) {
   const update = (patch: { type?: string; label?: string | null }) =>
     applyOrReport(session, [{ op: 'update_edge', id: edge.id, patch }]);
   const label = useDraft(edge.label ?? '', (next) => update({ label: next.trim() || null }));
-  const options = EDGE_TYPES.includes(edge.type) ? EDGE_TYPES : [edge.type, ...EDGE_TYPES];
+  const index = useTypes();
+  const declared = index.declaredEdges;
+  const known = EDGE_TYPES.includes(edge.type) || declared.some((t) => t.type === edge.type);
+  const about = index.edge.get(edge.type);
 
   return (
     <div className="inspector-edge">
@@ -55,14 +59,29 @@ export function EdgeInspector({ edge }: { edge: BoardEdge }) {
                 value={edge.type}
                 onChange={(event) => update({ type: event.target.value })}
               >
-                {options.map((type) => (
+                {!known && <option value={edge.type}>{edgeMeta(edge.type).label}</option>}
+                {EDGE_TYPES.map((type) => (
                   <option key={type} value={type}>
                     {edgeMeta(type).label}
                   </option>
                 ))}
+                {declared.length > 0 && (
+                  <optgroup label="Declared">
+                    {declared.map((t) => (
+                      <option key={t.type} value={t.type}>
+                        {edgeMeta(t.type, t).label}
+                        {t.style && t.style !== 'solid' ? ` (${t.style})` : ''}
+                        {t.directed ? '' : ', both ways'}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
             )}
           </Field>
+          {about && about.source !== 'builtin' && about.description && (
+            <p className="field-hint">{about.description}</p>
+          )}
           <Field label="Label">
             {(id) => (
               <input

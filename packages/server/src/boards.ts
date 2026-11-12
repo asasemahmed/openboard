@@ -19,6 +19,7 @@ import {
 } from '@openboard/core';
 import { type FSWatcher, watch } from 'chokidar';
 import { AccessStore } from './access.js';
+import { guardAuthorship } from './authorship.js';
 import { CodeLinks } from './code.js';
 import { ConfigStore } from './config.js';
 import { ensureLocalDir, errorMessage, isErrno } from './fsutil.js';
@@ -196,6 +197,7 @@ export class Boards {
             this.open.set(id, room);
             this.live.roomOpened(room);
             this.code.attach(room);
+            if (this.shared) guardAuthorship(room, this.log);
           }
           // Not there (yet): forget the miss so a later call looks again.
           else this.rooms.delete(id);
@@ -231,6 +233,7 @@ export class Boards {
       this.open.set(id, room);
       this.live.roomOpened(room);
       this.code.attach(room);
+      if (this.shared) guardAuthorship(room, this.log);
       room.knownActors.set(actor.id, actor);
       return room;
     } catch (error) {

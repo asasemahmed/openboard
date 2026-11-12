@@ -4,6 +4,7 @@ import { boardUrl, openBrowser, waitForSignal } from '../lib/browser.js';
 import { CliError } from '../lib/errors.js';
 import { type CliIo, isDebug, println } from '../lib/io.js';
 import { mcpLaunch, shellCommand } from '../lib/mcp.js';
+import { loadPlugins } from '../lib/plugins.js';
 import { cliActor, cliVersion, locateApp, projectName, resolveRoot } from '../lib/project.js';
 import { findRunningServer, projectPaths, startServer } from '../lib/server.js';
 
@@ -19,6 +20,8 @@ export interface StartOptions {
   share?: boolean;
   /** The URL people use to reach the server, such as an https tunnel or reverse proxy. */
   publicUrl?: string;
+  /** Plugin modules to load, as given to `--plugin` (paths or package names). */
+  plugins?: string[];
   /** Called once the server is up, with its URL. For tests and embedding. */
   onReady?: (url: string) => void;
 }
@@ -53,6 +56,8 @@ export async function startCommand(io: CliIo, options: StartOptions = {}): Promi
     throw new CliError('--public-url only applies to shared mode; add --share');
   }
 
+  const plugins = options.plugins?.length ? await loadPlugins(options.plugins, io.cwd) : [];
+
   const app = locateApp();
   if (!app.built) {
     println(
@@ -70,6 +75,7 @@ export async function startCommand(io: CliIo, options: StartOptions = {}): Promi
     ...(options.host !== undefined ? { host: options.host } : {}),
     ...(options.share ? { shared: true } : {}),
     ...(options.publicUrl !== undefined ? { publicUrl: options.publicUrl } : {}),
+    ...(plugins.length ? { plugins } : {}),
     ...(app.built && app.dir ? { appDir: app.dir } : {}),
     log: (line) => {
       if (isDebug(io)) println(io.stderr, line);
@@ -110,6 +116,7 @@ export async function startCommand(io: CliIo, options: StartOptions = {}): Promi
     const boardsDir = path.relative(io.cwd, projectPaths(root).dir) || '.openboard';
     println(io.stdout, `OpenBoard is running at ${url}`);
     println(io.stdout, `Boards: ${boardsDir}`);
+    if (plugins.length) await printPlugins(io, server.url);
     if (server.shared) {
       println(io.stdout, '');
       println(io.stdout, `Shared mode. People and agents reach it at ${server.publicUrl}`);
@@ -143,4 +150,19 @@ export async function startCommand(io: CliIo, options: StartOptions = {}): Promi
     await server.close();
   }
   return 0;
+}
+
+/** The loaded plugins and their warnings, as the server reports them. */
+async function printPlugins(io: CliIo, url: string): Promise<void> {
+  try {
+    const info = (await (await fetch(`${url}/api/info`)).json()) as {
+      plugins?: Array<{ name: string; version?: string; warnings: string[] }>;
+    };
+    for (const plugin of info.plugins ?? []) {
+      println(io.stdout, `Plugin: ${plugin.name}${plugin.version ? ` ${plugin.version}` : ''}`);
+      for (const warning of plugin.warnings) println(io.stdout, `  warning: ${warning}`);
+    }
+  } catch {
+    // The server runs; the list is only informative.
+  }
 }

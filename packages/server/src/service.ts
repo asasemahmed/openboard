@@ -88,6 +88,7 @@ import {
   type LayoutRequest,
   LayoutRequestSchema,
   type LayoutResult,
+  LIMITS,
   type LinksOptions,
   LinksOptionsSchema,
   type LinksResult,
@@ -193,6 +194,9 @@ const ProposalsOptionsSchema = z.object({
 });
 
 const AskWaitSchema = z.object({ waitMs: z.number().int().min(0).optional() });
+
+/** Most operations one import may produce. */
+const IMPORT_MAX_OPS = 50_000;
 
 /** Decided proposals kept in the document; older ones are dropped. */
 export const DECIDED_PROPOSALS_KEPT = 50;
@@ -500,6 +504,15 @@ export class LocalBoardApi implements BoardApi {
   // ── Writing ────────────────────────────────────────────────────────────────
 
   async apply(boardId: string, request: ApplyRequest): Promise<ApplyResult> {
+    return this.applyBatch(boardId, request, LIMITS.opsPerBatch);
+  }
+
+  /** `apply`, with the operation limit of the caller: public batches, or the server's own imports. */
+  private async applyBatch(
+    boardId: string,
+    request: ApplyRequest,
+    maxOps: number,
+  ): Promise<ApplyResult> {
     this.authorize('apply');
     const req = parseInput(ApplyEnvelopeSchema, request, 'apply request');
     // Core validates each operation and reports problems by index.
@@ -509,7 +522,7 @@ export class LocalBoardApi implements BoardApi {
 
     const run = async (): Promise<ApplyResult> => {
       const board = room.doc.toJSON();
-      const dry = applyOps(board, ops, { actor: this.actor });
+      const dry = applyOps(board, ops, { actor: this.actor, maxOps });
       if (!dry.ok) return { status: 'invalid', cursor: room.cursor, refs: {}, errors: dry.errors };
       const typed = checkOpsAgainstTypes(board, ops, dry.applied.refs, this.types());
       if (typed.length > 0) {
@@ -584,17 +597,20 @@ export class LocalBoardApi implements BoardApi {
       const batchId = newId('b');
       const context: TxContext = { batchId };
       if (req.reason) context.reason = req.reason;
-      const outcome = room.withContext(context, () => room.doc.apply(ops, { actor: this.actor }));
+      const outcome = room.withContext(context, () =>
+        room.doc.apply(ops, { actor: this.actor, maxOps }),
+      );
       if (!outcome.ok) {
         return { status: 'invalid', cursor: room.cursor, refs: {}, errors: outcome.errors };
       }
-      if (req.layout !== 'none') await this.placeNew(room, this.actor, batchId);
+      const warnings = req.layout !== 'none' ? await this.placeNew(room, this.actor, batchId) : [];
       const result: ApplyResult = {
         status: 'applied',
         cursor: room.cursor,
         refs: outcome.applied.refs,
         applied: outcome.applied,
       };
+      if (warnings.length > 0) result.warnings = warnings;
       // A batch that changed nothing is not in the history.
       if (room.history.get(batchId)) result.batchId = batchId;
       const applied = outcome.applied;
@@ -633,14 +649,24 @@ export class LocalBoardApi implements BoardApi {
    * batch (so undoing it also undoes the placement). Failures are logged, not
    * thrown: the batch already landed.
    */
-  private async placeNew(room: Room, actor: Actor, batchId: string): Promise<void> {
+  private async placeNew(room: Room, actor: Actor, batchId: string): Promise<string[]> {
+    const warnings: string[] = [];
     try {
       await this.writeLayout(room, (board) => layoutIncremental(board), actor, {
         mergeInto: batchId,
       });
     } catch (error) {
       this.log(`layout after apply on "${room.id}" failed: ${errorMessage(error)}`);
+      warnings.push(`automatic layout failed (${errorMessage(error)})`);
     }
+    // Never report a clean success while nodes are left without a place.
+    const unplaced = room.doc.nodes().filter((node) => !node.view).length;
+    if (unplaced > 0) {
+      warnings.push(
+        `${unplaced} node${unplaced === 1 ? ' has' : 's have'} no position yet; the next apply with automatic layout, or layout, places ${unplaced === 1 ? 'it' : 'them'}`,
+      );
+    }
+    return warnings;
   }
 
   /**
@@ -660,8 +686,9 @@ export class LocalBoardApi implements BoardApi {
       const now = room.doc.toJSON();
       const ops = patchToMoves(now, patch);
       if (ops.length === 0) return 0;
+      // Layout writes are the server's own: one transaction, not bound by the batch limit.
       const outcome = room.withContext(context, () =>
-        room.doc.apply(ops, { actor, source: 'layout' }),
+        room.doc.apply(ops, { actor, source: 'layout', maxOps: Number.POSITIVE_INFINITY }),
       );
       if (outcome.ok) return ops.length;
       if (attempt === 1) {
@@ -730,7 +757,46 @@ export class LocalBoardApi implements BoardApi {
       const touched = new Set<string>();
       const conflicted: Array<{ index: number; reason: string }> = [];
       if (accept.length > 0) {
-        const check = checkItems(room.doc.toJSON(), proposal, accept, { actor: author });
+        const current = room.doc.toJSON();
+        let check = checkItems(current, proposal, accept, { actor: author });
+        // Declared types may have changed since proposing: check again against the current ones.
+        const types = this.types();
+        for (let round = 0; round < 10 && check.ok.length > 0; round++) {
+          const typed = checkOpsAgainstTypes(
+            current,
+            proposalOps(proposal, check.ok),
+            check.outcome.applied.refs,
+            types,
+          );
+          if (typed.length === 0) break;
+          const failed = new Map<number, string>();
+          for (const error of typed) {
+            const index = check.ok[error.index];
+            if (index !== undefined && !failed.has(index)) {
+              failed.set(index, `no longer matches its declared type: ${error.message}`);
+            }
+          }
+          // What depends on a refused item goes with it.
+          for (let grew = true; grew; ) {
+            grew = false;
+            for (const item of proposal.items) {
+              if (failed.has(item.index) || !check.ok.includes(item.index)) continue;
+              const dep = item.dependsOn.find((d) => failed.has(d));
+              if (dep !== undefined) {
+                failed.set(item.index, `depends on item ${dep}, which can no longer be applied`);
+                grew = true;
+              }
+            }
+          }
+          const remaining = check.ok.filter((index) => !failed.has(index));
+          const earlier = check.conflicts;
+          check = checkItems(current, proposal, remaining, { actor: author });
+          check.conflicts = [
+            ...earlier,
+            ...[...failed].map(([index, reason]) => ({ index, reason })),
+            ...check.conflicts,
+          ];
+        }
         for (const conflict of check.conflicts) {
           const item = items.get(conflict.index) as ProposalItem;
           item.status = 'conflict';
@@ -1228,11 +1294,22 @@ export class LocalBoardApi implements BoardApi {
     return room.doc.getComment(root.id) ?? next;
   }
 
-  async inbox(boardId: string, options?: InboxOptions): Promise<InboxResult> {
+  /** `signal` ends a `waitMs` wait early, for example when an HTTP client disconnects. */
+  async inbox(
+    boardId: string,
+    options?: InboxOptions & { signal?: AbortSignal },
+  ): Promise<InboxResult> {
     this.authorize('inbox');
-    const opts = parseInput(InboxOptionsSchema, options ?? {}, 'inbox options');
+    const { signal, ...rest } = options ?? {};
+    const opts = parseInput(InboxOptionsSchema, rest, 'inbox options');
     const room = await this.room(boardId);
-    const items = room.inbox.unread(this.actor.id, opts.since);
+    let items = room.inbox.unread(this.actor.id, opts.since);
+    if (items.length === 0 && opts.waitMs) {
+      this.mark(room, 'waiting');
+      await room.waitForInbox(this.actor.id, Math.min(opts.waitMs, MAX_ASK_WAIT_MS), signal);
+      items = room.inbox.unread(this.actor.id, opts.since);
+      this.mark(room, 'reading');
+    }
     const result = renderInbox(room.id, items, room.inbox.position, {
       actors: { [SYSTEM_ACTOR.id]: SYSTEM_ACTOR, ...room.actors() },
       openAsks: room.doc.asks().filter((a) => a.author === this.actor.id && a.status === 'open')
@@ -1614,7 +1691,7 @@ export class LocalBoardApi implements BoardApi {
     }
     let parsed: ReturnType<typeof importer.parse>;
     try {
-      parsed = importer.parse(req.text);
+      parsed = importer.parse(req.text, { maxOps: IMPORT_MAX_OPS });
     } catch (error) {
       // Built-in importers never throw; a plugin's might.
       throw new OpenBoardError(
@@ -1649,11 +1726,12 @@ export class LocalBoardApi implements BoardApi {
         },
       );
     }
-    const result = await this.apply(room.id, {
-      ops,
-      reason: `Import from ${importer.name}`,
-      ...(req.dryRun ? { dryRun: true } : {}),
-    });
+    // An import is the server's batch, bounded by the size of the text rather than the op limit.
+    const result = await this.applyBatch(
+      room.id,
+      { ops, reason: `Import from ${importer.name}`, ...(req.dryRun ? { dryRun: true } : {}) },
+      IMPORT_MAX_OPS,
+    );
     return { ...result, format: importer.name, warnings: parsed.warnings };
   }
 

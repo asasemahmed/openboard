@@ -127,3 +127,27 @@ describe('activity', () => {
     expect(text).toContain('You hold 1 claim on board main:\n  n "Note" until');
   });
 });
+
+describe('markers at titles detail', () => {
+  it('shows claims and stale links on the header line', () => {
+    const doc = seeded();
+    doc.registerActor(bot, doc.origin('bot', 'ops'));
+    doc.apply(
+      [
+        {
+          op: 'update_node',
+          id: 'n',
+          patch: { links: [{ kind: 'file', target: 'a.ts', stale: true }] },
+        },
+      ],
+      { actor: ada, now: T0 },
+    );
+    const text = renderRead(doc.toJSON(), doc.nodes(), 1, {
+      detail: 'titles',
+      claims: { n: claim },
+    }).text;
+    expect(text).toContain(
+      '[note] n "Note" [claimed by Bot (agent) until 2026-01-01T00:15:00.000Z; 1 stale code link]',
+    );
+  });
+});

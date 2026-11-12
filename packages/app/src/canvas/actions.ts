@@ -19,6 +19,7 @@ import { DEFAULT_EDGE_TYPE } from '../lib/edgeTypes.js';
 import type { XY } from '../lib/geometry.js';
 import { typeMeta } from '../lib/nodeTypes.js';
 import { useSession } from '../state/context.js';
+import { types } from '../state/schema.js';
 import type { BoardSession } from '../state/session.js';
 import { toasts } from '../state/toasts.js';
 
@@ -35,6 +36,8 @@ export interface BoardActions {
   redo(): void;
   tidy(scope: 'unpinned' | 'all'): Promise<void>;
   jumpTo(nodeId: string): void;
+  /** Select and bring into view nodes that are on their way (a template or import just added them). */
+  reveal(nodeIds: readonly string[]): Promise<void>;
   fit(): void;
   zoomIn(): void;
   zoomOut(): void;
@@ -106,15 +109,20 @@ export function useBoardActions(): BoardActions {
       addNode(type, at) {
         const id = newId('n');
         const meta = typeMeta(type);
+        const declared = types.get().node.get(type);
+        const custom = declared && declared.source !== 'builtin' ? declared : undefined;
         const point = at ?? ui.lastPointer ?? viewCenter();
         const ok = apply(
           addNodeOps(
             {
               id,
               type,
-              title: DEFAULT_TITLES[type] ?? `New ${meta.name.toLowerCase()}`,
-              ...(meta.initialStatus ? { status: meta.initialStatus } : {}),
+              title: DEFAULT_TITLES[type] ?? `New ${(custom?.label ?? meta.name).toLowerCase()}`,
+              ...(meta.initialStatus && custom?.hasStatus !== false
+                ? { status: meta.initialStatus }
+                : {}),
               at: point,
+              ...(custom && custom.fields.length > 0 ? { bodyRoom: true } : {}),
             },
             store.placements(),
           ),
@@ -240,6 +248,29 @@ export function useBoardActions(): BoardActions {
           duration: reducedMotion() ? 0 : 240,
           maxZoom: 1.25,
           padding: 0.4,
+        });
+      },
+
+      async reveal(nodeIds) {
+        if (nodeIds.length === 0) return;
+        // The nodes come through the live document a moment after the request returns.
+        for (let i = 0; i < 40 && !nodeIds.some((id) => store.node(id)); i++) {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        const present = nodeIds.filter((id) => store.node(id));
+        if (present.length === 0) return;
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        store.select(present);
+        ui.pointAt(present);
+        const pointed = ui.highlight.get();
+        setTimeout(() => {
+          if (ui.highlight.get() === pointed) ui.pointAt([]);
+        }, 2400);
+        void flow.fitView({
+          nodes: present.map((id) => ({ id })),
+          duration: reducedMotion() ? 0 : 240,
+          maxZoom: 1,
+          padding: 0.2,
         });
       },
 

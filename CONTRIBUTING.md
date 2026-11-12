@@ -36,5 +36,27 @@ pnpm test
 | `pnpm typecheck` | Type-check everything           |
 | `pnpm lint`      | Check formatting and lint rules |
 | `pnpm format`    | Fix formatting                  |
+| `pnpm evals`     | Run the agent evaluation suite  |
 
 How the pieces fit together is described in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Read it before making a change that crosses package boundaries.
+
+## Packages
+
+| Path                        | What it is                                                                                            |
+| --------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `packages/core`             | Schema, operations, the board document, rendering, policy, types, templates, import and export, merge |
+| `packages/server`           | The local board server: sync, persistence, layout, the HTTP API, shared mode, plugins                 |
+| `packages/sdk`              | `BoardApi` over HTTP, for programs that talk to a running server                                      |
+| `packages/mcp`              | The MCP server: the `board_*` tools on top of any `BoardApi`                                          |
+| `packages/app`              | The web canvas                                                                                        |
+| `packages/cli`              | The `openboard` command                                                                               |
+| `packages/evals`            | The evaluation harness for agents on a board ([docs/evals.md](docs/evals.md))                         |
+| `examples/plugin-estimates` | An example server plugin ([docs/extending.md](docs/extending.md))                                     |
+
+## Evaluations
+
+`pnpm evals run` runs every scenario's scripted reference against the real MCP server; each must score 1.0, and `corepack pnpm exec vitest run --project evals` enforces it. Run the suite before and after a change to tool descriptions, rendering, the server instructions or a policy, and with a real agent (`--runner claude-code`) when the change is meant to alter behaviour. See [docs/evals.md](docs/evals.md).
+
+## Tool descriptions are budgeted
+
+Everything in the MCP `tools/list` and the server instructions is sent to the model on every turn of every session, so it is the most expensive text in the project. A test in `packages/mcp` caps `tools/list` at a fixed number of tokens (`TOOLS_LIST_TOKEN_CEILING`). A new tool, parameter or sentence has to fit under it: tighten existing wording rather than raising the ceiling, and do not remove information an agent needs to use a tool correctly. The scripted evaluation suite must still score 1.0 after the change.

@@ -39,7 +39,9 @@ Do not read the whole board to answer a question about one part of it.
 | `agent`, `run` | An agent at work, and one execution of something (a test run, a job).    |
 | `frame`        | A group. Other nodes sit in it through `parent`.                         |
 
-Custom types look like `x:name` (for example `x:metric`); keep their data in `props`. Use built-in types whenever one fits.
+Custom types look like `x:name` (for example `x:metric`); keep their data in `props`. Use built-in types whenever one fits. When the outline mentions custom types, the project has declared them: call `board_schema` before adding nodes, use those types where they fit, and fill their fields in `props` (a batch that misses a required field is refused).
+
+To start a new board or area, look for a template first (`board_template` lists them: a feature plan, an architecture map, a decision record, a kanban and more); applying one is a single batch, and you then fill in its nodes instead of inventing the structure.
 
 Edges read from `source` to `target`:
 
@@ -75,7 +77,7 @@ People decide how much you may change without asking. Work with that, never arou
 
 - **"Proposed" is normal.** When `board_apply` answers `Proposed as p_...`, the batch waits for a person's review and nothing is on the board yet. Do not send it again, and never work around the review, for example by removing a node and adding a new one in its place, or by splitting the batch so each part looks harmless. Continue with work that does not depend on it, or tell the user it awaits their review. The ids under `Refs` exist only once it is accepted.
 - **Locked means no.** A batch refused because an area is locked for agents stays refused. Do not retry it; ask with `board_ask`, or leave a note with `board_comment`.
-- **Check your inbox.** Call `board_inbox` at the start of a task, after finishing a chunk of work, and whenever a result mentions new inbox items. Decisions on your proposals, answers to your questions, replies and mentions arrive there.
+- **Check your inbox.** Call `board_inbox` at the start of a task, after finishing a chunk of work, and whenever a result mentions new inbox items. Decisions on your proposals, answers to your questions, replies and mentions arrive there. To wait for a decision, call `board_inbox` with `waitSeconds` (for example 60) rather than calling it again and again.
 - **Read rejection notes and adjust.** A rejected item is not on the board. Take the reviewer's note into account; do not send the same change again.
 - **Ask before destructive or ambiguous work.** Before removing things, rewriting what others wrote, or choosing between readings of an unclear request, ask with `board_ask` (`kind: "approval"` for a go-ahead) instead of guessing. If the question is still open when the wait ends, carry on with other work and pick up the answer later with `board_ask {askId}` or from your inbox.
 - **Undo your own mistakes** with `board_undo` (your last batch by default, or `batchId`). It never overwrites what someone changed afterwards; leave the conflicts it reports as they are. Other people's changes are not yours to undo: ask.

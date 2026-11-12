@@ -190,7 +190,7 @@ describe('import flow', () => {
     let s = importReducer(initialImport(), { type: 'text', text: 'A --> B', detected: null });
     s = importReducer(s, { type: 'check' });
     expect(s.step).toBe('edit');
-    expect(s.error?.message).toMatch(/Pick Mermaid or JSON Canvas/);
+    expect(s.error?.message).toMatch(/Pick one under Format/);
     s = importReducer(s, { type: 'format', format: 'mermaid' });
     expect(s.error).toBeNull();
     expect(importReducer(s, { type: 'check' }).step).toBe('checking');

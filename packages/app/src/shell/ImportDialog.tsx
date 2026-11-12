@@ -9,9 +9,9 @@ import { useReactFlow } from '@xyflow/react';
 import { type DragEvent, useEffect, useId, useReducer, useRef } from 'react';
 import { reducedMotion } from '../canvas/actions.js';
 import { ApiError, calmMessage } from '../lib/api.js';
+import { type ImportFormatChoice, importChoices, importerForFile } from '../lib/exportChoices.js';
 import {
   chosenFormat,
-  IMPORT_FORMATS,
   type ImportFormat,
   type ImportState,
   importable,
@@ -20,6 +20,7 @@ import {
   initialImport,
   warningsOf,
 } from '../lib/importFlow.js';
+import { serverInfo } from '../state/boards.js';
 import { useSession } from '../state/context.js';
 import { useStoreValue, useValue } from '../state/emitter.js';
 import type { BoardSession } from '../state/session.js';
@@ -29,8 +30,12 @@ import { Dialog } from '../ui/Dialog.js';
 
 const MAX_BYTES = 1_500_000;
 
-function detect(filename: string, text: string): ImportFormat | null {
-  return importable(detectFormat(filename, text));
+function detect(
+  choices: readonly ImportFormatChoice[],
+  filename: string,
+  text: string,
+): ImportFormat | null {
+  return importerForFile(choices, filename) ?? importable(detectFormat(filename, text));
 }
 
 /** The frame to import into by default: the one selected frame, if exactly one is. */
@@ -54,6 +59,9 @@ function ImportForm({ initial }: { initial: { text?: string; filename?: string }
   const session = useSession();
   const { ui, store } = session;
   const flow = useReactFlow();
+  const info = useValue(serverInfo);
+  const choices = importChoices(info);
+  const plugins = choices.filter((c) => c.plugin);
   const [state, dispatch] = useReducer(
     importReducer,
     undefined,
@@ -62,7 +70,9 @@ function ImportForm({ initial }: { initial: { text?: string; filename?: string }
         text: initial.text ?? '',
         filename: initial.filename ?? '',
         frame: selectedFrame(session),
-        detected: initial.text ? detect(initial.filename ?? '', initial.text) : null,
+        detected: initial.text
+          ? detect(importChoices(serverInfo.get()), initial.filename ?? '', initial.text)
+          : null,
       }),
   );
   const frames = useStoreValue(store, () =>
@@ -76,7 +86,7 @@ function ImportForm({ initial }: { initial: { text?: string; filename?: string }
   const close = () => ui.importDialog.set(null);
 
   const setText = (text: string, filename = state.filename) =>
-    dispatch({ type: 'text', text, filename, detected: detect(filename, text) });
+    dispatch({ type: 'text', text, filename, detected: detect(choices, filename, text) });
 
   const readFile = async (file: File) => {
     if (file.size > MAX_BYTES) {
@@ -160,8 +170,11 @@ function ImportForm({ initial }: { initial: { text?: string; filename?: string }
       ) : (
         <div className="import-form" onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
           <p className="dialog-description">
-            Paste a Mermaid flowchart or a JSON Canvas, or pick a file. Subgraphs and groups become
-            frames.
+            Paste a Mermaid flowchart or a JSON Canvas
+            {plugins.length > 0
+              ? `, or ${plugins.map((p) => p.name).join(', ')} from a plugin`
+              : ''}
+            , or pick a file. Subgraphs and groups become frames.
           </p>
           <div className="field">
             <div className="import-label-row">
@@ -181,7 +194,10 @@ function ImportForm({ initial }: { initial: { text?: string; filename?: string }
                 type="file"
                 className="visually-hidden"
                 tabIndex={-1}
-                accept=".mmd,.mermaid,.canvas,.json,.txt,.md"
+                accept={[
+                  '.mmd,.mermaid,.canvas,.json,.txt,.md',
+                  ...plugins.flatMap((p) => p.extensions),
+                ].join(',')}
                 onChange={(event) => {
                   const file = event.target.files?.[0];
                   if (file) void readFile(file);
@@ -220,12 +236,12 @@ function ImportForm({ initial }: { initial: { text?: string; filename?: string }
               >
                 <option value="">
                   {state.detected
-                    ? `Detected: ${IMPORT_FORMATS.find((f) => f.id === state.detected)?.name}`
+                    ? `Detected: ${choices.find((f) => f.id === state.detected)?.name ?? state.detected}`
                     : 'Detect from the text'}
                 </option>
-                {IMPORT_FORMATS.map((f) => (
+                {choices.map((f) => (
                   <option key={f.id} value={f.id}>
-                    {f.name}
+                    {f.plugin ? `${f.name} (${f.plugin})` : f.name}
                   </option>
                 ))}
               </select>

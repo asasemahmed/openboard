@@ -241,13 +241,16 @@ export function createHttpApp(ctx: HttpContext): Hono<Env> {
     );
     if (!verdict.ok) return errorResponse(c, 403, new OpenBoardError('forbidden', verdict.reason));
     await next();
+    // Never let another site put the app in a frame, in either mode: a framed
+    // board could be used to trick someone into clicking through it. The
+    // policy header is the modern form; the older one covers older browsers.
+    c.res.headers.set('x-frame-options', 'DENY');
+    c.res.headers.set('content-security-policy', "frame-ancestors 'none'");
+    c.res.headers.set('x-content-type-options', 'nosniff');
     if (auth.shared) {
       // Invite links carry the token in the fragment, which browsers never put
-      // in Referer; this keeps the rest of every URL out of it too, and keeps
-      // the app out of other sites' frames.
+      // in Referer; this keeps the rest of every URL out of it too.
       c.res.headers.set('referrer-policy', 'no-referrer');
-      c.res.headers.set('x-frame-options', 'DENY');
-      c.res.headers.set('x-content-type-options', 'nosniff');
     }
   });
 
@@ -802,7 +805,10 @@ export function createHttpApp(ctx: HttpContext): Hono<Env> {
   });
 
   post('/api/boards/:id/inbox', 'inbox', async (c) =>
-    c.json(await api(c).inbox(param(c, 'id'), await jsonBody(c))),
+    // `waitMs` makes this a long-poll; a client that disconnects ends the wait.
+    c.json(
+      await api(c).inbox(param(c, 'id'), { ...(await jsonBody(c)), signal: c.req.raw.signal }),
+    ),
   );
 
   // ── Questions ──────────────────────────────────────────────────────────────

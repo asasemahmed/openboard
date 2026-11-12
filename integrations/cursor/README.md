@@ -43,7 +43,7 @@ Only those events are wired on purpose: Cursor treats a silent answer from its p
 
 ## Verify
 
-- The `openboard` server is enabled where Cursor lists its MCP servers, and its thirteen tools (`board_list` to `board_claim`) appear among the agent's available tools.
+- The `openboard` server is enabled where Cursor lists its MCP servers, and its sixteen tools (`board_list` to `board_template`) appear among the agent's available tools.
 - If it does not start, open the Output panel, choose "MCP Logs", and run `openboard doctor` in the project.
 - Start the canvas with `openboard start` and ask the agent: "Show me the outline of the board."
 

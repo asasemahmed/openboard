@@ -86,12 +86,16 @@ export class Inbox {
     return this.seq;
   }
 
+  /** Called with the recipient after every delivery. */
+  onDeliver: ((to: string) => void) | null = null;
+
   /** Add an item for `to`. Never deliver an actor's own action to itself: the caller checks `from`. */
   deliver(to: string, item: Omit<InboxItem, 'seq' | 'at'> & { at?: string }): InboxItem {
     const full: InboxItem = { ...item, seq: ++this.seq, at: item.at ?? new Date().toISOString() };
     this.items.push({ to, item: full });
     if (this.items.length > this.retain) this.items.splice(0, this.items.length - this.retain);
     this.append(`${JSON.stringify({ to, item: full })}\n`);
+    this.onDeliver?.(to);
     return full;
   }
 

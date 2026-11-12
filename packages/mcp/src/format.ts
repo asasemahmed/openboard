@@ -112,7 +112,7 @@ export function formatApply(result: ApplyResult, opCount = 0): { text: string; i
       const refs = refsLine(result.refs);
       if (refs) lines.push(`Refs (the ids they get once accepted; they do not exist yet): ${refs}`);
       lines.push(
-        'This is normal, not an error. Do not re-send the batch or work around the review (for example by removing and re-adding). Continue with work that does not depend on it, or tell the user it awaits their review. The decision, with any note from the reviewer, arrives in board_inbox.',
+        'This is normal, not an error. Do not re-send the batch or work around the review (for example by removing and re-adding). Continue with work that does not depend on it, or tell the user it awaits their review. The decision, with any note from the reviewer, arrives in board_inbox; to wait for it, call board_inbox with waitSeconds.',
       );
       return { text: lines.join('\n'), isError: false };
     }
@@ -132,6 +132,12 @@ export function formatApply(result: ApplyResult, opCount = 0): { text: string; i
             unnamed.length > MAX_LISTED_IDS ? ` (+${unnamed.length - MAX_LISTED_IDS})` : '';
           lines.push(`New node ids: ${shown}${more}`);
         }
+      }
+      const warnings = result.warnings ?? [];
+      if (warnings.length > 0) {
+        const shownWarnings = warnings.slice(0, 3).join(' ');
+        const extra = warnings.length > 3 ? ` (+${warnings.length - 3} more)` : '';
+        lines.push(`Warning: ${shownWarnings}${extra}`);
       }
       return { text: lines.join('\n'), isError: false };
     }

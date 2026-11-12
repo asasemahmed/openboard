@@ -62,6 +62,8 @@ export async function ensureServer(
   root: string,
   io: Pick<CliIo, 'stderr'>,
   timeoutMs = START_TIMEOUT_MS,
+  /** `--plugin` values to start it with; passed on only when given to `openboard mcp` itself. */
+  plugins: readonly string[] = [],
 ): Promise<ServerInfo> {
   const running = await findRunningServer(root);
   if (running) return running;
@@ -69,11 +71,16 @@ export async function ensureServer(
   println(io.stderr, `openboard: starting the board server for ${root}`);
   let failure: string | undefined;
   try {
-    const child = spawn(process.execPath, [cliBinPath(), 'start', '--no-open', '--root', root], {
-      cwd: root,
-      detached: true,
-      stdio: 'ignore',
-    });
+    const pluginArgs = plugins.flatMap((plugin) => ['--plugin', plugin]);
+    const child = spawn(
+      process.execPath,
+      [cliBinPath(), 'start', '--no-open', '--root', root, ...pluginArgs],
+      {
+        cwd: root,
+        detached: true,
+        stdio: 'ignore',
+      },
+    );
     child.once('error', (error) => {
       failure = error.message;
     });

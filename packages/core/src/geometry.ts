@@ -28,12 +28,15 @@ export interface Size {
  * row of status, tags, and links.
  */
 export function defaultNodeSize(
-  node: Pick<NodeInput, 'type' | 'title' | 'body' | 'status' | 'tags' | 'links'>,
+  node: Pick<NodeInput, 'type' | 'title' | 'body' | 'status' | 'tags' | 'links'> &
+    Partial<Pick<NodeInput, 'props'>>,
 ): Size {
   if (node.type === 'frame') return { ...FRAME_MIN };
   let h = 40; // vertical padding plus the type label row
   h += node.title.length > 28 ? 48 : 24; // one or two title lines
-  if (node.body?.trim()) h += 48; // two-line body preview
+  // Two lines: the body preview, or the field values of a project-defined type.
+  const showsFields = node.type.startsWith('x:') && Object.keys(node.props ?? {}).length > 0;
+  if (node.body?.trim() || showsFields) h += 48;
   if (node.status || node.tags?.length || node.links?.length) h += 32; // meta row
   return { w: NODE_WIDTH, h: snap(h) };
 }

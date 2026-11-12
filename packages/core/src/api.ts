@@ -272,6 +272,12 @@ export interface ApplyResult {
   applied?: AppliedOps;
   /** When `applied`: the history batch it became (see `history` and `undo`). */
   batchId?: string;
+  /**
+   * Things that went wrong after the batch landed, one sentence each: for
+   * example nodes the layout could not place yet (it is tried again on the
+   * next apply).
+   */
+  warnings?: string[];
   errors?: OpError[];
   proposalId?: string;
   /**

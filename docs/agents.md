@@ -22,6 +22,8 @@ Every example below is copied from a real session against a board built by the t
 | `board_undo`      | writes          | Take back the agent's own changes or proposals       |
 | `board_claim`     | writes          | Claim nodes to work on, or release them              |
 | `board_links`     | reads, writes   | Code links whose code changed; refresh checked nodes |
+| `board_schema`    | reads           | The node and edge types, built-in and declared       |
+| `board_template`  | reads, writes   | List templates, or apply one as a batch              |
 
 When a client connects, the server also sends short instructions that summarize the rules on this page. The server additionally exposes two prompts, `map_codebase` and `plan_work`, and the boards as resources (see [tools.md](tools.md#prompts-and-resources)).
 
@@ -154,6 +156,12 @@ Nothing was applied. Fix these and send the whole batch again.
 
 The messages name the field and, where it helps, the fix. Fields the schema does not know are reported rather than silently dropped, so a typo cannot turn into a no-op. A problem that follows from an earlier one (for example, an edge to a ref whose `add_node` failed) is not reported twice. The full list of checks is in [tools.md](tools.md#validation-errors).
 
+### Types and templates
+
+A project can declare its own node and edge types, with fields, in `.openboard/config.json` ([Extending OpenBoard](extending.md#declaring-types)). The outline then ends with a line naming them, and `board_schema` describes every type: what the built-in ones are for, and each declared one with its fields (values go in `props`). Batches are checked against the declared types, and a node that does not fit is refused with a message naming the field.
+
+To start a board or an area, an agent can use a template instead of composing the structure itself: `board_template` lists them (eight built in, plus the project's and plugins') and applies one as an ordinary batch, and `board_create` takes a `template`. See [templates](templates.md).
+
 ### Automatic layout
 
 Agents never place nodes. After a batch lands, the layout engine gives every node without a position a place in its frame. A frame that no longer fits its children grows, and pushes unpinned siblings it would overlap out of the way. Nothing else moves. Edges set the flow: `depends_on` and `implements` put their target upstream, every other edge type its source. Upstream is above; `board_layout` with `direction: "right"` puts it to the left instead.
@@ -237,10 +245,10 @@ Ada (human) at 2026-11-12T06:08:35.861Z:
 
 Each entry is `#seq kind id "title": changed fields`. By default the list leaves out the session's own changes and pure moves; `includeOwn` and `includeMoves` add them. Once `board_changes` has shown changes, the session's cursor moves past them, so the notice only ever points at changes the agent has not seen. Passing `since` reads from any cursor, `0` for all kept history.
 
-A session that has not read a board yet has no cursor:
+A session that has not read a board yet has no cursor, so `board_changes` without `since` lists every change the server keeps, with a first line that says so:
 
 ```text
-This session has not read board main yet, so there is no cursor to continue from. Call board_outline first, or pass since (0 for all kept history).
+This session had not read board main yet, so this lists every change kept since the start.
 ```
 
 The server keeps the most recent 5000 changes per board. If a cursor is older than that, or the runtime state was wiped, `board_changes` starts with a line saying the list may be incomplete, and the notice becomes:
@@ -294,7 +302,7 @@ When a batch needs review, nothing lands. The whole batch becomes one **proposal
 Proposed as p_5wivef5dio: the batch is waiting for a person to review it on the board. Nothing is applied yet. Cursor 8.
 Review needed: Op 0 changes "Export query", which Ada created. The other op waits with them.
 Refs (the ids they get once accepted; they do not exist yet): r=n_qr45oh8omo
-This is normal, not an error. Do not re-send the batch or work around the review (for example by removing and re-adding). Continue with work that does not depend on it, or tell the user it awaits their review. The decision, with any note from the reviewer, arrives in board_inbox.
+This is normal, not an error. Do not re-send the batch or work around the review (for example by removing and re-adding). Continue with work that does not depend on it, or tell the user it awaits their review. The decision, with any note from the reviewer, arrives in board_inbox; to wait for it, call board_inbox with waitSeconds.
 ```
 
 Every operation of the proposal already has the id it will get, so accepting it lands exactly what was proposed. On the canvas, a pending proposal is drawn as ghosts over the board, and the **Review** panel lists its items to accept or reject, all or some, with a note for the agent. The same review works from the terminal, which helps over SSH and in scripts:
@@ -317,7 +325,7 @@ ITEM  STATUS    CHANGE
 - **Partial decisions.** `--items 0,2` accepts or rejects only those items; the rest stay pending until decided. Dependencies are respected: accepting an edge also accepts the node it needs, and rejecting a node also rejects the edges that need it.
 - **Conflicts.** Each item remembers the state of what it changes. If someone changes or removes that in the meantime, the item becomes a `conflict` instead of overwriting their work, and is left out when the proposal is accepted.
 - **Who it is attributed to.** Accepted items land as one batch by the agent that proposed them, with its reason, so history and undo treat them like any other batch of that agent.
-- **The answer reaches the agent.** The decision, with the reviewer's note, arrives in the agent's inbox. The agent can withdraw a proposal that is still pending with `board_undo {proposalId}`.
+- **The answer reaches the agent.** The decision, with the reviewer's note, arrives in the agent's inbox. An agent that has nothing else to do waits for it with `board_inbox {"waitSeconds": 60}`, which returns as soon as the decision comes, instead of calling again and again. It can withdraw a proposal that is still pending with `board_undo {proposalId}`.
 
 Proposals live in the server's working state (`.openboard/.local/`), not in the board file. The 50 most recently decided proposals are kept.
 

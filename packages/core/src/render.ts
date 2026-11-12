@@ -204,7 +204,17 @@ function fieldsText(values: Array<{ field: FieldDef; value: Json }>, detail: Det
 function nodeBlock(node: BoardNode, depth: number, ctx: BlockContext): string[] {
   const pad = '  '.repeat(depth);
   const lines = [pad + nodeHeader(node)];
-  if (ctx.detail === 'titles') return lines;
+  if (ctx.detail === 'titles') {
+    // The scanning level still says what an agent must not trip over.
+    const marks: string[] = [];
+    const claimed = ctx.claims?.[node.id];
+    if (claimed)
+      marks.push(`claimed by ${actorLabel(ctx.board.actors, claimed.by)} until ${claimed.until}`);
+    const stale = (node.links ?? []).filter((link) => link.stale).length;
+    if (stale > 0) marks.push(countOf(stale, 'stale code link'));
+    if (marks.length > 0) lines[0] += ` [${marks.join('; ')}]`;
+    return lines;
+  }
   const inner = `${pad}  `;
   const { board, detail } = ctx;
 

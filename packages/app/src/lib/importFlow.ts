@@ -6,7 +6,8 @@
  */
 import type { ImportIntoResult, ImportRequest } from '@openboard/core';
 
-export type ImportFormat = 'mermaid' | 'jsoncanvas';
+/** A built-in importer (`mermaid`, `jsoncanvas`) or one a server plugin adds. */
+export type ImportFormat = string;
 export const IMPORT_FORMATS: ReadonlyArray<{ id: ImportFormat; name: string }> = [
   { id: 'mermaid', name: 'Mermaid flowchart' },
   { id: 'jsoncanvas', name: 'JSON Canvas' },
@@ -105,7 +106,7 @@ export function importReducer(state: ImportState, event: ImportEvent): ImportSta
         return {
           ...state,
           error: {
-            message: 'The format could not be told from the text. Pick Mermaid or JSON Canvas.',
+            message: 'The format could not be told from the text. Pick one under Format.',
             warnings: [],
           },
         };

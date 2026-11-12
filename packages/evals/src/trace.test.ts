@@ -143,7 +143,7 @@ describe('the recording proxy', () => {
     await client.connect(new StreamableHTTPClientTransport(new URL(endpoint.url)));
     clients.push(client);
     const { tools } = await client.listTools();
-    expect(tools.length).toBe(14);
+    expect(tools.length).toBe(16);
     await client.callTool({ name: 'board_list', arguments: {} });
     expect(recorder.trace.connections).toBe(2);
     expect(recorder.trace.clients.map((c) => c.name)).toEqual(['first', 'http-agent']);

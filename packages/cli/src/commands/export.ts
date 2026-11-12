@@ -53,9 +53,25 @@ export async function exportCommand(
   boardId: string | undefined,
   options: ExportOptions = {},
 ): Promise<number> {
-  const exporter = chooseExporter(options);
+  const builtin = options.format === undefined || findExporter(options.format) !== undefined;
   const root = resolveRoot(io, options.root);
-  const { store } = await openSession(io, root);
+  const { store, client } = await openSession(io, root);
+  if (!builtin) {
+    // Not one of ours: maybe a plugin's format on the running server.
+    if (!client) {
+      throw new CliError(
+        `unknown format "${options.format}" (choose one of: ${FORMAT_NAMES.join(', ')}; a plugin's format needs the server that loads it running)`,
+      );
+    }
+    const id = boardId ?? (await defaultBoardId(store));
+    const result = await client.exportBoard(id, {
+      format: options.format as string,
+      ...(options.theme ? { theme: options.theme } : {}),
+    });
+    await writeExport(io, result.text, options.out);
+    return 0;
+  }
+  const exporter = chooseExporter(options);
   const board = await store.getBoard(boardId ?? (await defaultBoardId(store)));
   await writeExport(
     io,

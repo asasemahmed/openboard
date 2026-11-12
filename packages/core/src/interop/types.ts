@@ -30,11 +30,19 @@ export interface ImportResult {
   name?: string;
 }
 
+export interface ImportOptions {
+  maxOps?: number;
+}
+
 export interface Importer {
   name: string;
   /** File extensions, with the dot. */
   extensions: string[];
   description: string;
-  /** Never throws: anything it cannot read becomes a warning. */
-  parse(text: string): ImportResult;
+  /**
+   * Never throws: anything it cannot read becomes a warning. The batch is cut
+   * to `maxOps` operations (default `LIMITS.opsPerBatch`, what one public
+   * batch may hold), with a warning.
+   */
+  parse(text: string, options?: ImportOptions): ImportResult;
 }

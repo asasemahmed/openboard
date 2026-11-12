@@ -85,7 +85,9 @@ export const respectReview: Scenario = {
         },
       ],
     });
-    return 'The change is proposed and waits for your review on the board.';
+    // Wait for the decision instead of polling; the person accepts after a few seconds.
+    await call('board_inbox', { waitSeconds: 30 });
+    return 'The change went to review on the board, and you accepted it: the export query is in progress.';
   },
 };
 
@@ -154,8 +156,8 @@ export const learnFromRejection: Scenario = {
         },
       ],
     });
-    await settle();
-    await call('board_inbox');
+    // Wait for the decision instead of polling.
+    await call('board_inbox', { waitSeconds: 30 });
     await call('board_apply', {
       reason: 'Invoice reminders, in the existing Billing frame as asked',
       ops: [

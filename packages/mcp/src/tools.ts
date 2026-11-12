@@ -42,6 +42,8 @@ export const TOOL_NAMES = [
   'board_undo',
   'board_claim',
   'board_links',
+  'board_schema',
+  'board_template',
 ] as const;
 export type ToolName = (typeof TOOL_NAMES)[number];
 
@@ -57,7 +59,7 @@ const list = (values: readonly string[]) => values.join(', ');
 export const DEFAULT_ASK_WAIT_SECONDS = 60;
 export const MAX_ASK_WAIT_SECONDS = MAX_ASK_WAIT_MS / 1000;
 
-const board = z.string().optional().describe('Board id; omit for the default board');
+const board = z.string().optional().describe('Board id; optional');
 const maxTokens = z
   .number()
   .int()
@@ -72,6 +74,10 @@ export const INPUT_SCHEMAS = {
     name: z.string().min(1).max(120),
     id: z.string().optional().describe('Default: derived from name'),
     description: z.string().max(2000).optional(),
+    template: z
+      .string()
+      .optional()
+      .describe('Start from this template (board_template lists them)'),
   },
   board_outline: { board, maxTokens },
   board_read: {
@@ -110,6 +116,13 @@ export const INPUT_SCHEMAS = {
   board_inbox: {
     board,
     peek: z.boolean().optional().describe('Leave the items unseen'),
+    waitSeconds: z
+      .number()
+      .int()
+      .min(0)
+      .max(MAX_ASK_WAIT_SECONDS)
+      .optional()
+      .describe('Wait up to this long for something to arrive (default 0)'),
     maxTokens,
   },
   board_comment: {
@@ -169,6 +182,14 @@ export const INPUT_SCHEMAS = {
       .optional()
       .describe('Node ids (or "all") you re-checked against the code'),
     maxTokens,
+  },
+  board_schema: { board, maxTokens },
+  board_template: {
+    board,
+    template: z.string().optional().describe('Apply this template; omit to list them'),
+    frame: z.string().optional().describe('Put it inside this frame'),
+    title: z.string().max(200).optional().describe("Title of the template's outer frame"),
+    dryRun: z.boolean().optional(),
   },
 } as const;
 
@@ -240,6 +261,12 @@ export const DESCRIPTIONS: Record<ToolName, string> = {
     'Re-read that code, update the nodes with board_apply, then refresh their ids. Never refresh a node you did not re-check. all: true lists every link.',
     'To link a node: links: [{kind: "file", target: "src/x.ts", line?, endLine?}] in board_apply; the server hashes and watches it.',
   ].join(' '),
+  board_schema:
+    'The node and edge types this board can use: what each built-in type means, and the types the project declares with their fields (values go in props). Call it before creating nodes on a board with custom types, or when unsure which type fits.',
+  board_template: [
+    'Templates: ready-made structures (frames, nodes, edges) for common boards, such as a feature plan or a retrospective. Without template, lists them.',
+    'With template: <id>, applies it as one batch, like board_apply (it can be proposed for review). A fast start for a new board or area.',
+  ].join(' '),
 };
 
 export const TITLES: Record<ToolName, string> = {
@@ -257,6 +284,8 @@ export const TITLES: Record<ToolName, string> = {
   board_undo: 'Undo own change',
   board_claim: 'Claim nodes',
   board_links: 'Code links',
+  board_schema: 'Node and edge types',
+  board_template: 'Templates',
 };
 
 const READ_ONLY = {
@@ -318,10 +347,14 @@ export const ANNOTATIONS: Record<
   board_claim: { ...WRITE, idempotentHint: true },
   // Listing is a read; refresh writes a normal batch.
   board_links: { ...WRITE, idempotentHint: true },
+  board_schema: READ_ONLY,
+  board_template: WRITE,
 };
 
 export const INSTRUCTIONS = [
   'OpenBoard is a shared canvas: a typed graph of nodes (tasks, notes, decisions, risks, questions, code, frames) and edges that people edit in a browser while you edit it here.',
+  '- Every tool takes an optional board id. Without it: the board given at startup, else the only board, else "main".',
+  '- If the outline mentions custom types, call board_schema before adding nodes. To start a board or area, look for a fitting template (board_template).',
   '- Start with board_outline, then board_read only the slice you need. Do not read the whole board.',
   '- When the user says "this", "these" or "the selected ...", call board_selection.',
   '- Write with one board_apply batch per intent, using refs to connect new nodes. Layout is automatic.',
