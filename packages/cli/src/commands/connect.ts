@@ -117,7 +117,7 @@ async function remoteCommand(
     out(`${setup.label}:`);
     if (setup.command) out(indent(setup.command, '  '));
     if (setup.config && setup.file) {
-      out(`  or in ${setup.file}:`);
+      out(setup.command ? `  or in ${setup.file}:` : `  add to ${setup.file}:`);
       out(indent(setup.config, '    '));
     } else if (setup.config && name === 'generic') out(indent(setup.config, '  '));
   }

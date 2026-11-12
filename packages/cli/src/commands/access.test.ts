@@ -188,6 +188,9 @@ describe('connect --remote and start', () => {
     expect(out).toContain('"Authorization": "Bearer ${OPENBOARD_TOKEN}"');
     expect(out).toContain(TOKEN_PLACEHOLDER);
     expect(out).toContain('mcp --url https://board.example.com');
+    expect(out).toContain('  or in .mcp.json:');
+    expect(out).toContain('Cursor:\n  add to .cursor/mcp.json:');
+    expect(out).toContain('Codex:\n  add to ~/.codex/config.toml:');
     expect(out).not.toMatch(/ob_[a-z0-9]{16}_/);
     const json = captureIo(await tempDir());
     await connectCommand(json, 'codex', {
