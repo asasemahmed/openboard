@@ -125,7 +125,13 @@ claude mcp add openboard -- node /path/to/openboard/packages/cli/dist/bin.js mcp
     "servers": {
       "openboard": {
         "type": "local",
-        "command": ["node", "/path/to/openboard/packages/cli/dist/bin.js", "mcp", "--root", "/path/to/your/project"]
+        "command": [
+          "node",
+          "/path/to/openboard/packages/cli/dist/bin.js",
+          "mcp",
+          "--root",
+          "/path/to/your/project"
+        ]
       }
     }
   }
@@ -141,7 +147,12 @@ Older OpenCode versions put the server directly under `mcp`, without `servers`.
   "mcpServers": {
     "openboard": {
       "command": "node",
-      "args": ["/path/to/openboard/packages/cli/dist/bin.js", "mcp", "--root", "/path/to/your/project"]
+      "args": [
+        "/path/to/openboard/packages/cli/dist/bin.js",
+        "mcp",
+        "--root",
+        "/path/to/your/project"
+      ]
     }
   }
 }
@@ -149,15 +160,15 @@ Older OpenCode versions put the server directly under `mcp`, without `servers`.
 
 **Other clients** take the same `command` and `args`:
 
-| Client             | File                                  | Where the server goes                        |
-| ------------------ | ------------------------------------- | -------------------------------------------- |
-| Cursor             | `.cursor/mcp.json`                    | `mcpServers`                                 |
-| Codex              | `~/.codex/config.toml`                | `[mcp_servers.openboard]`                    |
-| Gemini CLI         | `.gemini/settings.json`               | `mcpServers`                                 |
-| Windsurf           | `~/.codeium/windsurf/mcp_config.json` | `mcpServers`                                 |
-| GitHub Copilot     | `.vscode/mcp.json`                    | `servers`, with `"type": "stdio"`            |
-| Zed                | Zed's `settings.json`                 | `context_servers`                            |
-| Anything else      | Your client's MCP settings            | stdio, or `http://127.0.0.1:4747/mcp`        |
+| Client         | File                                  | Where the server goes                 |
+| -------------- | ------------------------------------- | ------------------------------------- |
+| Cursor         | `.cursor/mcp.json`                    | `mcpServers`                          |
+| Codex          | `~/.codex/config.toml`                | `[mcp_servers.openboard]`             |
+| Gemini CLI     | `.gemini/settings.json`               | `mcpServers`                          |
+| Windsurf       | `~/.codeium/windsurf/mcp_config.json` | `mcpServers`                          |
+| GitHub Copilot | `.vscode/mcp.json`                    | `servers`, with `"type": "stdio"`     |
+| Zed            | Zed's `settings.json`                 | `context_servers`                     |
+| Anything else  | Your client's MCP settings            | stdio, or `http://127.0.0.1:4747/mcp` |
 
 If `node` is not on the path your client starts servers with, use the absolute Node.js path that `openboard connect` prints. Setups that also teach the agent how to work on a board — a plugin with a skill for Claude Code, a rule for Cursor, a snippet for Codex, and a generic guide for everything else — are in [`integrations/`](integrations/README.md).
 
