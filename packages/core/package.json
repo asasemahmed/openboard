@@ -1,0 +1,21 @@
+{
+  "name": "@openboard/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Board schema, operations, validation, and serialization for OpenBoard.",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "yjs": "^13.6.33",
+    "zod": "^4.6.7"
+  }
+}

@@ -17,4 +17,24 @@ OpenBoard is private while the foundation is built and will become a public, MIT
 
 Write commit messages that say what changed and why, in the imperative mood: "Add board schema", not "Added" or "Adds".
 
-Setup, build, and test instructions will be added here when there is code to run.
+## Development
+
+You need Node 22 or newer. The repo uses pnpm through Corepack, so there is nothing else to install:
+
+```bash
+corepack enable
+pnpm install
+pnpm build
+pnpm test
+```
+
+| Command          | What it does                    |
+| ---------------- | ------------------------------- |
+| `pnpm build`     | Build every package             |
+| `pnpm dev`       | Rebuild the libraries on change |
+| `pnpm test`      | Run all tests                   |
+| `pnpm typecheck` | Type-check everything           |
+| `pnpm lint`      | Check formatting and lint rules |
+| `pnpm format`    | Fix formatting                  |
+
+How the pieces fit together is described in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Read it before making a change that crosses package boundaries.
