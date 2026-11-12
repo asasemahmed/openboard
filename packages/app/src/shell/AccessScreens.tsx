@@ -110,8 +110,14 @@ function JoinFlow() {
             className="input"
             value={name}
             maxLength={80}
+            autoComplete="name"
+            aria-describedby={`${nameId}-hint`}
+            onFocus={(event) => event.target.select()}
             onChange={(event) => setName(event.target.value)}
           />
+          <p id={`${nameId}-hint`} className="field-hint">
+            Change it if this is not you. You can rename yourself later from your profile.
+          </p>
         </form>
       </StateScreen>
     );

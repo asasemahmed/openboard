@@ -43,6 +43,9 @@ describe('argument parsing and exit codes', () => {
       'revisions',
       'whoami',
       'access',
+      'templates',
+      'template',
+      'types',
     ]) {
       expect(io.out()).toContain(`  ${command} `);
     }

@@ -56,6 +56,18 @@
   --type-frame: #5f646d;
   --type-custom: #5f646d;
 
+  /* declared-type colours (TYPE_COLORS in core), each at least 4.5:1 on --card and --sunken */
+  --tc-gray: #5f646d;
+  --tc-red: #c62828;
+  --tc-orange: #a84b06;
+  --tc-yellow: #7f5a00;
+  --tc-green: #2a7230;
+  --tc-teal: #0f766e;
+  --tc-blue: #1d5fd1;
+  --tc-indigo: #4f46e5;
+  --tc-purple: #8034b5;
+  --tc-pink: #be185d;
+
   /* statuses */
   --status-todo: #5f646d;
   --status-progress: #c2410c;
@@ -123,6 +135,16 @@
     --type-run: #b79cff;
     --type-frame: #9a9fa8;
     --type-custom: #9a9fa8;
+    --tc-gray: #a3a8b0;
+    --tc-red: #ff7b72;
+    --tc-orange: #ffa657;
+    --tc-yellow: #e3b341;
+    --tc-green: #56d364;
+    --tc-teal: #39c5bb;
+    --tc-blue: #6cb6ff;
+    --tc-indigo: #a5a8ff;
+    --tc-purple: #d2a8ff;
+    --tc-pink: #ff8ccf;
     --status-todo: #9a9fa8;
     --status-progress: #ff7a45;
     --status-blocked: #ff6b5e;
@@ -174,6 +196,16 @@
   --type-run: #b79cff;
   --type-frame: #9a9fa8;
   --type-custom: #9a9fa8;
+  --tc-gray: #a3a8b0;
+  --tc-red: #ff7b72;
+  --tc-orange: #ffa657;
+  --tc-yellow: #e3b341;
+  --tc-green: #56d364;
+  --tc-teal: #39c5bb;
+  --tc-blue: #6cb6ff;
+  --tc-indigo: #a5a8ff;
+  --tc-purple: #d2a8ff;
+  --tc-pink: #ff8ccf;
   --status-todo: #9a9fa8;
   --status-progress: #ff7a45;
   --status-blocked: #ff6b5e;
@@ -226,6 +258,36 @@
 }
 .tone-custom {
   --tone: var(--type-custom);
+}
+.tone-c-gray {
+  --tone: var(--tc-gray);
+}
+.tone-c-red {
+  --tone: var(--tc-red);
+}
+.tone-c-orange {
+  --tone: var(--tc-orange);
+}
+.tone-c-yellow {
+  --tone: var(--tc-yellow);
+}
+.tone-c-green {
+  --tone: var(--tc-green);
+}
+.tone-c-teal {
+  --tone: var(--tc-teal);
+}
+.tone-c-blue {
+  --tone: var(--tc-blue);
+}
+.tone-c-indigo {
+  --tone: var(--tc-indigo);
+}
+.tone-c-purple {
+  --tone: var(--tc-purple);
+}
+.tone-c-pink {
+  --tone: var(--tc-pink);
 }
 
 .status-todo {

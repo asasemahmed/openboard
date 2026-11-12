@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import { format } from 'node:util';
 import { emptyBoard, OpenBoardError } from '@openboard/core';
 import { actorForClient, runStdio, sessionFromEnv } from '@openboard/mcp';
@@ -7,6 +8,7 @@ import { CliError } from '../lib/errors.js';
 import type { CliIo } from '../lib/io.js';
 import { println } from '../lib/io.js';
 import { ensureServer, reconnectingApi, shared } from '../lib/mcp.js';
+import { pluginUrl } from '../lib/plugins.js';
 import { cliVersion, projectName, resolveRoot } from '../lib/project.js';
 import { findRunningServer, projectPaths } from '../lib/server.js';
 import {
@@ -25,6 +27,8 @@ export interface McpOptions {
   url?: string;
   /** Board used when a tool call names none. */
   board?: string;
+  /** `--plugin` values for the background server this command may start. */
+  plugins?: string[];
 }
 
 /** Send `console` output to stderr: stdout carries the protocol and nothing else. */
@@ -70,7 +74,9 @@ export async function mcpCommand(io: CliIo, options: McpOptions = {}): Promise<n
   // file and a background process in every project it merely opens.
   const ensure = shared(async () => {
     await ensureMainBoard(root);
-    return ensureServer(root, io);
+    // Plugin paths are resolved here, where the person typed them.
+    const plugins = (options.plugins ?? []).map((spec) => fileURLToPath(pluginUrl(spec, io.cwd)));
+    return ensureServer(root, io, undefined, plugins);
   });
 
   // One agent session per process. OPENBOARD_SESSION lets a client that also

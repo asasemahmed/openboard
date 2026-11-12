@@ -1,12 +1,14 @@
 import { useRef, useState } from 'react';
+import { exportChoices } from '../lib/exportChoices.js';
 import { boardPath, navigate } from '../lib/router.js';
 import { useCan } from '../state/access.js';
-import { boards, useBoards } from '../state/boards.js';
+import { boards, serverInfo, useBoards } from '../state/boards.js';
 import { useSession } from '../state/context.js';
+import { useValue } from '../state/emitter.js';
 import { Icon } from '../ui/Icon.js';
 import { MenuHeading, MenuItem, MenuList, MenuSeparator } from '../ui/Menu.js';
 import { Popover } from '../ui/Popover.js';
-import { copyBoardAs, EXPORT_CHOICES, exportBoard } from './boardActions.js';
+import { copyBoardAs, exportBoard } from './boardActions.js';
 
 const SHOWN = 12;
 
@@ -18,6 +20,12 @@ export function BoardSwitcher() {
   const close = () => setOpen(false);
   const canEdit = useCan('board.edit');
   const canCreate = useCan('board.create');
+  const info = useValue(serverInfo);
+  const selectedFrame = (): string | null => {
+    const ids = session.store.selection.nodeIds;
+    const node = ids.length === 1 ? session.store.node(ids[0] as string) : undefined;
+    return node?.type === 'frame' ? node.id : null;
+  };
 
   return (
     <>
@@ -70,16 +78,29 @@ export function BoardSwitcher() {
               Import…
             </MenuItem>
           )}
-          {EXPORT_CHOICES.map(({ label, choice }) => (
+          {canEdit && (
             <MenuItem
-              key={label}
+              icon="layout"
+              hint="A plan, a map, a kanban…"
+              onSelect={() => {
+                close();
+                session.ui.templateDialog.set({ frame: selectedFrame() });
+              }}
+            >
+              Insert template…
+            </MenuItem>
+          )}
+          {exportChoices(info).map((choice) => (
+            <MenuItem
+              key={`${choice.format}:${choice.theme ?? ''}`}
               icon="file"
+              {...(choice.plugin ? { hint: choice.plugin } : {})}
               onSelect={() => {
                 close();
                 void exportBoard(session, choice);
               }}
             >
-              Export as {label}
+              Export as {choice.label}
             </MenuItem>
           ))}
           <MenuItem

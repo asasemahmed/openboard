@@ -50,6 +50,8 @@ export class UiStore {
   readonly followSession = new Value<string | null>(null);
   /** The import dialog, with text a drop or a paste brought along. */
   readonly importDialog = new Value<{ text?: string; filename?: string } | null>(null);
+  /** "Insert template…", into this frame when one was selected. */
+  readonly templateDialog = new Value<{ frame: string | null; template?: string } | null>(null);
   /** The "Compare with…" revision picker. */
   readonly comparePicker = new Value(false);
   /** Comparing the live board with this revision (the compare view is shown). */
@@ -115,6 +117,7 @@ export class UiStore {
       this.connectAgent.get() ||
       this.settings.get() ||
       this.importDialog.get() !== null ||
+      this.templateDialog.get() !== null ||
       this.comparePicker.get()
     );
   }

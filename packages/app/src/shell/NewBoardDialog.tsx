@@ -1,16 +1,25 @@
-import { type FormEvent, useId, useState } from 'react';
+import { type FormEvent, useEffect, useId, useState } from 'react';
 import { ApiError } from '../lib/api.js';
 import { boardPath, navigate } from '../lib/router.js';
 import { boards } from '../state/boards.js';
+import { loadTemplates, useTemplateList } from '../state/templates.js';
 import { Button } from '../ui/Button.js';
 import { Dialog } from '../ui/Dialog.js';
+import { TemplateGallery } from './TemplateGallery.js';
 
 export function NewBoardForm({ onDone, onCancel }: { onDone?: () => void; onCancel?: () => void }) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [template, setTemplate] = useState<string | null>(null);
+  const templates = useTemplateList();
   const nameId = useId();
+
+  useEffect(() => {
+    // Without templates the form is just name and description.
+    loadTemplates().catch(() => {});
+  }, []);
   const descId = useId();
 
   const submit = async (event: FormEvent) => {
@@ -26,6 +35,7 @@ export function NewBoardForm({ onDone, onCancel }: { onDone?: () => void; onCanc
       const board = await boards.create({
         name: clean,
         ...(description.trim() ? { description: description.trim() } : {}),
+        ...(template ? { template } : {}),
       });
       onDone?.();
       navigate(boardPath(board.id));
@@ -72,6 +82,16 @@ export function NewBoardForm({ onDone, onCancel }: { onDone?: () => void; onCanc
           onChange={(event) => setDescription(event.target.value)}
         />
       </div>
+      {templates && templates.length > 0 && (
+        <TemplateGallery
+          label="Start from"
+          templates={templates}
+          value={template}
+          onChange={setTemplate}
+          disabled={busy}
+          empty={{ name: 'Empty', description: 'A blank board.' }}
+        />
+      )}
       {error && (
         <p className="field-error" role="alert">
           {error}
@@ -93,7 +113,7 @@ export function NewBoardForm({ onDone, onCancel }: { onDone?: () => void; onCanc
 
 export function NewBoardDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   return (
-    <Dialog open={open} onClose={onClose} title="New board">
+    <Dialog open={open} onClose={onClose} title="New board" size="lg">
       <NewBoardForm onDone={onClose} onCancel={onClose} />
     </Dialog>
   );

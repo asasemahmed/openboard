@@ -10,6 +10,7 @@ import { readdir } from 'node:fs/promises';
 import path from 'node:path';
 import {
   type Actor,
+  type Batch,
   BoardDoc,
   type BoardSummary,
   type CreateBoardInput,
@@ -18,15 +19,18 @@ import {
 } from '@openboard/core';
 import { type FSWatcher, watch } from 'chokidar';
 import { AccessStore } from './access.js';
+import { guardAuthorship } from './authorship.js';
 import { CodeLinks } from './code.js';
 import { ConfigStore } from './config.js';
 import { ensureLocalDir, errorMessage, isErrno } from './fsutil.js';
 import { Git } from './git.js';
 import { LiveHub } from './live.js';
 import { assertBoardId, boardIdFromFile, CONFIG_FILE, localBoardFiles } from './paths.js';
+import { PluginHost } from './plugins.js';
 import { refreshProposals } from './review.js';
 import { Room, type RoomFiles } from './room.js';
 import type { FileStatus } from './store.js';
+import { TemplateCatalog } from './templates.js';
 import type { ProjectPaths } from './types.js';
 
 /** A board as listed over HTTP: its summary plus the state of its file. */
@@ -50,6 +54,8 @@ export interface BoardsOptions {
   clock?: () => number;
   /** Shared mode: an access file that does not parse stops the start instead of being ignored. */
   shared?: boolean;
+  /** This server's plugins; none when omitted. */
+  plugins?: PluginHost;
 }
 
 export class Boards {
@@ -75,7 +81,14 @@ export class Boards {
   readonly shared: boolean;
   /** The URL people use to reach the server; set once it listens. Invite links start with it. */
   publicUrl = '';
-  private readonly opts: BoardsOptions & { config: ConfigStore };
+  /** This server's plugins, and with them its extra types, formats and templates. */
+  readonly plugins: PluginHost;
+  /** Built-in, plugin and project templates. */
+  readonly templates: TemplateCatalog;
+  private readonly opts: BoardsOptions & {
+    config: ConfigStore;
+    onBatch: (room: Room, batch: Batch) => void;
+  };
 
   constructor(
     readonly paths: ProjectPaths,
@@ -97,10 +110,14 @@ export class Boards {
       log: this.log,
       strict: this.shared,
     });
+    this.plugins = opts.plugins ?? new PluginHost([], this.log);
+    this.templates = new TemplateCatalog(paths.templates, this.plugins, this.log);
+    const plugins = this.plugins;
     this.opts = {
       onProposalsStale: (room) => refreshProposals(room, this.log),
       ...opts,
       config: this.config,
+      onBatch: (room, batch) => plugins.batch(room.id, batch, () => room.doc.toJSON()),
     };
   }
 
@@ -180,6 +197,7 @@ export class Boards {
             this.open.set(id, room);
             this.live.roomOpened(room);
             this.code.attach(room);
+            if (this.shared) guardAuthorship(room, this.log);
           }
           // Not there (yet): forget the miss so a later call looks again.
           else this.rooms.delete(id);
@@ -215,6 +233,7 @@ export class Boards {
       this.open.set(id, room);
       this.live.roomOpened(room);
       this.code.attach(room);
+      if (this.shared) guardAuthorship(room, this.log);
       room.knownActors.set(actor.id, actor);
       return room;
     } catch (error) {
@@ -248,6 +267,8 @@ export class Boards {
   }
 
   async close(): Promise<void> {
+    // Plugins go first: running hooks and teardowns may still use the boards.
+    await this.plugins.close();
     this.closing = true;
     this.live.close();
     await this.code.close();

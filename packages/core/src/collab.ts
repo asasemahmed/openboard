@@ -11,6 +11,7 @@
 import { z } from 'zod';
 import { OpSchema } from './ops.js';
 import { CommentSchema, EdgeSchema, IdSchema, NodeSchema, ViewSchema } from './schema.js';
+import { EdgeTypesSchema, NodeTypesSchema } from './typedefs.js';
 
 // ── Policy ───────────────────────────────────────────────────────────────────
 
@@ -66,6 +67,10 @@ export const ProjectConfigSchema = z.object({
     /** Mode per agent, by actor id. */
     agents: z.record(IdSchema, PolicyModeSchema),
   }),
+  /** Declared node types, by `x:` name (see typedefs.ts). */
+  nodeTypes: NodeTypesSchema.optional(),
+  /** Declared edge types, by `x:` name. */
+  edgeTypes: EdgeTypesSchema.optional(),
 });
 export type ProjectConfig = z.infer<typeof ProjectConfigSchema>;
 
@@ -362,6 +367,12 @@ export const InboxOptionsSchema = z.object({
   /** Leave the returned items unseen. */
   peek: z.boolean().optional(),
   maxTokens: z.number().int().min(100).max(50_000).optional(),
+  /**
+   * When nothing new is there, wait up to this long (at most `MAX_ASK_WAIT_MS`)
+   * for an item to arrive, for example the decision on a proposal. Returns at
+   * once when unseen items already exist.
+   */
+  waitMs: z.number().int().min(0).optional(),
 });
 export type InboxOptions = z.infer<typeof InboxOptionsSchema>;
 

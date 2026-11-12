@@ -414,3 +414,18 @@ describe('static app', () => {
     expect(Object.keys(after.json.actors)).toEqual(['anonymous']);
   });
 });
+
+describe('framing', () => {
+  it('forbids other sites from framing the app in local mode too', async () => {
+    const root = await tempRoot();
+    const server = await startTestServer(root);
+    try {
+      const res = await fetch(`${server.url}/api/health`);
+      expect(res.headers.get('x-frame-options')).toBe('DENY');
+      expect(res.headers.get('content-security-policy')).toBe("frame-ancestors 'none'");
+    } finally {
+      await server.close();
+      await removeRoot(root);
+    }
+  });
+});

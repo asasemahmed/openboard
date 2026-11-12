@@ -10,6 +10,7 @@ import { access, loadAccess, signedOut, useAccess } from './state/access.js';
 import { api, loadServerInfo, serverInfo } from './state/boards.js';
 import { useValue } from './state/emitter.js';
 import { adoptServerName, currentActor } from './state/identity.js';
+import { watchSchema } from './state/schema.js';
 import { Toasts } from './ui/Toasts.js';
 
 // Any 401, from any request, means this browser is signed out: stop and say so.
@@ -32,6 +33,7 @@ export function App() {
   useEffect(() => {
     if (state.status !== 'ready') return;
     void loadServerInfo().then(() => adoptServerName(serverInfo.get()?.user));
+    watchSchema();
   }, [state.status]);
 
   // An invite link always gets its own page, even when already signed in (it may be another grant).

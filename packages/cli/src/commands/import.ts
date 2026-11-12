@@ -142,6 +142,7 @@ export async function importCommand(
       ...(options.dryRun ? { dryRun: true } : {}),
     });
     if (result.status === 'invalid') throw refused(result.errors ?? []);
+    for (const warning of result.warnings ?? []) println(io.stderr, `warning: ${warning}`);
     const what = result.applied ? counts(result.applied) : `${ops.length} operations`;
     println(
       io.stdout,

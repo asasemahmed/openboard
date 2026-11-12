@@ -96,6 +96,51 @@ async function gitCheck(root: string, local: string): Promise<Check | undefined>
       };
 }
 
+/** Plugins the server loaded, with their warnings, and nodes that do not fit declared types. */
+async function extensionChecks(io: CliIo, url: string): Promise<Check[]> {
+  const checks: Check[] = [];
+  try {
+    const info = (await (
+      await fetch(`${url}/api/info`, { signal: AbortSignal.timeout(3000) })
+    ).json()) as {
+      plugins?: Array<{ name: string; version?: string; warnings: string[] }>;
+    };
+    for (const plugin of info.plugins ?? []) {
+      const label = `Plugin ${plugin.name}${plugin.version ? ` ${plugin.version}` : ''} is loaded`;
+      checks.push(
+        plugin.warnings.length === 0
+          ? { status: 'ok', label }
+          : {
+              status: 'warn',
+              label: `${label}, with ${plugin.warnings.length} warning${plugin.warnings.length === 1 ? '' : 's'}: ${plugin.warnings.join('; ')}`,
+              hint: 'remove the clash from .openboard/config.json or from the plugin',
+            },
+      );
+    }
+    const client = connect({ url, actor: cliActor(io.env), timeoutMs: 3000 });
+    const schema = await client.schema({ maxTokens: 100 });
+    if (schema.nodeTypes.some((t) => t.source !== 'builtin')) {
+      let problems = 0;
+      for (const board of await client.listBoards()) {
+        problems +=
+          (await client.schema({ board: board.id, maxTokens: 100 })).warnings?.length ?? 0;
+      }
+      checks.push(
+        problems === 0
+          ? { status: 'ok', label: 'Every node fits its declared type' }
+          : {
+              status: 'warn',
+              label: `${problems} node${problems === 1 ? ' does' : 's do'} not fit their declared type`,
+              hint: 'see `openboard types check <board>`',
+            },
+      );
+    }
+  } catch {
+    // The server check above already says whether it answers.
+  }
+  return checks;
+}
+
 /** For a server in shared mode: its public URL and grants. Informational, except plain http. */
 async function sharedChecks(
   io: CliIo,
@@ -261,6 +306,7 @@ export async function runChecks(io: CliIo, options: DoctorOptions = {}): Promise
         timeoutMs: 3000,
       }).health();
       if (health.ok && server.shared) checks.push(...(await sharedChecks(io, server)));
+      if (health.ok) checks.push(...(await extensionChecks(io, server.url)));
       checks.push(
         health.ok
           ? { status: 'ok', label: `Server is running at ${server.url} (pid ${health.pid})` }

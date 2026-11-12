@@ -65,6 +65,16 @@ export function fakeApi(overrides: Partial<ApiClient> = {}): ApiClient {
   return {
     listBoards: vi.fn(async () => []),
     createBoard: vi.fn(),
+    schema: vi.fn(async () => ({
+      nodeTypes: [],
+      edgeTypes: [],
+      statuses: [],
+      text: '',
+      tokens: 0,
+      truncated: false,
+    })),
+    templates: vi.fn(async () => []),
+    applyTemplate: vi.fn(),
     layout: vi.fn(),
     changes: vi.fn(async (boardId: string) => ({
       boardId,

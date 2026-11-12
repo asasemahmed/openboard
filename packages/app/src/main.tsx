@@ -1,4 +1,6 @@
-// Before anything else: take an invite token out of the address bar.
+// Before anything else: keep zod from probing for eval (see the CSP in index.html),
+// then take an invite token out of the address bar.
+import './zodConfig.js';
 import './joinToken.js';
 import '@xyflow/react/dist/base.css';
 import './styles/tokens.css';

@@ -1,0 +1,28 @@
+{
+  "name": "@openboard/evals",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Evaluation harness: how well an agent uses an OpenBoard, scored on task success and token cost.",
+  "license": "MIT",
+  "bin": {
+    "openboard-evals": "./dist/bin.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@openboard/core": "workspace:*",
+    "@openboard/mcp": "workspace:*",
+    "@openboard/sdk": "workspace:*",
+    "@openboard/server": "workspace:*",
+    "commander": "^15.1.0"
+  }
+}

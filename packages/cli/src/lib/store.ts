@@ -5,6 +5,8 @@
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
+  type Actor,
+  applyOps,
   type Board,
   type BoardSummary,
   type CreateBoardInput,
@@ -21,6 +23,7 @@ import { CliError, isNodeError } from './errors.js';
 import { type CliIo, println } from './io.js';
 import { cliActor } from './project.js';
 import { findRunningServer, type ProjectPaths, projectPaths, type ServerInfo } from './server.js';
+import { templateOps } from './templates.js';
 
 const BOARD_SUFFIX = '.board.json';
 
@@ -113,10 +116,12 @@ export class FileStore implements BoardStore {
   readonly source = 'files' as const;
   readonly paths: ProjectPaths;
   readonly #warn: (line: string) => void;
+  readonly #actor: Actor;
 
-  constructor(root: string, warn: (line: string) => void = () => {}) {
+  constructor(root: string, warn: (line: string) => void = () => {}, actor: Actor = cliActor()) {
     this.paths = projectPaths(root);
     this.#warn = warn;
+    this.#actor = actor;
   }
 
   async listBoards(): Promise<BoardSummary[]> {
@@ -137,8 +142,20 @@ export class FileStore implements BoardStore {
         `invalid board: ${issue ? `${issue.path.join('.') || 'input'}: ${issue.message}` : 'unknown problem'}`,
       );
     }
-    const { id, name, description } = parsed.data;
-    const board = emptyBoard({ id: id ?? slugify(name), name, description });
+    const { id, name, description, template } = parsed.data;
+    let board = emptyBoard({ id: id ?? slugify(name), name, description });
+    if (template !== undefined) {
+      // As the server does: the template's outer frame is titled after the board.
+      const ops = await templateOps(this.paths.root, template, name);
+      const outcome = applyOps(board, ops, { actor: this.#actor });
+      if (!outcome.ok) {
+        throw new OpenBoardError(
+          'invalid_request',
+          `template "${template}" does not apply: ${outcome.errors[0]?.message ?? 'unknown problem'}`,
+        );
+      }
+      board = outcome.board;
+    }
     await ensureProjectDir(this.paths);
     await writeNewBoardFile(this.paths, board);
     return summarize(board);
@@ -226,7 +243,11 @@ export async function openSession(io: CliIo, root: string): Promise<Session> {
     const client = connect({ url: server.url, actor: cliActor(io.env) });
     return { root, server, store: { source: 'server', ...bindStore(client) }, client };
   }
-  const store = new FileStore(root, (line) => println(io.stderr, `openboard: ${line}`));
+  const store = new FileStore(
+    root,
+    (line) => println(io.stderr, `openboard: ${line}`),
+    cliActor(io.env),
+  );
   return { root, server: null, store };
 }
 

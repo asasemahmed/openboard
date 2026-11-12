@@ -16,6 +16,13 @@ import { diffCommand } from './commands/diff.js';
 import { doctorCommand } from './commands/doctor.js';
 import { exportCommand } from './commands/export.js';
 import {
+  templateApplyCommand,
+  templateSaveCommand,
+  templatesCommand,
+  typesCheckCommand,
+  typesCommand,
+} from './commands/extend.js';
+import {
   gitRemoveCommand,
   gitSetupCommand,
   gitStatusCommand,
@@ -75,6 +82,11 @@ const urlOption = () =>
     "talk to this OpenBoard server instead of the project's (token from OPENBOARD_TOKEN, never a flag: flags end up in shell history and process lists)",
   );
 
+/** `--plugin`, repeatable. Loading a plugin runs its code: it is never done without this flag. */
+const collect = (value: string, previous: string[] = []) => [...previous, value];
+const PLUGIN_HELP =
+  "load this server plugin: a path to a module, or an installed package (repeatable). Plugins run with the server's privileges; they are only ever loaded when named here, never from the project or a config file";
+
 const rootOption = () =>
   new Option('--root <dir>', 'project root (default: discovered from the current directory)');
 
@@ -133,6 +145,7 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
     )
     .option('--board <id>', 'board to open in the browser')
     .option('--no-open', 'do not open a browser')
+    .option('--plugin <module>', PLUGIN_HELP, collect)
     .action(
       action(
         (opts: {
@@ -143,7 +156,11 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
           open: boolean;
           share?: boolean;
           publicUrl?: string;
-        }) => startCommand(io, opts),
+          plugin?: string[];
+        }) => {
+          const { plugin, ...rest } = opts;
+          return startCommand(io, { ...rest, ...(plugin ? { plugins: plugin } : {}) });
+        },
       ),
     );
 
@@ -187,13 +204,90 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
     .addOption(urlOption())
     .option('--id <id>', 'board id (default: derived from the name)')
     .option('--description <text>', 'board description')
+    .option('--template <id>', 'start the board from this template (see openboard templates)')
     .option('--json', 'print the new board as JSON')
     .action(
       action(
         (
           name: string,
-          opts: { root?: string; id?: string; description?: string; json?: boolean },
+          opts: {
+            root?: string;
+            id?: string;
+            description?: string;
+            template?: string;
+            json?: boolean;
+          },
         ) => newBoardCommand(io, name, opts),
+      ),
+    );
+
+  program
+    .command('templates')
+    .description("list the templates: built-in, the project's, and those of loaded plugins")
+    .addOption(rootOption())
+    .addOption(urlOption())
+    .option('--json', 'print JSON')
+    .action(action((opts: { root?: string; json?: boolean }) => templatesCommand(io, opts)));
+
+  const templateCommand = program
+    .command('template')
+    .description('apply a template to a board, or save a board as a project template')
+    .enablePositionalOptions();
+  templateCommand
+    .command('apply')
+    .description('apply a template to a board as one batch')
+    .argument('<id>', 'the template, as openboard templates lists it')
+    .argument('[board]', 'board id (default: the only board, or "main")')
+    .addOption(rootOption())
+    .addOption(urlOption())
+    .option('--frame <id>', "put the template's top-level nodes inside this frame")
+    .option('--title <text>', "title of the template's outer frame")
+    .option('--dry-run', 'check it and say what it would add; change nothing')
+    .action(
+      action(
+        (
+          id: string,
+          board: string | undefined,
+          opts: { root?: string; frame?: string; title?: string; dryRun?: boolean },
+        ) => templateApplyCommand(io, id, board, opts),
+      ),
+    );
+  templateCommand
+    .command('save')
+    .description(
+      'save a board as a project template in .openboard/templates/ (commit it to share it)',
+    )
+    .argument('<name>', 'the template id: lowercase letters, digits and dashes')
+    .argument('[board]', 'board id (default: the only board, or "main")')
+    .addOption(rootOption())
+    .addOption(urlOption())
+    .option('--force', 'replace a project template of that name')
+    .action(
+      action((name: string, board: string | undefined, opts: { root?: string; force?: boolean }) =>
+        templateSaveCommand(io, name, board, opts),
+      ),
+    );
+
+  const typesCommandDef = program
+    .command('types')
+    .description(
+      'the node and edge types: built-in meanings and the declared ones with their fields',
+    )
+    .enablePositionalOptions()
+    .addOption(rootOption())
+    .addOption(urlOption())
+    .option('--json', 'print JSON')
+    .action(action((opts: { root?: string; json?: boolean }) => typesCommand(io, opts)));
+  typesCommandDef
+    .command('check')
+    .description('list nodes that do not fit their declared type (exit 1 when there are any)')
+    .argument('[board]', 'board id (default: the only board, or "main")')
+    .addOption(rootOption())
+    .addOption(urlOption())
+    .option('--json', 'print JSON')
+    .action(
+      action((board: string | undefined, opts: { root?: string; json?: boolean }) =>
+        typesCheckCommand(io, board, { ...opts, root: opts.root ?? typesCommandDef.opts().root }),
       ),
     );
 
@@ -203,10 +297,9 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
     .argument('[board]', 'board id (default: the only board, or "main")')
     .addOption(rootOption())
     .addOption(urlOption())
-    .addOption(
-      new Option('-f, --format <format>', 'output format (default: from --out, else json)').choices(
-        FORMAT_NAMES,
-      ),
+    .option(
+      '-f, --format <format>',
+      `output format: ${FORMAT_NAMES.join(', ')}, or a format of a plugin the running server loaded (default: from --out, else json)`,
     )
     .option('-o, --out <file>', 'write to a file instead of stdout')
     .addOption(
@@ -398,14 +491,20 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
     .addOption(rootOption())
     .option('--board <id>', 'board used when a tool call names none')
     .option(
+      '--plugin <module>',
+      `for the server it starts in the background: ${PLUGIN_HELP}`,
+      collect,
+    )
+    .option(
       '--url <url>',
       'proxy to this remote OpenBoard instead (token from OPENBOARD_TOKEN, never a flag); starts no local server',
     )
     .action(
-      action((opts: { root?: string; board?: string; url?: string }) => {
+      action((opts: { root?: string; board?: string; url?: string; plugin?: string[] }) => {
         // `--url` here is the proxy target, not the CLI's own remote.
         io.remoteUrl = undefined;
-        return mcpCommand(io, opts);
+        const { plugin, ...rest } = opts;
+        return mcpCommand(io, { ...rest, ...(plugin ? { plugins: plugin } : {}) });
       }),
     );
 

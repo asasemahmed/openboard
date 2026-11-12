@@ -26,6 +26,8 @@ import {
   type ApplyRequest,
   ApplyRequestSchema,
   type ApplyResult,
+  type ApplyTemplateRequest,
+  ApplyTemplateRequestSchema,
   type Ask,
   type AskInput,
   AskInputSchema,
@@ -53,7 +55,9 @@ import {
   type CreateBoardInput,
   CreateBoardInputSchema,
   can,
+  checkBoardAgainstTypes,
   checkItems,
+  checkOpsAgainstTypes,
   classifyOps,
   type Decision,
   DecisionSchema,
@@ -62,13 +66,11 @@ import {
   type DiffResult,
   detectFormat,
   diffBoards,
-  EXPORTERS,
   type ExportOptions,
   ExportOptionsSchema,
   type ExportResult,
+  emptyBoard,
   explainVerdicts,
-  findExporter,
-  findImporter,
   forbiddenMessage,
   type GrantAccessInput,
   type GrantAccessResult,
@@ -76,7 +78,6 @@ import {
   HistoryOptionsSchema,
   type HistoryResult,
   IdSchema,
-  IMPORTERS,
   type ImportIntoResult,
   type ImportRequest,
   ImportRequestSchema,
@@ -87,6 +88,7 @@ import {
   type LayoutRequest,
   LayoutRequestSchema,
   type LayoutResult,
+  LIMITS,
   type LinksOptions,
   LinksOptionsSchema,
   type LinksResult,
@@ -130,10 +132,15 @@ import {
   renderProposals,
   renderRead,
   renderRevisions,
+  renderSchema,
   renderSelection,
   renderSessions,
+  renderTemplates,
   renderUndo,
   rollupStatus,
+  type SchemaOptions,
+  SchemaOptionsSchema,
+  type SchemaResult,
   type SelectionResult,
   type Session,
   type SessionsOptions,
@@ -142,6 +149,8 @@ import {
   SYSTEM_ACTOR,
   selectItems,
   selectNodes,
+  type TemplatesResult,
+  type TypeRegistry,
   type UndoRequest,
   UndoRequestSchema,
   type UndoResult,
@@ -185,6 +194,9 @@ const ProposalsOptionsSchema = z.object({
 });
 
 const AskWaitSchema = z.object({ waitMs: z.number().int().min(0).optional() });
+
+/** Most operations one import may produce. */
+const IMPORT_MAX_OPS = 50_000;
 
 /** Decided proposals kept in the document; older ones are dropped. */
 export const DECIDED_PROPOSALS_KEPT = 50;
@@ -355,6 +367,11 @@ export class LocalBoardApi implements BoardApi {
     return room.doc.origin(this.actor.id, source);
   }
 
+  /** The declared types in effect: the project config's, then the plugins'. */
+  private types(): TypeRegistry {
+    return this.boards.plugins.types(this.boards.config.config).types;
+  }
+
   // ── Boards and reading ─────────────────────────────────────────────────────
 
   async listBoards(): Promise<BoardSummary[]> {
@@ -365,7 +382,38 @@ export class LocalBoardApi implements BoardApi {
   async createBoard(input: CreateBoardInput): Promise<BoardSummary> {
     this.authorize('createBoard');
     const parsed = parseInput(CreateBoardInputSchema, input, 'board');
-    const room = await this.boards.create(parsed, this.actor);
+    const { template: templateId, ...meta } = parsed;
+    if (templateId === undefined) return (await this.boards.create(meta, this.actor)).doc.summary();
+
+    // Starting from a template: check it on an empty board before creating anything.
+    this.authorize('applyTemplate');
+    const template = await this.boards.templates.get(templateId);
+    const ops = template.build({ title: meta.name, emptyTarget: true });
+    const empty = emptyBoard({ id: 'template-check', name: meta.name });
+    const probe = applyOps(empty, ops, { actor: this.actor });
+    const errors = probe.ok
+      ? checkOpsAgainstTypes(empty, ops, probe.applied.refs, this.types())
+      : probe.errors;
+    if (errors.length > 0) {
+      throw new OpenBoardError(
+        'invalid_request',
+        `template "${templateId}" does not apply: ${errors
+          .slice(0, 3)
+          .map((e) => `ops[${e.index}]: ${e.message}`)
+          .join('; ')}`,
+        { errors },
+      );
+    }
+    const room = await this.boards.create(meta, this.actor);
+    const result = await this.apply(room.id, {
+      ops,
+      reason: `Template: ${template.summary.name}`,
+    });
+    if (result.status === 'invalid') {
+      this.log(
+        `template "${templateId}" on new board "${room.id}": ${result.errors?.[0]?.message ?? 'refused'}`,
+      );
+    }
     return room.doc.summary();
   }
 
@@ -378,7 +426,14 @@ export class LocalBoardApi implements BoardApi {
     this.authorize('outline');
     const opts = parseInput(OutlineOptionsSchema, options ?? {}, 'outline options');
     const room = await this.room(boardId);
-    return renderOutline(room.doc.toJSON(), room.cursor, opts);
+    const board = room.doc.toJSON();
+    const types = this.types();
+    if (Object.keys(types.nodeTypes).length === 0) return renderOutline(board, room.cursor, opts);
+    return renderOutline(board, room.cursor, {
+      ...opts,
+      types,
+      typeProblems: checkBoardAgainstTypes(board, types).length,
+    });
   }
 
   async read(boardId: string, query?: ReadQuery): Promise<ReadResult> {
@@ -390,6 +445,7 @@ export class LocalBoardApi implements BoardApi {
     const nodes = selectNodes(board, q, { selection: { nodeIds: selection?.nodeIds ?? [] } });
     const opts: Parameters<typeof renderRead>[3] = {
       claims: Object.fromEntries(this.boards.live.activeClaims(room)),
+      types: this.types(),
     };
     if (q.detail !== undefined) opts.detail = q.detail;
     if (q.maxTokens !== undefined) opts.maxTokens = q.maxTokens;
@@ -435,7 +491,7 @@ export class LocalBoardApi implements BoardApi {
         edgeIds: selection?.edgeIds ?? [],
       },
       room.cursor,
-      { claims: Object.fromEntries(this.boards.live.activeClaims(room)) },
+      { claims: Object.fromEntries(this.boards.live.activeClaims(room)), types: this.types() },
     );
     this.mark(
       room,
@@ -448,6 +504,15 @@ export class LocalBoardApi implements BoardApi {
   // ── Writing ────────────────────────────────────────────────────────────────
 
   async apply(boardId: string, request: ApplyRequest): Promise<ApplyResult> {
+    return this.applyBatch(boardId, request, LIMITS.opsPerBatch);
+  }
+
+  /** `apply`, with the operation limit of the caller: public batches, or the server's own imports. */
+  private async applyBatch(
+    boardId: string,
+    request: ApplyRequest,
+    maxOps: number,
+  ): Promise<ApplyResult> {
     this.authorize('apply');
     const req = parseInput(ApplyEnvelopeSchema, request, 'apply request');
     // Core validates each operation and reports problems by index.
@@ -457,8 +522,12 @@ export class LocalBoardApi implements BoardApi {
 
     const run = async (): Promise<ApplyResult> => {
       const board = room.doc.toJSON();
-      const dry = applyOps(board, ops, { actor: this.actor });
+      const dry = applyOps(board, ops, { actor: this.actor, maxOps });
       if (!dry.ok) return { status: 'invalid', cursor: room.cursor, refs: {}, errors: dry.errors };
+      const typed = checkOpsAgainstTypes(board, ops, dry.applied.refs, this.types());
+      if (typed.length > 0) {
+        return { status: 'invalid', cursor: room.cursor, refs: {}, errors: typed };
+      }
       const claimed = this.claimErrors(room, board, ops);
       if (claimed.length > 0) {
         return { status: 'invalid', cursor: room.cursor, refs: {}, errors: claimed };
@@ -528,17 +597,20 @@ export class LocalBoardApi implements BoardApi {
       const batchId = newId('b');
       const context: TxContext = { batchId };
       if (req.reason) context.reason = req.reason;
-      const outcome = room.withContext(context, () => room.doc.apply(ops, { actor: this.actor }));
+      const outcome = room.withContext(context, () =>
+        room.doc.apply(ops, { actor: this.actor, maxOps }),
+      );
       if (!outcome.ok) {
         return { status: 'invalid', cursor: room.cursor, refs: {}, errors: outcome.errors };
       }
-      if (req.layout !== 'none') await this.placeNew(room, this.actor, batchId);
+      const warnings = req.layout !== 'none' ? await this.placeNew(room, this.actor, batchId) : [];
       const result: ApplyResult = {
         status: 'applied',
         cursor: room.cursor,
         refs: outcome.applied.refs,
         applied: outcome.applied,
       };
+      if (warnings.length > 0) result.warnings = warnings;
       // A batch that changed nothing is not in the history.
       if (room.history.get(batchId)) result.batchId = batchId;
       const applied = outcome.applied;
@@ -577,14 +649,24 @@ export class LocalBoardApi implements BoardApi {
    * batch (so undoing it also undoes the placement). Failures are logged, not
    * thrown: the batch already landed.
    */
-  private async placeNew(room: Room, actor: Actor, batchId: string): Promise<void> {
+  private async placeNew(room: Room, actor: Actor, batchId: string): Promise<string[]> {
+    const warnings: string[] = [];
     try {
       await this.writeLayout(room, (board) => layoutIncremental(board), actor, {
         mergeInto: batchId,
       });
     } catch (error) {
       this.log(`layout after apply on "${room.id}" failed: ${errorMessage(error)}`);
+      warnings.push(`automatic layout failed (${errorMessage(error)})`);
     }
+    // Never report a clean success while nodes are left without a place.
+    const unplaced = room.doc.nodes().filter((node) => !node.view).length;
+    if (unplaced > 0) {
+      warnings.push(
+        `${unplaced} node${unplaced === 1 ? ' has' : 's have'} no position yet; the next apply with automatic layout, or layout, places ${unplaced === 1 ? 'it' : 'them'}`,
+      );
+    }
+    return warnings;
   }
 
   /**
@@ -604,8 +686,9 @@ export class LocalBoardApi implements BoardApi {
       const now = room.doc.toJSON();
       const ops = patchToMoves(now, patch);
       if (ops.length === 0) return 0;
+      // Layout writes are the server's own: one transaction, not bound by the batch limit.
       const outcome = room.withContext(context, () =>
-        room.doc.apply(ops, { actor, source: 'layout' }),
+        room.doc.apply(ops, { actor, source: 'layout', maxOps: Number.POSITIVE_INFINITY }),
       );
       if (outcome.ok) return ops.length;
       if (attempt === 1) {
@@ -674,7 +757,46 @@ export class LocalBoardApi implements BoardApi {
       const touched = new Set<string>();
       const conflicted: Array<{ index: number; reason: string }> = [];
       if (accept.length > 0) {
-        const check = checkItems(room.doc.toJSON(), proposal, accept, { actor: author });
+        const current = room.doc.toJSON();
+        let check = checkItems(current, proposal, accept, { actor: author });
+        // Declared types may have changed since proposing: check again against the current ones.
+        const types = this.types();
+        for (let round = 0; round < 10 && check.ok.length > 0; round++) {
+          const typed = checkOpsAgainstTypes(
+            current,
+            proposalOps(proposal, check.ok),
+            check.outcome.applied.refs,
+            types,
+          );
+          if (typed.length === 0) break;
+          const failed = new Map<number, string>();
+          for (const error of typed) {
+            const index = check.ok[error.index];
+            if (index !== undefined && !failed.has(index)) {
+              failed.set(index, `no longer matches its declared type: ${error.message}`);
+            }
+          }
+          // What depends on a refused item goes with it.
+          for (let grew = true; grew; ) {
+            grew = false;
+            for (const item of proposal.items) {
+              if (failed.has(item.index) || !check.ok.includes(item.index)) continue;
+              const dep = item.dependsOn.find((d) => failed.has(d));
+              if (dep !== undefined) {
+                failed.set(item.index, `depends on item ${dep}, which can no longer be applied`);
+                grew = true;
+              }
+            }
+          }
+          const remaining = check.ok.filter((index) => !failed.has(index));
+          const earlier = check.conflicts;
+          check = checkItems(current, proposal, remaining, { actor: author });
+          check.conflicts = [
+            ...earlier,
+            ...[...failed].map(([index, reason]) => ({ index, reason })),
+            ...check.conflicts,
+          ];
+        }
         for (const conflict of check.conflicts) {
           const item = items.get(conflict.index) as ProposalItem;
           item.status = 'conflict';
@@ -1172,11 +1294,22 @@ export class LocalBoardApi implements BoardApi {
     return room.doc.getComment(root.id) ?? next;
   }
 
-  async inbox(boardId: string, options?: InboxOptions): Promise<InboxResult> {
+  /** `signal` ends a `waitMs` wait early, for example when an HTTP client disconnects. */
+  async inbox(
+    boardId: string,
+    options?: InboxOptions & { signal?: AbortSignal },
+  ): Promise<InboxResult> {
     this.authorize('inbox');
-    const opts = parseInput(InboxOptionsSchema, options ?? {}, 'inbox options');
+    const { signal, ...rest } = options ?? {};
+    const opts = parseInput(InboxOptionsSchema, rest, 'inbox options');
     const room = await this.room(boardId);
-    const items = room.inbox.unread(this.actor.id, opts.since);
+    let items = room.inbox.unread(this.actor.id, opts.since);
+    if (items.length === 0 && opts.waitMs) {
+      this.mark(room, 'waiting');
+      await room.waitForInbox(this.actor.id, Math.min(opts.waitMs, MAX_ASK_WAIT_MS), signal);
+      items = room.inbox.unread(this.actor.id, opts.since);
+      this.mark(room, 'reading');
+    }
     const result = renderInbox(room.id, items, room.inbox.position, {
       actors: { [SYSTEM_ACTOR.id]: SYSTEM_ACTOR, ...room.actors() },
       openAsks: room.doc.asks().filter((a) => a.author === this.actor.id && a.status === 'open')
@@ -1538,10 +1671,17 @@ export class LocalBoardApi implements BoardApi {
     this.authorize('importInto');
     const req = parseInput(ImportRequestSchema, request, 'import request');
     const room = await this.room(boardId, req.dryRun ? 'reading' : 'writing');
-    const format = req.format ?? detectFormat(req.filename ?? '', req.text);
-    const importer = format ? findImporter(format) : undefined;
+    const plugins = this.boards.plugins;
+    const format =
+      req.format ??
+      detectFormat(req.filename ?? '', req.text) ??
+      (req.filename ? plugins.importerForFile(req.filename)?.name : undefined);
+    const importer = format ? plugins.findImporter(format) : undefined;
     if (!importer) {
-      const names = IMPORTERS.map((i) => i.name).join(', ');
+      const names = plugins
+        .importers()
+        .map((i) => i.name)
+        .join(', ');
       throw new OpenBoardError(
         'invalid_request',
         format
@@ -1549,7 +1689,16 @@ export class LocalBoardApi implements BoardApi {
           : `the format could not be detected; pass format (one of: ${names})`,
       );
     }
-    const parsed = importer.parse(req.text);
+    let parsed: ReturnType<typeof importer.parse>;
+    try {
+      parsed = importer.parse(req.text, { maxOps: IMPORT_MAX_OPS });
+    } catch (error) {
+      // Built-in importers never throw; a plugin's might.
+      throw new OpenBoardError(
+        'invalid_request',
+        `the ${importer.name} importer${importer.plugin ? ` of plugin "${importer.plugin}"` : ''} could not read this text: ${errorMessage(error)}`,
+      );
+    }
     let ops = parsed.ops;
     if (req.frame !== undefined) {
       const frame = room.doc.getNode(req.frame);
@@ -1577,11 +1726,12 @@ export class LocalBoardApi implements BoardApi {
         },
       );
     }
-    const result = await this.apply(room.id, {
-      ops,
-      reason: `Import from ${importer.name}`,
-      ...(req.dryRun ? { dryRun: true } : {}),
-    });
+    // An import is the server's batch, bounded by the size of the text rather than the op limit.
+    const result = await this.applyBatch(
+      room.id,
+      { ops, reason: `Import from ${importer.name}`, ...(req.dryRun ? { dryRun: true } : {}) },
+      IMPORT_MAX_OPS,
+    );
     return { ...result, format: importer.name, warnings: parsed.warnings };
   }
 
@@ -1589,11 +1739,15 @@ export class LocalBoardApi implements BoardApi {
     this.authorize('exportBoard');
     const opts = parseInput(ExportOptionsSchema, options, 'export options');
     const room = await this.room(boardId);
-    const exporter = findExporter(opts.format);
+    const plugins = this.boards.plugins;
+    const exporter = plugins.findExporter(opts.format);
     if (!exporter) {
       throw new OpenBoardError(
         'invalid_request',
-        `unknown export format "${opts.format}"; one of: ${EXPORTERS.map((e) => e.name).join(', ')}`,
+        `unknown export format "${opts.format}"; one of: ${plugins
+          .exporters()
+          .map((e) => e.name)
+          .join(', ')}`,
       );
     }
     const board = room.doc.toJSON();
@@ -1607,11 +1761,79 @@ export class LocalBoardApi implements BoardApi {
       render.before = before;
       render.diff = diffBoards(before, board);
     }
+    let text: unknown;
+    try {
+      text = exporter.render(board, render);
+    } catch (error) {
+      throw new OpenBoardError(
+        'internal',
+        `the ${exporter.name} exporter${exporter.plugin ? ` of plugin "${exporter.plugin}"` : ''} failed: ${errorMessage(error)}`,
+      );
+    }
+    if (typeof text !== 'string') {
+      throw new OpenBoardError('internal', `the ${exporter.name} exporter returned no text`);
+    }
     return {
-      text: exporter.render(board, render),
+      text,
       mime: exporter.mime,
       filename: `${room.id}${opts.diffFrom !== undefined ? '.diff' : ''}${exporter.extension}`,
     };
+  }
+
+  // ── Types and templates ────────────────────────────────────────────────────
+
+  async schema(options?: SchemaOptions): Promise<SchemaResult> {
+    this.authorize('schema');
+    const opts = parseInput(SchemaOptionsSchema, options ?? {}, 'schema options');
+    const types = this.types();
+    const render: Parameters<typeof renderSchema>[1] = {};
+    if (opts.maxTokens !== undefined) render.maxTokens = opts.maxTokens;
+    if (opts.board !== undefined) {
+      const room = await this.room(opts.board);
+      render.boardId = room.id;
+      render.warnings = checkBoardAgainstTypes(room.doc.toJSON(), types);
+    }
+    return renderSchema(types, render);
+  }
+
+  async templates(): Promise<TemplatesResult> {
+    this.authorize('templates');
+    return renderTemplates(await this.boards.templates.list());
+  }
+
+  async applyTemplate(boardId: string, request: ApplyTemplateRequest): Promise<ApplyResult> {
+    this.authorize('applyTemplate');
+    const req = parseInput(ApplyTemplateRequestSchema, request, 'template request');
+    const room = await this.room(boardId, req.dryRun ? 'reading' : 'writing');
+    const template = await this.boards.templates.get(req.template);
+    if (req.frame !== undefined) {
+      const frame = room.doc.getNode(req.frame);
+      if (!frame)
+        throw new OpenBoardError('not_found', `no node "${req.frame}" on board "${room.id}"`);
+      if (frame.type !== 'frame') {
+        throw new OpenBoardError(
+          'invalid_request',
+          `"${req.frame}" is a ${frame.type}, not a frame`,
+        );
+      }
+    }
+    let ops = template.build({
+      ...(req.title !== undefined ? { title: req.title } : {}),
+      emptyTarget: req.frame === undefined && room.doc.nodes().length === 0,
+    });
+    if (req.frame !== undefined) {
+      const into = req.frame;
+      ops = ops.map((op) =>
+        op.op === 'add_node' && op.node.parent === undefined
+          ? { ...op, node: { ...op.node, parent: into } }
+          : op,
+      );
+    }
+    return this.apply(room.id, {
+      ops,
+      reason: `Template: ${template.summary.name}`.slice(0, 300),
+      ...(req.dryRun ? { dryRun: true } : {}),
+    });
   }
 
   // ── Settings ───────────────────────────────────────────────────────────────

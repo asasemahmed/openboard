@@ -22,6 +22,7 @@ import {
   SCHEMA_VERSION,
   type View,
 } from './schema.js';
+import type { EdgeTypeDef, NodeTypeDef } from './typedefs.js';
 import { compareStrings, formatIssues, formatPath, normalizeEdge, normalizeNode } from './util.js';
 
 // ── Writing ──────────────────────────────────────────────────────────────────
@@ -302,7 +303,7 @@ export function serializeConfig(config: ProjectConfig): string {
   const agents = Object.keys(parsed.policy.agents)
     .sort(compareStrings)
     .map((id): [string, Value] => [id, parsed.policy.agents[id] as string]);
-  const root = new Ordered([
+  const entries: Array<[string, Value]> = [
     ['version', parsed.version],
     [
       'policy',
@@ -311,8 +312,32 @@ export function serializeConfig(config: ProjectConfig): string {
         ['agents', new Ordered(agents)],
       ]),
     ],
+  ];
+  // Declared types are written only when there are some, so a config without
+  // them stays byte for byte what it was.
+  if (parsed.nodeTypes && Object.keys(parsed.nodeTypes).length > 0) {
+    entries.push(['nodeTypes', sortedRecord(parsed.nodeTypes, nodeTypeValue)]);
+  }
+  if (parsed.edgeTypes && Object.keys(parsed.edgeTypes).length > 0) {
+    entries.push(['edgeTypes', sortedRecord(parsed.edgeTypes, edgeTypeValue)]);
+  }
+  return `${emit(new Ordered(entries), '')}\n`;
+}
+
+const NODE_TYPE_KEYS = ['label', 'description', 'color', 'icon', 'hasStatus'] as const;
+const FIELD_KEYS = ['key', 'label', 'kind', 'required', 'options', 'description'] as const;
+const EDGE_TYPE_KEYS = ['label', 'description', 'style', 'directed'] as const;
+
+/** Fields keep their order: it is the order of the form. */
+function nodeTypeValue(def: NodeTypeDef): Ordered {
+  return new Ordered([
+    ...pick(def, NODE_TYPE_KEYS),
+    ['fields', def.fields?.map((field) => new Ordered(pick(field, FIELD_KEYS))) as Value],
   ]);
-  return `${emit(root, '')}\n`;
+}
+
+function edgeTypeValue(def: EdgeTypeDef): Ordered {
+  return new Ordered(pick(def, EDGE_TYPE_KEYS));
 }
 
 /** Parse and validate config file text. Throws an `invalid_request` `OpenBoardError` naming the problem. */

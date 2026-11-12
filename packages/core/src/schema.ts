@@ -87,6 +87,14 @@ export type BuiltinEdgeType = (typeof BUILTIN_EDGE_TYPES)[number];
 /** Custom types are namespaced with `x:` so they can never collide with built-ins. */
 const customTypePattern = /^x:[a-z][a-z0-9_-]{0,39}$/;
 
+/** A custom node or edge type name, such as `x:persona`. */
+export const CustomTypeSchema = z
+  .string()
+  .regex(
+    customTypePattern,
+    'custom types must look like "x:name" (lowercase, at most 40 characters)',
+  );
+
 export const NodeTypeSchema = z.union([
   z.enum(BUILTIN_NODE_TYPES),
   z.string().regex(customTypePattern, 'custom node types must look like "x:name"'),

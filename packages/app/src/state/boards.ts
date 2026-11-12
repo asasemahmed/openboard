@@ -42,7 +42,11 @@ class BoardsStore extends Emitter {
     return this.inflight;
   }
 
-  async create(input: { name: string; description?: string }): Promise<BoardSummary> {
+  async create(input: {
+    name: string;
+    description?: string;
+    template?: string;
+  }): Promise<BoardSummary> {
     const board = await api.createBoard(input);
     this.snapshot = {
       status: 'ready',

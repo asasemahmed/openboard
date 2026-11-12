@@ -19,6 +19,9 @@ openboard [command] [options]
 | [`mcp`](#mcp)                            | Serve the boards to an MCP client over stdio                        |
 | [`connect`](#connect)                    | Show how to connect an agent (writes nothing)                       |
 | [`whoami`](#whoami)                      | Who a server takes you to be, and your role                         |
+| [`templates`](#templates)                | List the templates                                                  |
+| [`template`](#template)                  | Apply a template to a board, or save a board as one                 |
+| [`types`](#types)                        | The node and edge types, and nodes that do not fit them             |
 | [`access`](#access)                      | Invite people and agents to a shared server; list and revoke        |
 | [`policy`](#policy)                      | Show or change the review policy for agents                         |
 | [`proposals`](#proposals)                | List agent changes waiting for review                               |
@@ -53,20 +56,21 @@ Global options: `-v`, `--version` prints the version; `-h`, `--help` shows help,
 ## start
 
 ```text
-openboard start [--root <dir>] [-p, --port <n>] [--host <host>] [--share] [--public-url <url>] [--board <id>] [--no-open]
+openboard start [--root <dir>] [-p, --port <n>] [--host <host>] [--share] [--public-url <url>] [--plugin <module>]... [--board <id>] [--no-open]
 ```
 
 Start the board server for the project in the foreground and keep it running until <kbd>Ctrl</kbd>+<kbd>C</kbd> (SIGINT or SIGTERM). It serves the web canvas, the HTTP API, document sync for browsers, and MCP over Streamable HTTP at `/mcp`. `openboard` with no command runs `start`.
 
-| Option               | Default          | Meaning                                                                                                                                                                   |
-| -------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--root <dir>`       | discovered       | Project root                                                                                                                                                              |
-| `-p`, `--port <n>`   | `4747`           | Preferred port, 0 to 65535. If it is taken, the next free port is used.                                                                                                   |
-| `--host <host>`      | `127.0.0.1`      | Interface to bind. Anything but a loopback address requires `--share`; every interface (`0.0.0.0`) also requires `--public-url`.                                          |
-| `--share`            | off              | [Shared mode](sharing.md): people and agents on other machines sign in with an invite; you at this machine stay the owner without one.                                    |
-| `--public-url <url>` | the server's own | With `--share`: the address people use, such as `https://board.example.com` on a TLS reverse proxy or tunnel. Used for invite links and the accepted `Host` and `Origin`. |
-| `--board <id>`       | none             | Open this board in the browser instead of the default view. An unknown id is an error.                                                                                    |
-| `--no-open`          | opens            | Do not open a browser. A newly started server also skips the browser when stdout is not a terminal.                                                                       |
+| Option               | Default          | Meaning                                                                                                                                                                                      |
+| -------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--root <dir>`       | discovered       | Project root                                                                                                                                                                                 |
+| `-p`, `--port <n>`   | `4747`           | Preferred port, 0 to 65535. If it is taken, the next free port is used.                                                                                                                      |
+| `--host <host>`      | `127.0.0.1`      | Interface to bind. Anything but a loopback address requires `--share`; every interface (`0.0.0.0`) also requires `--public-url`.                                                             |
+| `--share`            | off              | [Shared mode](sharing.md): people and agents on other machines sign in with an invite; you at this machine stay the owner without one.                                                       |
+| `--public-url <url>` | the server's own | With `--share`: the address people use, such as `https://board.example.com` on a TLS reverse proxy or tunnel. Used for invite links and the accepted `Host` and `Origin`.                    |
+| `--board <id>`       | none             | Open this board in the browser instead of the default view. An unknown id is an error.                                                                                                       |
+| `--no-open`          | opens            | Do not open a browser. A newly started server also skips the browser when stdout is not a terminal.                                                                                          |
+| `--plugin <module>`  | none             | Load a [server plugin](extending.md#loading-a-plugin): a path to a module, or an installed package. Repeatable. Plugins run with the server's privileges and are never loaded any other way. |
 
 In shared mode, `start` also prints the public address, that everyone but this machine must sign in, and how to invite (`openboard access invite`); it warns when the public URL is plain http on another host.
 
@@ -147,17 +151,18 @@ List the project's boards as a table (`ID`, `NAME`, `NODES`, `EDGES`, `UPDATED`)
 ## new
 
 ```text
-openboard new <name> [--root <dir>] [--id <id>] [--description <text>] [--json]
+openboard new <name> [--root <dir>] [--id <id>] [--description <text>] [--template <id>] [--json]
 ```
 
 Create an empty board and print its id.
 
-| Option                 | Meaning                                                                              |
-| ---------------------- | ------------------------------------------------------------------------------------ |
-| `<name>`               | Board name, 1 to 120 characters                                                      |
-| `--id <id>`            | Board id; by default derived from the name (`"Release plan"` becomes `release-plan`) |
-| `--description <text>` | Board description, at most 2000 characters                                           |
-| `--json`               | Print the new board's summary as JSON                                                |
+| Option                 | Meaning                                                                                      |
+| ---------------------- | -------------------------------------------------------------------------------------------- |
+| `<name>`               | Board name, 1 to 120 characters                                                              |
+| `--id <id>`            | Board id; by default derived from the name (`"Release plan"` becomes `release-plan`)         |
+| `--description <text>` | Board description, at most 2000 characters                                                   |
+| `--template <id>`      | Start the board from this [template](templates.md); its outer frame is named after the board |
+| `--json`               | Print the new board's summary as JSON                                                        |
 
 ```text
 $ openboard new "Spikes" --description "Throwaway experiments"
@@ -174,12 +179,12 @@ openboard export [board] [--root <dir>] [-f, --format <format>] [-o, --out <file
 
 Write a board to stdout or a file. With a server running, the live board is exported, including changes not yet saved to the file.
 
-| Option                    | Default                     | Meaning                                                         |
-| ------------------------- | --------------------------- | --------------------------------------------------------------- |
-| `[board]`                 | the only board, else `main` | Board id. With several boards and none called `main`, name one. |
-| `-f`, `--format <format>` | from `--out`, else `json`   | One of the formats below                                        |
-| `-o`, `--out <file>`      | stdout                      | Write to this file; `-` means stdout                            |
-| `--theme <theme>`         | `light`                     | `light` or `dark`, for `svg`                                    |
+| Option                    | Default                     | Meaning                                                                     |
+| ------------------------- | --------------------------- | --------------------------------------------------------------------------- |
+| `[board]`                 | the only board, else `main` | Board id. With several boards and none called `main`, name one.             |
+| `-f`, `--format <format>` | from `--out`, else `json`   | One of the formats below, or a format of a plugin the running server loaded |
+| `-o`, `--out <file>`      | stdout                      | Write to this file; `-` means stdout                                        |
+| `--theme <theme>`         | `light`                     | `light` or `dark`, for `svg`                                                |
 
 | Format                  | Output                                                                     | Extension that selects it |
 | ----------------------- | -------------------------------------------------------------------------- | ------------------------- |
@@ -311,6 +316,8 @@ Check the installation and the project. Each line is `ok`, `warn` or `FAIL`, and
 | Web app         | Not built (fail; fix: `pnpm build`)                                                                                |
 | MCP server      | Does not load (fail)                                                                                               |
 | Server          | Not running (warn), or recorded but not answering (fail)                                                           |
+| Plugins         | Each plugin the running server loaded (info), with its warnings (warn)                                             |
+| Declared types  | Nodes that do not fit their declared type (warn)                                                                   |
 | Shared mode     | When the server is shared: its public URL and active grants (info); a plain-http public URL on another host (warn) |
 | Git             | In a git repository, `.openboard/.local` is not ignored (fail)                                                     |
 
@@ -335,16 +342,17 @@ Everything looks good.
 ## mcp
 
 ```text
-openboard mcp [--root <dir>] [--board <id>]
+openboard mcp [--root <dir>] [--board <id>] [--plugin <module>]...
 openboard mcp --url <url> [--board <id>]
 ```
 
 Serve the project's boards to an MCP client over stdio. MCP clients run this command; you do not run it by hand. Stdout carries only protocol messages; messages go to stderr.
 
-| Option         | Meaning                                                                                              |
-| -------------- | ---------------------------------------------------------------------------------------------------- |
-| `--root <dir>` | Project root. Without it, discovered from the working directory the client starts the command in.    |
-| `--board <id>` | Board that tool calls use when they name none. See [the default board](agents.md#the-default-board). |
+| Option              | Meaning                                                                                                                               |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `--root <dir>`      | Project root. Without it, discovered from the working directory the client starts the command in.                                     |
+| `--board <id>`      | Board that tool calls use when they name none. See [the default board](agents.md#the-default-board).                                  |
+| `--plugin <module>` | Load this plugin into the board server it starts in the background (repeatable). It cannot add plugins to a server that already runs. |
 
 On start it creates `.openboard/` with an empty `main` board if the project has no boards, and starts the board server in the background (`openboard start --no-open`) if none is running. It does not wait for the server before answering the client's handshake; the first tool call waits, up to 15 seconds. If the server goes away mid-session, the next call starts it again and retries once. The background server outlives the session; stop it with `openboard stop`.
 
@@ -673,3 +681,48 @@ MCP over HTTP: http://127.0.0.1:56353/mcp, with the header "Authorization: Beare
 ```
 
 The token and the invite link are printed only by `invite` (and by `--json`, which includes them): the server keeps only their hash.
+
+## templates
+
+```text
+openboard templates [--root <dir>] [--url <url>] [--json]
+```
+
+List the templates: the eight built-in ones, the project's own in `.openboard/templates/`, and with a server running, those of its plugins. See [templates](templates.md).
+
+```text
+$ openboard templates
+8 templates. Apply one with: openboard template apply <id> [board] [--frame <id>] [--title <text>], or start a board with: openboard new <name> --template <id>.
+feature-plan "Feature plan" (built-in; 12 nodes, 6 edges; tags planning, feature): Plan one feature from goal to done: ...
+```
+
+## template
+
+```text
+openboard template apply <id> [board] [--frame <id>] [--title <text>] [--dry-run] [--root <dir>] [--url <url>]
+openboard template save <name> [board] [--force] [--root <dir>]
+```
+
+`apply` adds a template to a board (default: the only board, or `main`) as one batch: through the running server as you, or, without one, to the board file (the new nodes are placed by the next automatic layout). `--frame` puts its top-level nodes in that frame, `--title` names its outer frame, `--dry-run` says what it would add and changes nothing.
+
+`save` writes a board as the project template `.openboard/templates/<name>.board.json` (lowercase letters, digits and dashes), without its comments. A template of that name is replaced only with `--force`; a project template with a built-in's id replaces the built-in in this project. Commit the folder to share it.
+
+```text
+$ openboard template save launch-plan
+Saved board main as the template launch-plan: .openboard/templates/launch-plan.board.json
+Commit it so everyone gets it. Comments are not part of it.
+```
+
+## types
+
+```text
+openboard types [--root <dir>] [--url <url>] [--json]
+openboard types check [board] [--root <dir>] [--json]
+```
+
+`types` prints every node and edge type: what the built-in ones are for, and the types declared in `.openboard/config.json` (and, with a server running, by its plugins) with their fields; it is what agents get from `board_schema`. `types check` lists the nodes of a board that do not fit their declared type, such as ones made before a type changed or edited in a browser, and exits 1 when there are any. See [declaring types](extending.md#declaring-types).
+
+```text
+$ openboard types check
+Board main: every node fits its declared type.
+```

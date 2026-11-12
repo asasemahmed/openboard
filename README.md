@@ -14,17 +14,16 @@ OpenBoard is an open canvas that AI agents read and edit over MCP while you edit
 
 ## What it does
 
-- **A live canvas.** The board runs in your browser and stays in sync with everyone editing it. Changes made by others, people or agents, are highlighted as they arrive.
-- **Agent tools over MCP.** Thirteen `board_*` tools to outline, read, change and lay out a board, and to talk with the people on it, over stdio or Streamable HTTP, with ready-made setups for Claude Code, Cursor and Codex.
-- **Budgeted reads, atomic writes.** Agents read an outline, a slice or just what changed, within a token budget. They write whole intents as one batch that is validated and applied all at once, and the layout engine places what they add.
+- **A live canvas.** The board runs in your browser and stays in sync with everyone editing it; changes by others, people or agents, are highlighted as they arrive.
+- **Agent tools over MCP.** Sixteen `board_*` tools, over stdio or Streamable HTTP, with ready-made setups for Claude Code, Cursor and Codex. Agents read an outline, a slice or just what changed within a token budget, and write whole intents as one validated batch that the layout engine places.
 - **Selection as context.** Select cards on the canvas and say "these"; the agent sees what you selected.
-- **You stay in control.** Decide per project and per agent what agents may change on their own; changes to your work wait as proposals you accept or reject, in whole or in part. Every change is recorded and can be undone exactly, without overwriting later work.
-- **See agents at work.** Agents appear on the canvas next to the people: what they are reading, writing or running, including work outside the board reported by their hooks. Agents claim the nodes they work on so they do not collide, and you can replay how the board came to be.
-- **Agents ask instead of guessing.** Agents put questions to you on the board and wait for the answer, read your comments and mentions in their inbox, and reply in the thread.
-- **Boards in git.** Each board is a deterministic JSON file in `.openboard/`. A merge driver merges boards by meaning, never leaving conflict markers; `openboard diff` summarizes board changes for review, as text, Markdown or SVG; and the server picks up changes from a checkout or a merge.
-- **Share beyond your machine.** Shared mode lets people and agents elsewhere sign in with invite links and tokens, each with a role (owner, editor, commenter, viewer) that is enforced on every request, and revoked at once when you want.
-- **Import and export.** Bring in Mermaid flowcharts and JSON Canvas files, and export boards as Markdown, Mermaid, JSON Canvas or SVG.
-- **Boards that notice when code changes.** Link a node to a file or a range of lines; when that code changes, the board marks the node, so agents know which parts of the map to re-check.
+- **You stay in control.** Per project and per agent, decide what agents may change on their own; changes to your work wait as proposals you accept or reject. Every change is recorded and can be undone exactly.
+- **A conversation on the board.** Agents ask you questions and wait for the answer, read your comments and mentions in their inbox, and reply in the thread.
+- **See agents at work.** Agents appear on the canvas with what they are reading, writing or running, claim the nodes they work on so they do not collide, and you can replay how the board came to be.
+- **Boards that know the code.** Link a node to a file or a range of lines; when that code changes, the board marks the node for a re-check.
+- **Boards in git.** Each board is a deterministic JSON file in `.openboard/`, merged by meaning with a merge driver and summarized for review with `openboard diff`; Mermaid and JSON Canvas import, and export to Markdown, Mermaid, JSON Canvas or SVG.
+- **Your own types and templates.** Declare node types with fields for your domain, start boards from eight templates or your own, and extend the server with plugins you load explicitly.
+- **Share beyond your machine.** Shared mode lets people and agents elsewhere sign in with invite links and tokens, each with a role enforced on every request.
 
 ## Quick start
 
@@ -79,9 +78,16 @@ Three ideas carry the design:
 - [CLI reference](docs/cli.md): every command and flag
 - [Board file format](docs/board-format.md): the `.board.json` file and `config.json`, for reviewers and tool authors
 - [Boards in git](docs/git.md): merging, readable diffs, reviewing board changes in pull requests
+- [Templates](docs/templates.md): the built-in templates, and how people and agents use them
+- [Extending OpenBoard](docs/extending.md): declared types, project templates, plugins
+- [Evaluating agents](docs/evals.md): the evaluation harness, its baseline, and what it shows
 - [Sharing boards](docs/sharing.md): shared mode, invites, roles, running it safely; and [SECURITY.md](SECURITY.md)
 - [Integrations](integrations/README.md): Claude Code, Cursor, Codex and generic MCP setups
 - [Architecture](docs/ARCHITECTURE.md): how the packages fit together
+
+## Extending
+
+Declare your own node types in `.openboard/config.json`, keep project templates in `.openboard/templates/`, or write a plugin and load it with `openboard start --plugin <module>`; see [Extending OpenBoard](docs/extending.md).
 
 ## Development
 

@@ -472,6 +472,22 @@ describe('errors', () => {
     expect((await failure(api.askResult('main', 'a_1'))).code).toBe('unavailable');
   });
 
+  it('gives an inbox long-poll more time than it waits', async () => {
+    const { api } = client(
+      (_call, init) =>
+        new Promise<Response>((resolve, reject) => {
+          const timer = setTimeout(() => resolve(json({ items: [] })), 60);
+          init.signal?.addEventListener('abort', () => {
+            clearTimeout(timer);
+            reject(new Error('aborted'));
+          });
+        }),
+      20,
+    );
+    await expect(api.inbox('main', { waitMs: 50 })).resolves.toEqual({ items: [] });
+    expect((await failure(api.inbox('main'))).code).toBe('unavailable');
+  });
+
   it('times out while reading a slow body', async () => {
     const { api } = client(
       (_call, init) =>

@@ -555,6 +555,13 @@ export class BoardDoc {
     return present;
   }
 
+  /** Remove an actor registry entry. Returns false when there was none. */
+  removeActor(id: string, origin: TxOrigin): boolean {
+    if (!this.actorsMap.has(id)) return false;
+    this.ydoc.transact(() => this.actorsMap.delete(id), origin);
+    return true;
+  }
+
   /** Remove a proposal. Returns false when there was none. */
   deleteProposal(id: string, origin: TxOrigin): boolean {
     return this.deletePlain(this.proposalsMap, id, origin);
@@ -563,6 +570,11 @@ export class BoardDoc {
   /** Store a question (replacing one with the same id). */
   putAsk(ask: Ask, origin: TxOrigin): void {
     this.putPlain(this.asksMap, AskSchema, ask, 'question', origin);
+  }
+
+  /** Remove a question. Returns false when there was none. */
+  deleteAsk(id: string, origin: TxOrigin): boolean {
+    return this.deletePlain(this.asksMap, id, origin);
   }
 
   /**

@@ -20,7 +20,7 @@ import {
   TYPE_BY_SHAPE_KEYWORD,
 } from './mermaid-shapes.js';
 import { clip, fitTitle, oneLine, typeWords } from './text.js';
-import type { ImportResult } from './types.js';
+import type { ImportOptions, ImportResult } from './types.js';
 
 type LinkKind = 'arrow' | 'open' | 'dotted' | 'thick';
 
@@ -378,7 +378,7 @@ function frontMatterTitle(lines: string[]): { title?: string; skip: number } {
 // ── Import ───────────────────────────────────────────────────────────────────
 
 /** Read a Mermaid flowchart into operations that recreate it. */
-export function fromMermaid(text: string): ImportResult {
+export function fromMermaid(text: string, options: ImportOptions = {}): ImportResult {
   const warnings: string[] = [];
   const lines = text.replace(/\r\n?/g, '\n').split('\n');
   const front = frontMatterTitle(lines);
@@ -522,7 +522,7 @@ export function fromMermaid(text: string): ImportResult {
     );
   }
 
-  return buildOps(items, order, edges, warnings, front.title);
+  return buildOps(items, order, edges, warnings, front.title, options.maxOps ?? LIMITS.opsPerBatch);
 }
 
 function buildOps(
@@ -531,6 +531,7 @@ function buildOps(
   edges: Array<{ from: string; to: string; link: ParsedLink; line: number }>,
   warnings: string[],
   title: string | undefined,
+  maxOps: number,
 ): ImportResult {
   const refs = new Map<string, string>();
   const frameOps: Op[] = [];
@@ -616,11 +617,11 @@ function buildOps(
   }
 
   let ops = [...frameOps, ...nodeOps, ...edgeOps];
-  if (ops.length > LIMITS.opsPerBatch) {
+  if (ops.length > maxOps) {
     warnings.push(
-      `the diagram needs ${ops.length} operations but one batch holds ${LIMITS.opsPerBatch}; only the first ${LIMITS.opsPerBatch} were kept.`,
+      `the diagram needs ${ops.length} operations but one batch holds ${maxOps}; only the first ${maxOps} were kept.`,
     );
-    ops = ops.slice(0, LIMITS.opsPerBatch);
+    ops = ops.slice(0, maxOps);
   }
   return { ops, warnings, ...(title ? { name: clip(oneLine(title), 120) } : {}) };
 }

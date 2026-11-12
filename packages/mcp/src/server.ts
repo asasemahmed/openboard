@@ -15,7 +15,11 @@
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import {
+  type CallToolResult,
+  ListToolsRequestSchema,
+  type ListToolsResult,
+} from '@modelcontextprotocol/sdk/types.js';
 import {
   type Actor,
   type ApplyRequest,
@@ -27,6 +31,8 @@ import {
   type CommentInput,
   type CreateBoardInput,
   type InboxItem,
+  type InboxOptions,
+  type InboxResult,
   type LayoutRequest,
   MENTION_AGENTS,
   type Op,
@@ -376,17 +382,15 @@ interface WaitContext {
 }
 
 /**
- * Wait up to `waitMs` for a question to be answered or cancelled, sending
- * progress notifications while it waits when the client asked for them, and
- * giving up at once when the client cancels the request.
+ * Run a long-poll of up to `waitMs`, sending progress notifications while it
+ * waits when the client asked for them, and giving up at once when the client
+ * cancels the request.
  */
-async function waitForAnswer(
-  api: BoardApi,
-  board: string,
-  askId: string,
+async function waitWithProgress<T>(
+  poll: (options: { waitMs: number; signal: AbortSignal }) => Promise<T>,
   waitMs: number,
   context: WaitContext,
-): Promise<{ ask: Ask; waitedSeconds: number }> {
+): Promise<{ value: T; waitedSeconds: number }> {
   const started = Date.now();
   const total = waitMs / 1000;
   const report = () => {
@@ -406,13 +410,97 @@ async function waitForAnswer(
   try {
     // The in-process API also ends its wait on the signal; over HTTP the
     // race below returns at once and the long-poll ends on its own.
-    const options: { waitMs: number; signal: AbortSignal } = { waitMs, signal: context.signal };
-    const ask = await Promise.race([api.askResult(board, askId, options), aborted]);
-    return { ask, waitedSeconds: Math.round((Date.now() - started) / 1000) };
+    const value = await Promise.race([poll({ waitMs, signal: context.signal }), aborted]);
+    return { value, waitedSeconds: Math.round((Date.now() - started) / 1000) };
   } finally {
     if (timer !== undefined) clearInterval(timer);
     context.signal.removeEventListener('abort', onAbort);
   }
+}
+
+/** The progress context of a tool call, for `waitWithProgress`. */
+function waitContext(
+  extra: {
+    signal: AbortSignal;
+    _meta?: { progressToken?: string | number };
+    sendNotification: (notification: {
+      method: 'notifications/progress';
+      params: { progressToken: string | number; progress: number; total: number; message: string };
+    }) => Promise<void>;
+  },
+  intervalMs: number,
+  message: string,
+): WaitContext {
+  const progressToken = extra._meta?.progressToken;
+  return {
+    signal: extra.signal,
+    ...(progressToken !== undefined ? { progressToken } : {}),
+    intervalMs,
+    sendProgress: (progress, total) =>
+      extra.sendNotification({
+        method: 'notifications/progress',
+        params: { progressToken: progressToken as string | number, progress, total, message },
+      }),
+  };
+}
+
+/**
+ * Annotation values the MCP specification assumes when a hint is absent;
+ * sending them costs tokens on every turn and tells a client nothing.
+ */
+const ANNOTATION_DEFAULTS = {
+  readOnlyHint: false,
+  destructiveHint: true,
+  idempotentHint: false,
+  openWorldHint: true,
+} as const;
+
+/**
+ * Leave out of `tools/list` what clients do not need: the JSON Schema
+ * `$schema` URL on every input schema, annotation hints that equal their
+ * defaults (and the destructive and idempotent hints of read-only tools, which
+ * only mean something for tools that write), and `execution` when it only
+ * repeats the default that tasks are not supported.
+ */
+export function slimTool(tool: ListToolsResult['tools'][number]): ListToolsResult['tools'][number] {
+  const { $schema: _schema, ...inputSchema } = tool.inputSchema as Record<string, unknown>;
+  const next: Record<string, unknown> = { ...tool, inputSchema };
+  const execution = tool.execution as { taskSupport?: string } | undefined;
+  if (
+    execution &&
+    Object.keys(execution).length <= 1 &&
+    (execution.taskSupport ?? 'forbidden') === 'forbidden'
+  ) {
+    delete next.execution;
+  }
+  if (tool.annotations) {
+    const hints: Record<string, unknown> = { ...tool.annotations };
+    for (const [key, value] of Object.entries(ANNOTATION_DEFAULTS)) {
+      if (hints[key] === value) delete hints[key];
+    }
+    if (hints.readOnlyHint === true) {
+      delete hints.destructiveHint;
+      delete hints.idempotentHint;
+    }
+    if (Object.keys(hints).length === 0) delete next.annotations;
+    else next.annotations = hints;
+  }
+  return next as ListToolsResult['tools'][number];
+}
+
+/** Wrap the SDK's `tools/list` handler with `slimTool`. */
+function slimToolList(mcp: McpServer): void {
+  const handlers = (
+    mcp.server as unknown as {
+      _requestHandlers: Map<string, (...args: unknown[]) => Promise<unknown>>;
+    }
+  )._requestHandlers;
+  const original = handlers.get('tools/list');
+  if (!original) return;
+  mcp.server.setRequestHandler(ListToolsRequestSchema, async (request, extra) => {
+    const result = (await original(request, extra)) as ListToolsResult;
+    return { ...result, tools: result.tools.map(slimTool) };
+  });
 }
 
 /** Core's renderings name API methods; over MCP they are tools. */
@@ -422,6 +510,12 @@ function toolNames(text: string): string {
     .replace(
       'call refreshLinks for it to clear the mark.',
       'call board_links with refresh: [its id] to clear the mark.',
+    )
+    .replace('call schema with board to see them', 'call board_schema to see them')
+    .replace(' - see the schema', ': call board_schema for their meaning and fields')
+    .replace(
+      'Apply one with applyTemplate (template: <id>, optionally frame: <frame id>); it lands as one batch, like apply.',
+      'Apply one with board_template {template: <id>} (optionally frame, title, dryRun); it lands as one batch, like board_apply.',
     );
 }
 
@@ -462,8 +556,9 @@ export function createMcpServer(options: McpServerOptions): McpServer {
   mcp.registerTool('board_create', tool('board_create'), (args) =>
     session.run(async (api) => {
       const created = await api.createBoard(defined(args) as CreateBoardInput);
+      const from = args.template ? ` from the template ${args.template}` : '';
       return {
-        text: `Created board ${created.id} ${JSON.stringify(created.name)}. Pass board: ${JSON.stringify(created.id)} to work on it.`,
+        text: `Created board ${created.id} ${JSON.stringify(created.name)}${from}. Pass board: ${JSON.stringify(created.id)} to work on it.`,
       };
     }),
   );
@@ -474,7 +569,7 @@ export function createMcpServer(options: McpServerOptions): McpServer {
       const outline = await api.outline(board, defined({ maxTokens: args.maxTokens }));
       const text =
         outline.nodeCount === 0
-          ? `${outline.text}\nThe board is empty; add to it with board_apply.`
+          ? `${toolNames(outline.text)}\nThe board is empty; add to it with board_apply, or start from a template (board_template).`
           : toolNames(outline.text);
       return { text, board, cursor: outline.cursor };
     }),
@@ -491,16 +586,15 @@ export function createMcpServer(options: McpServerOptions): McpServer {
   mcp.registerTool('board_changes', tool('board_changes'), ({ board: requested, since, ...rest }) =>
     session.run(async (api) => {
       const board = await session.board(api, requested);
-      const from = since ?? session.cursor(board);
-      if (from === undefined) {
-        return {
-          text: `This session has not read board ${board} yet, so there is no cursor to continue from. Call board_outline first, or pass since (0 for all kept history).`,
-        };
-      }
-      const options: ChangesOptions = { ...defined(rest), since: from };
+      const known = since ?? session.cursor(board);
+      const options: ChangesOptions = { ...defined(rest), since: known ?? 0 };
       const result = await api.changes(board, options);
       session.caughtUp(board, result.cursor);
-      return { text: result.text, board };
+      const note =
+        known === undefined && !result.resync
+          ? `This session had not read board ${board} yet, so this lists every change kept since the start.\n`
+          : '';
+      return { text: `${note}${result.text}`, board };
     }),
   );
 
@@ -540,47 +634,67 @@ export function createMcpServer(options: McpServerOptions): McpServer {
     }),
   );
 
-  mcp.registerTool('board_inbox', tool('board_inbox'), ({ board: requested, ...rest }) =>
-    session.run(async (api) => {
-      const board = await session.board(api, requested);
-      const result = await api.inbox(board, defined(rest));
-      const lines = [result.text];
-      if (result.openAsks > 0) {
-        try {
-          const open = await api.asks(board, { status: 'open', maxTokens: 50_000 });
-          const mine = open.asks.filter((ask) => ask.author === api.actor.id);
-          if (mine.length > 0) {
-            lines.push(
-              'Your open questions (wait on one with board_ask {askId}):',
-              ...mine.map((ask) => `  ${ask.id} ${JSON.stringify(ask.question)}`),
-            );
+  mcp.registerTool(
+    'board_inbox',
+    tool('board_inbox'),
+    ({ board: requested, waitSeconds, ...rest }, extra) =>
+      session.run(async (api) => {
+        const board = await session.board(api, requested);
+        let result: InboxResult;
+        if (waitSeconds) {
+          const waited = await waitWithProgress(
+            (opts) => api.inbox(board, { ...defined(rest), ...opts } as InboxOptions),
+            waitSeconds * 1000,
+            waitContext(
+              extra,
+              options.progressIntervalMs ?? DEFAULT_PROGRESS_INTERVAL_MS,
+              'Waiting for something in the inbox',
+            ),
+          );
+          result = waited.value;
+        } else result = await api.inbox(board, defined(rest));
+        const lines = [result.text];
+        if (result.openAsks > 0) {
+          try {
+            const open = await api.asks(board, { status: 'open', maxTokens: 50_000 });
+            const mine = open.asks.filter((ask) => ask.author === api.actor.id);
+            if (mine.length > 0) {
+              lines.push(
+                'Your open questions (wait on one with board_ask {askId}):',
+                ...mine.map((ask) => `  ${ask.id} ${JSON.stringify(ask.question)}`),
+              );
+            }
+          } catch {
+            // The count above still stands.
           }
-        } catch {
-          // The count above still stands.
         }
-      }
-      const kinds = new Set(result.items.map((item) => item.kind));
-      if (kinds.has('mention') || kinds.has('reply')) {
-        lines.push(
-          'Answer people with board_comment {thread, body}; once a thread is handled, close it with board_comment {resolve: <thread>}.',
+        const kinds = new Set(result.items.map((item) => item.kind));
+        if (kinds.has('mention') || kinds.has('reply')) {
+          lines.push(
+            'Answer people with board_comment {thread, body}; once a thread is handled, close it with board_comment {resolve: <thread>}.',
+          );
+        }
+        const turnedDown = result.items.some(
+          (item) =>
+            item.kind === 'decision' &&
+            /\((rejected|partly_accepted)\)|could not apply/.test(item.summary),
         );
-      }
-      const turnedDown = result.items.some(
-        (item) =>
-          item.kind === 'decision' &&
-          /\((rejected|partly_accepted)\)|could not apply/.test(item.summary),
-      );
-      if (turnedDown) {
-        lines.push(
-          'Rejected items are not on the board: read the note and adjust. Do not send them again unchanged.',
-        );
-      }
-      if (kinds.has('undone')) {
-        lines.push('Someone undid a change of yours: do not redo it without asking.');
-      }
-      if (rest.peek && result.items.length > 0) lines.push('Peek: these items stay unseen.');
-      return { text: lines.join('\n'), board, noInbox: true };
-    }),
+        if (turnedDown) {
+          lines.push(
+            'Rejected items are not on the board: read the note and adjust. Do not send them again unchanged.',
+          );
+        }
+        if (kinds.has('undone')) {
+          lines.push('Someone undid a change of yours: do not redo it without asking.');
+        }
+        if (rest.peek && result.items.length > 0) lines.push('Peek: these items stay unseen.');
+        if (waitSeconds && result.items.length === 0) {
+          lines.push(
+            `Nothing arrived within ${waitSeconds} s; call again to keep waiting, or go on with other work.`,
+          );
+        }
+        return { text: lines.join('\n'), board, noInbox: true };
+      }),
   );
 
   mcp.registerTool('board_comment', tool('board_comment'), (args) =>
@@ -696,23 +810,17 @@ export function createMcpServer(options: McpServerOptions): McpServer {
         const waitSeconds = args.waitSeconds ?? DEFAULT_ASK_WAIT_SECONDS;
         let waitedSeconds = 0;
         if (ask.status === 'open' && waitSeconds > 0) {
-          const progressToken = extra._meta?.progressToken;
-          const waited = await waitForAnswer(api, board, ask.id, waitSeconds * 1000, {
-            signal: extra.signal,
-            ...(progressToken !== undefined ? { progressToken } : {}),
-            intervalMs: options.progressIntervalMs ?? DEFAULT_PROGRESS_INTERVAL_MS,
-            sendProgress: (progress, total) =>
-              extra.sendNotification({
-                method: 'notifications/progress',
-                params: {
-                  progressToken: progressToken as string | number,
-                  progress,
-                  total,
-                  message: 'Waiting for a person to answer on the board',
-                },
-              }),
-          });
-          ask = waited.ask;
+          const askId = ask.id;
+          const waited = await waitWithProgress(
+            (opts) => api.askResult(board, askId, opts),
+            waitSeconds * 1000,
+            waitContext(
+              extra,
+              options.progressIntervalMs ?? DEFAULT_PROGRESS_INTERVAL_MS,
+              'Waiting for a person to answer on the board',
+            ),
+          );
+          ask = waited.value;
           waitedSeconds = waited.waitedSeconds;
         }
         const nameOf = ask.status === 'answered' ? await namesOn(api, board)() : (id: string) => id;
@@ -848,6 +956,37 @@ export function createMcpServer(options: McpServerOptions): McpServer {
         return { text: toolNames(result.text), board, cursor: result.cursor };
       }),
   );
+
+  mcp.registerTool('board_schema', tool('board_schema'), ({ board: requested, maxTokens }) =>
+    session.run(async (api) => {
+      const board = await session.board(api, requested).catch(() => undefined);
+      const result = await api.schema(defined({ board, maxTokens }));
+      return { text: toolNames(result.text), ...(board ? { board } : {}) };
+    }),
+  );
+
+  mcp.registerTool(
+    'board_template',
+    tool('board_template'),
+    ({ board: requested, template, frame, title, dryRun }) =>
+      session.run(async (api) => {
+        if (template === undefined) {
+          if (frame !== undefined || title !== undefined || dryRun !== undefined) {
+            throw new ToolError(
+              'Pass template: <id> to apply one; frame, title and dryRun go with it.',
+            );
+          }
+          const result = await api.templates();
+          return { text: toolNames(result.text) };
+        }
+        const board = await session.board(api, requested);
+        const result = await api.applyTemplate(board, defined({ template, frame, title, dryRun }));
+        const { text, isError } = formatApply(result, 0);
+        return { text, isError, board, cursor: result.cursor };
+      }),
+  );
+
+  slimToolList(mcp);
 
   // ── Resources ──────────────────────────────────────────────────────────────
 

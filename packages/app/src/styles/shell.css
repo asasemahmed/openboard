@@ -109,8 +109,20 @@
   border-color: var(--line-strong);
   color: var(--ink);
 }
+.search-btn {
+  overflow: hidden;
+}
+.search-btn > svg,
+.search-btn .kbd-group {
+  flex: none;
+}
+/* When the bar is crowded the word gives way before the shortcut spills into the next button. */
 .search-btn-text {
-  min-width: 80px;
+  flex: 0 1 80px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: clip;
   text-align: left;
 }
 

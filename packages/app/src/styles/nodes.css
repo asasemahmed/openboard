@@ -111,6 +111,32 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
+/* Declared types: field values in the body area, one line each. */
+.card-fields {
+  display: block;
+}
+.card-field {
+  margin: 0;
+  height: 20px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card-field-label {
+  color: var(--ink-3);
+}
+.type-glyph {
+  display: inline-flex;
+  flex: none;
+  color: var(--tone);
+  margin-left: -1px;
+}
+.type-mismatch {
+  display: inline-flex;
+  flex: none;
+  color: var(--ink-3);
+}
+
 .card-meta {
   flex: none;
   display: flex;

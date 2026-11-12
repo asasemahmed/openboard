@@ -69,7 +69,7 @@ async function open(
 const human = () => server.api(ADA);
 
 describe('tools/list', () => {
-  it('lists the fourteen tools with titles, honest annotations and compact schemas', async () => {
+  it('lists the sixteen tools with titles, honest annotations and compact schemas', async () => {
     const { client } = await open();
     const { tools } = await client.listTools();
     expect(tools.map((tool) => tool.name)).toEqual([...TOOL_NAMES]);
@@ -79,36 +79,34 @@ describe('tools/list', () => {
       expect(tool.description?.length).toBeGreaterThan(40);
       expect(tool.outputSchema).toBeUndefined();
     }
+    // Only hints that differ from the MCP defaults are sent.
     for (const name of [
       'board_list',
       'board_outline',
       'board_read',
       'board_changes',
       'board_selection',
+      'board_schema',
     ]) {
-      expect(byName[name]?.annotations?.readOnlyHint).toBe(true);
+      expect(byName[name]?.annotations).toEqual({ readOnlyHint: true, openWorldHint: false });
     }
-    expect(byName.board_apply?.annotations).toMatchObject({
-      readOnlyHint: false,
-      destructiveHint: true,
+    expect(byName.board_apply?.annotations).toEqual({ openWorldHint: false });
+    expect(byName.board_undo?.annotations).toEqual({ openWorldHint: false });
+    expect(byName.board_layout?.annotations).toEqual({
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
     });
-    expect(byName.board_create?.annotations?.readOnlyHint).toBe(false);
-    expect(byName.board_layout?.annotations?.readOnlyHint).toBe(false);
-    expect(tools).toHaveLength(14);
-    expect(byName.board_inbox?.annotations).toMatchObject({
-      readOnlyHint: true,
-      idempotentHint: false,
-    });
-    for (const name of ['board_comment', 'board_ask']) {
-      expect(byName[name]?.annotations).toMatchObject({
-        readOnlyHint: false,
-        destructiveHint: false,
-      });
+    expect(tools).toHaveLength(16);
+    expect(byName.board_inbox?.annotations).toEqual({ readOnlyHint: true, openWorldHint: false });
+    for (const name of ['board_comment', 'board_ask', 'board_create', 'board_template']) {
+      expect(byName[name]?.annotations).toEqual({ destructiveHint: false, openWorldHint: false });
     }
-    expect(byName.board_undo?.annotations).toMatchObject({
-      readOnlyHint: false,
-      destructiveHint: true,
-    });
+    for (const tool of tools) {
+      expect(tool.inputSchema).not.toHaveProperty('$schema');
+      expect(tool).not.toHaveProperty('execution');
+      expect(tool.inputSchema.type).toBe('object');
+    }
     expect(Object.keys(byName.board_ask?.inputSchema.properties ?? {}).sort()).toEqual(
       ['askId', 'board', 'cancel', 'kind', 'nodeIds', 'options', 'question', 'waitSeconds'].sort(),
     );
@@ -307,15 +305,21 @@ describe('default board', () => {
 });
 
 describe('changes by others', () => {
-  it('needs a first read before board_changes can default its cursor', async () => {
+  it('lists everything kept when board_changes comes before any read', async () => {
     await human().createBoard({ id: 'main', name: 'Main' });
+    await human().apply('main', {
+      ops: [{ op: 'add_node', node: { type: 'note', title: 'Early' } }],
+    });
     const { call } = await open();
     const result = await call('board_changes');
     expect(result.isError).toBe(false);
-    expect(result.text).toContain('has not read board main');
-    expect(result.text).toContain('board_outline');
+    expect(result.text.split('\n')[0]).toBe(
+      'This session had not read board main yet, so this lists every change kept since the start.',
+    );
+    expect(result.text).toContain('"Early"');
+    expect((await call('board_changes')).text).toMatch(/no changes since cursor \d+/);
     const explicit = await call('board_changes', { since: 0 });
-    expect(explicit.text).toMatch(/no changes since cursor 0/);
+    expect(explicit.text).toMatch(/^Board main: 1 change since cursor 0/);
   });
 
   it('appends one notice line until board_changes catches up', async () => {

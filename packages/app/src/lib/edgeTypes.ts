@@ -2,7 +2,7 @@
  * How each relationship looks. Every type differs by more than colour: dash
  * pattern and end marker carry the meaning too.
  */
-import { BUILTIN_EDGE_TYPES } from '@openboard/core';
+import { BUILTIN_EDGE_TYPES, type SchemaEdgeType } from '@openboard/core';
 
 export type EdgeMarker = 'none' | 'arrow' | 'open' | 'tee' | 'hollow' | 'dot';
 
@@ -55,14 +55,26 @@ const META: Record<string, EdgeMeta> = {
 export const EDGE_TYPES: readonly string[] = BUILTIN_EDGE_TYPES;
 export const DEFAULT_EDGE_TYPE = 'relates_to';
 
-export function edgeMeta(type: string): EdgeMeta {
-  return (
-    META[type] ?? {
+/** How an edge of `type` is drawn; `declared` is its definition when the project declares it. */
+export function edgeMeta(type: string, declared?: SchemaEdgeType): EdgeMeta {
+  const builtin = META[type];
+  if (builtin) return builtin;
+  if (declared && declared.source !== 'builtin') {
+    const meta: EdgeMeta = {
       type,
-      label: type.startsWith('x:') ? type.slice(2).replace(/[-_]/g, ' ') : type,
-      marker: 'arrow',
-      tone: 'muted',
-      width: 1.5,
-    }
-  );
+      label: declared.label.toLowerCase(),
+      marker: declared.directed ? 'arrow' : 'none',
+      tone: declared.style === 'thick' ? 'ink' : 'muted',
+      width: declared.style === 'thick' ? 2.5 : 1.5,
+    };
+    if (declared.style === 'dashed') meta.dash = '6 5';
+    return meta;
+  }
+  return {
+    type,
+    label: type.startsWith('x:') ? type.slice(2).replace(/[-_]/g, ' ') : type,
+    marker: 'arrow',
+    tone: 'muted',
+    width: 1.5,
+  };
 }

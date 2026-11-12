@@ -3,6 +3,7 @@ import {
   ActorSchema,
   ApplyRequestSchema,
   BoardSchema,
+  defaultNodeSize,
   NodeInputSchema,
   newId,
   OpSchema,
@@ -82,5 +83,17 @@ describe('colors, which clients put into CSS', () => {
       );
       expect(ViewSchema.safeParse({ x: 0, y: 0, color }).success).toBe(false);
     }
+  });
+});
+
+describe('geometry', () => {
+  it('reserves the body area for a project-defined type that has field values', () => {
+    const plain = defaultNodeSize({ type: 'x:experiment', title: 'A' });
+    const withFields = defaultNodeSize({ type: 'x:experiment', title: 'A', props: { owner: 'x' } });
+    expect(withFields.h).toBe(plain.h + 48);
+    // Built-in types keep their size whatever their props hold.
+    expect(defaultNodeSize({ type: 'task', title: 'A', props: { k: 1 } }).h).toBe(
+      defaultNodeSize({ type: 'task', title: 'A' }).h,
+    );
   });
 });

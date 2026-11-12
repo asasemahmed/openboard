@@ -241,13 +241,16 @@ export function createHttpApp(ctx: HttpContext): Hono<Env> {
     );
     if (!verdict.ok) return errorResponse(c, 403, new OpenBoardError('forbidden', verdict.reason));
     await next();
+    // Never let another site put the app in a frame, in either mode: a framed
+    // board could be used to trick someone into clicking through it. The
+    // policy header is the modern form; the older one covers older browsers.
+    c.res.headers.set('x-frame-options', 'DENY');
+    c.res.headers.set('content-security-policy', "frame-ancestors 'none'");
+    c.res.headers.set('x-content-type-options', 'nosniff');
     if (auth.shared) {
       // Invite links carry the token in the fragment, which browsers never put
-      // in Referer; this keeps the rest of every URL out of it too, and keeps
-      // the app out of other sites' frames.
+      // in Referer; this keeps the rest of every URL out of it too.
       c.res.headers.set('referrer-policy', 'no-referrer');
-      c.res.headers.set('x-frame-options', 'DENY');
-      c.res.headers.set('x-content-type-options', 'nosniff');
     }
   });
 
@@ -389,6 +392,35 @@ export function createHttpApp(ctx: HttpContext): Hono<Env> {
     return c.json({ ok: true, version: ctx.version, shared: true });
   });
 
+  /**
+   * Plugins and every format, on a server that has plugins (without any, the
+   * formats are the built-in ones). No local paths, so everyone may see them.
+   */
+  const extensions = () => {
+    const plugins = ctx.boards.plugins;
+    if (plugins.count === 0) return {};
+    const source = (entry: { plugin?: string }) =>
+      entry.plugin === undefined
+        ? { source: 'builtin' }
+        : { source: 'plugin', plugin: entry.plugin };
+    return {
+      plugins: plugins.info(ctx.boards.config.config),
+      exporters: plugins.exporters().map((e) => ({
+        name: e.name,
+        extension: e.extension,
+        mime: e.mime,
+        description: e.description,
+        ...source(e),
+      })),
+      importers: plugins.importers().map((i) => ({
+        name: i.name,
+        extensions: i.extensions,
+        description: i.description,
+        ...source(i),
+      })),
+    };
+  };
+
   get('/api/info', 'authenticated', (c) => {
     const caller = c.get('caller');
     if (auth.shared && caller.role !== 'owner') {
@@ -398,6 +430,7 @@ export function createHttpApp(ctx: HttpContext): Hono<Env> {
         projectName: path.basename(ctx.root),
         url: publicUrl(),
         shared: true,
+        ...extensions(),
       });
     }
     return c.json({
@@ -405,6 +438,7 @@ export function createHttpApp(ctx: HttpContext): Hono<Env> {
       root: ctx.root,
       projectName: path.basename(ctx.root),
       url: ctx.url(),
+      ...extensions(),
       ...ctx.info?.(),
       ...(auth.shared ? { shared: true, publicUrl: publicUrl() } : {}),
     });
@@ -673,6 +707,28 @@ export function createHttpApp(ctx: HttpContext): Hono<Env> {
     });
   });
 
+  // ── Types and templates ────────────────────────────────────────────────────
+
+  get('/api/schema', 'schema', async (c) => {
+    const board = c.req.query('board');
+    const maxTokens = c.req.query('maxTokens');
+    const options: Record<string, unknown> = {};
+    if (board !== undefined) options.board = board;
+    if (maxTokens !== undefined) options.maxTokens = Number(maxTokens);
+    return c.json(await api(c).schema(options as Parameters<LocalBoardApi['schema']>[0]));
+  });
+
+  get('/api/templates', 'templates', async (c) => c.json(await api(c).templates()));
+
+  post('/api/boards/:id/template', 'applyTemplate', async (c) =>
+    c.json(
+      await api(c).applyTemplate(
+        param(c, 'id'),
+        (await jsonBody(c)) as unknown as Parameters<LocalBoardApi['applyTemplate']>[1],
+      ),
+    ),
+  );
+
   // ── Settings ───────────────────────────────────────────────────────────────
   // "People only" routes check the actor kind; see the note in service.ts.
 
@@ -749,7 +805,10 @@ export function createHttpApp(ctx: HttpContext): Hono<Env> {
   });
 
   post('/api/boards/:id/inbox', 'inbox', async (c) =>
-    c.json(await api(c).inbox(param(c, 'id'), await jsonBody(c))),
+    // `waitMs` makes this a long-poll; a client that disconnects ends the wait.
+    c.json(
+      await api(c).inbox(param(c, 'id'), { ...(await jsonBody(c)), signal: c.req.raw.signal }),
+    ),
   );
 
   // ── Questions ──────────────────────────────────────────────────────────────

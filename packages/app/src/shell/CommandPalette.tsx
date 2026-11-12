@@ -5,6 +5,7 @@ import { type AccessAction, can } from '@openboard/core';
  */
 import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useActions } from '../canvas/actions.js';
+import { shortHint } from '../lib/declaredTypes.js';
 import { fuzzyScore, searchNodes } from '../lib/fuzzy.js';
 import { ADDABLE_TYPES, STATUS_META, typeMeta } from '../lib/nodeTypes.js';
 import { boardPath, navigate } from '../lib/router.js';
@@ -13,10 +14,11 @@ import { useRole } from '../state/access.js';
 import { boards, useBoards } from '../state/boards.js';
 import { useSession } from '../state/context.js';
 import { useValue } from '../state/emitter.js';
+import { useTypes } from '../state/schema.js';
 import { Kbd } from '../ui/Button.js';
 import { Dialog } from '../ui/Dialog.js';
 import { Icon, type IconName } from '../ui/Icon.js';
-import { TypeDot } from './AddMenu.js';
+import { DeclaredLead, TypeDot } from './AddMenu.js';
 import { THEME_NAMES } from './ThemeToggle.js';
 
 interface Item {
@@ -44,6 +46,7 @@ const COMMAND_NEEDS: Record<string, AccessAction> = {
   undo: 'board.undo',
   redo: 'board.undo',
   import: 'board.edit',
+  'insert-template': 'board.edit',
   'new-board': 'board.create',
 };
 
@@ -53,6 +56,7 @@ export function CommandPalette() {
   const state = useValue(ui.palette);
   const actions = useActions();
   const role = useRole();
+  const declared = useTypes().declaredNodes;
   const list = useBoards();
   const [query, setQuery] = useState(state.query);
   const [active, setActive] = useState(0);
@@ -84,6 +88,18 @@ export function CommandPalette() {
           type === 'frame' ? actions.frameSelection() : actions.addNode(type, actions.viewCenter()),
       };
     });
+    for (const def of declared) {
+      const hint = shortHint(def.description);
+      out.push({
+        id: `add:${def.type}`,
+        group: 'Commands',
+        label: `New ${def.label.toLowerCase()}`,
+        ...(hint ? { detail: hint } : {}),
+        lead: <DeclaredLead def={def} />,
+        keywords: `add create ${def.type} ${def.label}`,
+        run: () => actions.addNode(def.type, actions.viewCenter()),
+      });
+    }
     out.push(
       {
         id: 'tidy',
@@ -171,6 +187,19 @@ export function CommandPalette() {
         run: () => ui.importDialog.set({}),
       },
       {
+        id: 'insert-template',
+        group: 'Commands',
+        label: 'Insert template…',
+        detail: 'A feature plan, a kanban, an architecture map…',
+        lead: icon('layout'),
+        keywords: 'template insert plan kanban map',
+        run: () => {
+          const ids = store.selection.nodeIds;
+          const only = ids.length === 1 ? store.node(ids[0] as string) : undefined;
+          ui.templateDialog.set({ frame: only?.type === 'frame' ? only.id : null });
+        },
+      },
+      {
         id: 'compare',
         group: 'Commands',
         label: 'Compare with a git revision…',
@@ -234,7 +263,7 @@ export function CommandPalette() {
       const needs = COMMAND_NEEDS[item.id] ?? (item.id.startsWith('add:') ? 'board.edit' : null);
       return needs === null || can(role, needs);
     });
-  }, [actions, ui, store, role]);
+  }, [actions, ui, store, role, declared]);
 
   const items = useMemo<Item[]>(() => {
     const q = query.trim();

@@ -11,6 +11,7 @@ import {
   type Actor,
   ActorSchema,
   type Ask,
+  type Batch,
   BoardDoc,
   type Comment,
   type DocEvent,
@@ -46,7 +47,17 @@ export interface RoomOptions {
   onProposalsStale?: (room: Room) => Promise<void>;
   /** Milliseconds since the epoch; injectable for tests. */
   clock?: () => number;
+  /**
+   * Called after a batch that changed nodes or edges, once the write that made
+   * it (an apply with its layout, an undo, a decision) has finished. Browser
+   * edits are reported once they pause; a batch that keeps growing (coalesced
+   * edits by one person) is reported again each time.
+   */
+  onBatch?: (room: Room, batch: Batch) => void;
 }
+
+/** Quiet time after a batch's last transaction before it is reported to `onBatch`. */
+const BATCH_REPORT_MS = 30;
 
 /** A human's current selection, as published over awareness. */
 export interface HumanSelection {
@@ -69,9 +80,18 @@ export class Room {
   private context: TxContext | null = null;
   private readonly askStatus = new Map<string, Ask['status']>();
   private readonly askWaiters = new Map<string, Set<() => void>>();
+  private readonly inboxWaiters = new Map<string, Set<() => void>>();
   private refreshTimer: NodeJS.Timeout | null = null;
+  private readonly batchTimers = new Map<string, NodeJS.Timeout>();
   /** Browser connections currently syncing this board. */
   viewers = 0;
+  /**
+   * Set in shared mode, where `guardAuthorship` corrects what sync connections
+   * claim about authorship; until it has, this room does not act on it.
+   */
+  guardsSync = false;
+  /** The history batch the last transaction was recorded in, if any. */
+  lastBatchId: string | undefined;
   private closed = false;
   private readonly log: (line: string) => void;
 
@@ -96,6 +116,9 @@ export class Room {
     // The server itself has no presence; only connected clients do.
     this.awareness.setLocalState(null);
     for (const ask of doc.asks()) this.askStatus.set(ask.id, ask.status);
+    inbox.onDeliver = (to) => {
+      for (const done of [...(this.inboxWaiters.get(to) ?? [])]) done();
+    };
     this.detachDoc = doc.observe((event) => this.observe(event));
   }
 
@@ -230,10 +253,37 @@ export class Room {
     });
   }
 
-  /** How many long-polls are waiting on questions; for tests and diagnostics. */
+  /**
+   * Resolve once an inbox item for `actorId` arrives, after `ms`, when `signal`
+   * aborts, or when the room closes. Never rejects.
+   */
+  waitForInbox(actorId: string, ms: number, signal?: AbortSignal): Promise<void> {
+    if (this.closed || ms <= 0 || signal?.aborted) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      let waiters = this.inboxWaiters.get(actorId);
+      if (!waiters) {
+        waiters = new Set();
+        this.inboxWaiters.set(actorId, waiters);
+      }
+      const done = () => {
+        clearTimeout(timer);
+        signal?.removeEventListener('abort', done);
+        const set = this.inboxWaiters.get(actorId);
+        set?.delete(done);
+        if (set?.size === 0) this.inboxWaiters.delete(actorId);
+        resolve();
+      };
+      const timer = setTimeout(done, ms);
+      signal?.addEventListener('abort', done, { once: true });
+      waiters.add(done);
+    });
+  }
+
+  /** How many long-polls are waiting on questions and inboxes; for tests and diagnostics. */
   get waiting(): number {
     let n = 0;
     for (const set of this.askWaiters.values()) n += set.size;
+    for (const set of this.inboxWaiters.values()) n += set.size;
     return n;
   }
 
@@ -248,7 +298,11 @@ export class Room {
     this.closed = true;
     if (this.refreshTimer) clearTimeout(this.refreshTimer);
     this.refreshTimer = null;
-    for (const set of [...this.askWaiters.values()]) for (const done of [...set]) done();
+    for (const timer of this.batchTimers.values()) clearTimeout(timer);
+    this.batchTimers.clear();
+    for (const set of [...this.askWaiters.values(), ...this.inboxWaiters.values()]) {
+      for (const done of [...set]) done();
+    }
     await this.store.close();
     await this.feed.flush();
     await this.history.flush();
@@ -269,7 +323,16 @@ export class Room {
     const from = this.feed.cursor;
     this.feed.record(event, tag);
     if (event.states) this.history.step(event.states, from, this.feed.cursor);
-    if (pending) this.history.commit(pending, event, ctx, this.feed.cursor);
+    this.lastBatchId = pending?.id;
+    if (pending) {
+      this.history.commit(pending, event, ctx, this.feed.cursor);
+      this.scheduleBatchReport(pending.id);
+    }
+    // An update from a shared-mode connection is not trusted on authorship (see authorship.ts).
+    const untrusted =
+      this.guardsSync && !event.local && event.origin?.source === 'sync'
+        ? event.origin.actorId
+        : null;
 
     // A removed node takes its claim with it. Written after this transaction.
     const gone = Object.entries(event.states?.nodes ?? {})
@@ -285,14 +348,42 @@ export class Room {
       if (event.comments && event.origin?.source !== 'undo') {
         for (const id of event.comments) {
           const state = event.states?.comments[id];
-          if (state && state.before === null && state.after) this.notifyComment(state.after);
+          if (state && state.before === null && state.after) {
+            this.notifyComment(untrusted ? { ...state.after, author: untrusted } : state.after);
+          }
         }
       }
-      if (event.asks) this.asksChanged(event.asks);
+      // Questions changed over an untrusted connection are reverted, never acted on.
+      if (event.asks && !untrusted) this.asksChanged(event.asks);
       if (event.states) this.maybeRefresh(event);
     } catch (error) {
       this.log(`board "${this.id}": ${errorMessage(error)}`);
     }
+  }
+
+  /**
+   * Report a batch to `onBatch` once it has been quiet for a moment and the
+   * board's write lock is free, so an apply is reported with its layout.
+   */
+  private scheduleBatchReport(id: string): void {
+    const onBatch = this.opts.onBatch;
+    if (!onBatch || this.closed) return;
+    const previous = this.batchTimers.get(id);
+    if (previous) clearTimeout(previous);
+    const timer = setTimeout(() => {
+      this.batchTimers.delete(id);
+      void this.lock
+        .run(() => undefined)
+        .then(() => {
+          if (this.closed) return;
+          const record = this.history.get(id);
+          if (!record || record.batch.nodeIds.length + record.batch.edgeIds.length === 0) return;
+          onBatch(this, { ...record.batch });
+        })
+        .catch((error: unknown) => this.log(`board "${this.id}": ${errorMessage(error)}`));
+    }, BATCH_REPORT_MS);
+    timer.unref();
+    this.batchTimers.set(id, timer);
   }
 
   private name(id: string): string {

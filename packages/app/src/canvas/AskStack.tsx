@@ -179,6 +179,22 @@ export function AskCard({ ask, onAnswered }: { ask: Ask; onAnswered?: (text: str
 
   useEffect(() => () => ui.pointAt([]), [ui]);
 
+  // Anyone who can see the board may look at what the question is about.
+  const pointButton = (
+    <button
+      type="button"
+      className="pill pill-quiet"
+      onClick={point}
+      onPointerEnter={() => ui.pointAt(nodeIds)}
+      onPointerLeave={() => ui.pointAt([])}
+      onFocus={() => ui.pointAt(nodeIds)}
+      onBlur={() => ui.pointAt([])}
+    >
+      <Icon name="locate" size={13} />
+      Point
+    </button>
+  );
+
   return (
     <article className={`ask-card kind-${ask.kind}`} aria-label={`Question from ${name}`}>
       <header className="ask-card-head">
@@ -238,24 +254,14 @@ export function AskCard({ ask, onAnswered }: { ask: Ask; onAnswered?: (text: str
             <button type="submit" className="pill pill-quiet" disabled={busy || text.trim() === ''}>
               Send
             </button>
-            {nodeIds.length > 0 && (
-              <button
-                type="button"
-                className="pill pill-quiet"
-                onClick={point}
-                onPointerEnter={() => ui.pointAt(nodeIds)}
-                onPointerLeave={() => ui.pointAt([])}
-                onFocus={() => ui.pointAt(nodeIds)}
-                onBlur={() => ui.pointAt([])}
-              >
-                <Icon name="locate" size={13} />
-                Point
-              </button>
-            )}
+            {nodeIds.length > 0 && pointButton}
           </form>
         </>
       ) : (
-        <p className="ask-hint">{disabledReason(role, 'ask.answer')}</p>
+        <div className="ask-readonly">
+          <p className="ask-hint">{disabledReason(role, 'ask.answer')}</p>
+          {nodeIds.length > 0 && pointButton}
+        </div>
       )}
       {options.length > 0 && text.trim() !== '' && (
         <p className="ask-hint">Your text goes along with the option you pick.</p>

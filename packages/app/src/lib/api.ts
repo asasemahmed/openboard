@@ -33,6 +33,8 @@ import type {
   Proposal,
   RefreshLinksRequest,
   RevisionsResult,
+  SchemaResult,
+  TemplateSummary,
   UndoRequest,
   UndoResult,
   WhoAmI,
@@ -78,7 +80,15 @@ export function retryAfterSeconds(error: unknown): number | null {
 
 export interface ApiClient {
   listBoards(): Promise<BoardSummary[]>;
-  createBoard(input: { name: string; description?: string }): Promise<BoardSummary>;
+  createBoard(input: {
+    name: string;
+    description?: string;
+    template?: string;
+  }): Promise<BoardSummary>;
+  /** Every type a board can use; with `boardId`, also what on that board does not fit. */
+  schema(boardId?: string): Promise<SchemaResult>;
+  templates(): Promise<TemplateSummary[]>;
+  applyTemplate(boardId: string, request: TemplateRequest): Promise<ApplyResult>;
   layout(boardId: string, request: LayoutRequest): Promise<LayoutResult>;
   changes(boardId: string, options: ChangesOptions): Promise<ChangesResult>;
   /** What this server is and how agents reach it; null when the server does not say. */
@@ -120,6 +130,13 @@ export interface ApiClient {
     boardId: string,
     options: { format: string; theme?: 'light' | 'dark'; diffFrom?: string },
   ): Promise<ExportFile>;
+}
+
+export interface TemplateRequest {
+  template: string;
+  frame?: string;
+  title?: string;
+  dryRun?: boolean;
 }
 
 export interface ExportFile {
@@ -201,6 +218,70 @@ export interface ServerInfo {
   mcp?: McpInfo;
   /** The name of the person running the server, when it says. */
   user?: string;
+  /** Whether the server shares boards with invited people. */
+  shared: boolean;
+  plugins: PluginSummary[];
+  exporters: FormatInfo[];
+  importers: FormatInfo[];
+}
+
+export interface PluginSummary {
+  name: string;
+  version?: string;
+  /** What of the plugin is not in effect, one sentence each. */
+  warnings: string[];
+}
+
+export interface FormatInfo {
+  name: string;
+  description: string;
+  /** Exporters: the file extension. Importers: the extensions they read. */
+  extensions: string[];
+  source: 'builtin' | 'plugin';
+  plugin?: string;
+}
+
+function parseFormats(raw: unknown, many: boolean): FormatInfo[] {
+  if (!Array.isArray(raw)) return [];
+  const out: FormatInfo[] = [];
+  for (const entry of raw.slice(0, 100)) {
+    if (typeof entry !== 'object' || entry === null) continue;
+    const e = entry as Record<string, unknown>;
+    if (!isString(e.name) || !/^[a-z][a-z0-9_-]{0,39}$/.test(e.name)) continue;
+    const extensions = many
+      ? Array.isArray(e.extensions)
+        ? e.extensions.filter(isString).slice(0, 20)
+        : []
+      : isString(e.extension)
+        ? [e.extension]
+        : [];
+    const format: FormatInfo = {
+      name: e.name,
+      description: isString(e.description) ? e.description.slice(0, 300) : '',
+      extensions: extensions.map((x) => (x.startsWith('.') ? x : `.${x}`).toLowerCase()),
+      source: e.source === 'plugin' ? 'plugin' : 'builtin',
+    };
+    if (isString(e.plugin)) format.plugin = e.plugin.slice(0, 80);
+    out.push(format);
+  }
+  return out;
+}
+
+function parsePlugins(raw: unknown): PluginSummary[] {
+  if (!Array.isArray(raw)) return [];
+  const out: PluginSummary[] = [];
+  for (const entry of raw.slice(0, 100)) {
+    if (typeof entry !== 'object' || entry === null) continue;
+    const p = entry as Record<string, unknown>;
+    if (!isString(p.name)) continue;
+    const plugin: PluginSummary = {
+      name: p.name.slice(0, 80),
+      warnings: Array.isArray(p.warnings) ? p.warnings.filter(isString).slice(0, 50) : [],
+    };
+    if (isString(p.version)) plugin.version = p.version.slice(0, 40);
+    out.push(plugin);
+  }
+  return out;
 }
 
 const isString = (value: unknown): value is string => typeof value === 'string';
@@ -214,6 +295,10 @@ export function parseServerInfo(raw: unknown): ServerInfo | null {
     root: isString(r.root) ? r.root : '',
     projectName: isString(r.projectName) ? r.projectName : '',
     url: isString(r.url) ? r.url : '',
+    shared: r.shared === true,
+    plugins: parsePlugins(r.plugins),
+    exporters: parseFormats(r.exporters, false),
+    importers: parseFormats(r.importers, true),
   };
   if (isString(r.user) && r.user.trim()) info.user = r.user.trim().slice(0, 80);
   const mcp = r.mcp as Record<string, unknown> | undefined;
@@ -326,6 +411,15 @@ export function createApiClient(getActor: () => Actor, base = ''): ApiClient {
       return Array.isArray(result) ? result : result.boards;
     },
     createBoard: (input) => request<BoardSummary>('POST', '/api/boards', input),
+    schema: (boardId) =>
+      request<SchemaResult>(
+        'GET',
+        boardId ? `/api/schema?board=${encodeURIComponent(boardId)}` : '/api/schema',
+      ),
+    templates: async () =>
+      (await request<{ templates: TemplateSummary[] }>('GET', '/api/templates')).templates ?? [],
+    applyTemplate: (boardId, templateRequest) =>
+      request<ApplyResult>('POST', `${board(boardId)}/template`, templateRequest),
     layout: (boardId, layoutRequest) =>
       request<LayoutResult>(
         'POST',

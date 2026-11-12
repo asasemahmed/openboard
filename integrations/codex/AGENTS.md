@@ -22,6 +22,8 @@ Types
 
 - Nodes: `task` work to do; `decision` a choice (options, then outcome); `question` needs an answer; `risk` what could go wrong; `note` a fact; `doc` longer writing; `code` a module or file; `frame` a group.
 - Edges read source to target: A `depends_on` B (B first); A `blocks` B (A is in the way of B); A `flows_to` B (data or control moves A to B); A `implements` B; A `evidence_for` B; `relates_to` for anything else. Use one of `depends_on` or `blocks` per pair, not both.
+- If the outline mentions custom types, call `board_schema` before adding nodes and fill their fields in `props`.
+- To start a new board or area, check `board_template` for a fitting template before building the structure yourself.
 
 Keep it current
 
@@ -30,7 +32,7 @@ Keep it current
 Working with a person in control
 
 - "Proposed" from `board_apply` is normal: the batch waits for a person's review. Never send it again or work around the review (for example by removing and re-adding); continue with other work or tell the user. A refusal because an area is locked for agents is final: ask instead.
-- Call `board_inbox` at the start of a task, after each chunk of work, and when a result mentions new inbox items. Read rejection notes and adjust; do not repeat a rejected change.
+- Call `board_inbox` at the start of a task, after each chunk of work, and when a result mentions new inbox items; to wait for a decision, pass `waitSeconds` instead of polling. Read rejection notes and adjust; do not repeat a rejected change.
 - Before destructive or ambiguous work, ask with `board_ask` instead of guessing.
 - Undo your own mistakes with `board_undo`; other people's changes are not yours to undo.
 - Reply in threads where you were mentioned (`board_comment` with `thread`) and resolve them (`resolve`) when done.

@@ -471,3 +471,65 @@
   padding: 16px;
   font-size: 13px;
 }
+
+/* ── Declared types ───────────────────────────────────────────────────────── */
+
+.inspector-type .type-glyph {
+  display: inline-flex;
+  color: var(--tone);
+}
+.type-fields {
+  display: grid;
+  gap: 12px;
+}
+.type-field.kind-boolean {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 8px;
+}
+.type-field.kind-boolean .field-label {
+  order: 2;
+  font-weight: 500;
+  color: var(--ink);
+}
+.type-field.kind-boolean input {
+  order: 1;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+.type-field.kind-boolean .field-error,
+.type-field.kind-boolean .field-hint {
+  order: 3;
+  grid-column: 1 / -1;
+}
+.type-field.has-problem .input {
+  border-color: var(--danger);
+}
+.required-mark {
+  color: var(--danger);
+  font-weight: 600;
+}
+.type-about {
+  margin: 12px 0 0;
+}
+.type-problems {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--ink-3);
+  border-radius: 6px;
+  background: var(--sunken);
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--ink-2);
+}
+.type-problems strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+.type-problems ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}

@@ -21,6 +21,7 @@ import type { FlowEdge } from '../lib/flow.js';
 import { absoluteRect, type PlacementMap, type Rect } from '../lib/geometry.js';
 import { useSession } from '../state/context.js';
 import { useStoreValue } from '../state/emitter.js';
+import { useTypes } from '../state/schema.js';
 import { type MarkerTone, markerUrl } from './EdgeMarkers.js';
 
 const POSITION: Record<Side, Position> = {
@@ -90,10 +91,11 @@ function BoardEdgeView({ id, source, target, data, selected }: EdgeProps<FlowEdg
   const proposed = useStoreValue(store, () =>
     ghost ? undefined : store.review().edgeMarks.get(id)?.kind,
   );
+  const declared = useTypes().edge;
   if (!sourceNode || !targetNode || !data) return null;
 
   const edge = data.edge;
-  const meta = edgeMeta(edge.type);
+  const meta = edgeMeta(edge.type, declared.get(edge.type));
   const from = rectOf(sourceNode);
   const to = rectOf(targetNode);
   let path: string;

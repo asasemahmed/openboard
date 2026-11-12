@@ -19,7 +19,8 @@
     "lint": "biome check .",
     "format": "biome check --write .",
     "clean": "rm -rf packages/*/dist packages/*/*.tsbuildinfo",
-    "openboard": "node packages/cli/dist/bin.js"
+    "openboard": "node packages/cli/dist/bin.js",
+    "evals": "node packages/evals/dist/bin.js"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.7",
