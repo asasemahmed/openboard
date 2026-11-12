@@ -1,14 +1,21 @@
 # Contributing to OpenBoard
 
-OpenBoard is private while the foundation is built and will become a public project under the [PolyForm Noncommercial License 1.0.0](LICENSE): free to use, change and share for personal and other noncommercial purposes. Work as if it is already public.
+OpenBoard is developed in the open under the [PolyForm Noncommercial License 1.0.0](LICENSE): free to use, change and share for personal and other noncommercial purposes.
 
 By contributing you agree that your contribution is licensed under the same terms.
 
 ## Ground rules
 
-- **Nothing private in git.** No secrets, tokens, credentials, internal URLs, or personal data — in files or in commit messages. History will be published as-is.
+- **Nothing private in git.** No secrets, tokens, credentials, internal URLs, or personal data — in files or in commit messages. The history is public.
 - **No third-party material without a compatible license.** That includes images, copied docs, and pasted code.
 - **Research stays local.** The `research/` folder is ignored by git on purpose.
+
+## Where to start
+
+- Pick an [open issue](https://github.com/asasemahmed/openboard/issues). `good first issue` marks small, well-scoped work; `help wanted` marks work nobody has taken.
+- Comment on the issue before you start, so two people do not build the same thing. For anything larger than the issue describes, say how you plan to do it first.
+- Found a bug or want something that has no issue? Open one. For a bug, include what you did, what you expected, and what happened.
+- Report security problems privately, as [SECURITY.md](SECURITY.md) describes, not in a public issue.
 
 ## Working on the project
 

@@ -21,7 +21,7 @@
 </p>
 
 > [!NOTE]
-> **This repository is private for now** and nothing is released yet. OpenBoard is free to use, change and share for personal and other noncommercial purposes under the [PolyForm Noncommercial License](LICENSE). Commercial use needs a separate license.
+> OpenBoard is free to use, change and share for personal and other noncommercial purposes under the [PolyForm Noncommercial License](LICENSE). Commercial use needs a separate license. It is pre-release: nothing is published to a package registry yet.
 
 # OpenBoard
 
@@ -236,6 +236,8 @@ OpenBoard is pre-release software.
 - There is no PNG export (the SVG export is self-contained) and no board view inside chat clients.
 
 ## Contributing
+
+Contributions are welcome. The [open issues](https://github.com/asasemahmed/openboard/issues) range from an afternoon's work to a new subsystem: [`good first issue`](https://github.com/asasemahmed/openboard/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) marks the small, well-scoped ones and [`help wanted`](https://github.com/asasemahmed/openboard/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22) the ones nobody is working on. Comment on an issue before you start so two people do not build the same thing.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup, commands, and ground rules.
 
