@@ -20,4 +20,5 @@ export * from './schema.js';
 export * from './serialize.js';
 export * from './templates/index.js';
 export * from './text.js';
+export * from './type-glyphs.js';
 export * from './typedefs.js';

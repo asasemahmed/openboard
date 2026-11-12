@@ -2,8 +2,8 @@
  * The icons a declared type may pick (`TYPE_ICONS` in core), drawn like the
  * rest of the app's icons: a 16px grid, 1.5px stroke in `currentColor`.
  */
-import type { TypeIcon as TypeIconName } from '@openboard/core';
-import type { ReactNode } from 'react';
+import { builtinTypeGlyph, type TypeIcon as TypeIconName } from '@openboard/core';
+import { createElement, type ReactNode } from 'react';
 
 export const TYPE_ICON_PATHS: Record<TypeIconName, ReactNode> = {
   box: (
@@ -42,12 +42,7 @@ export const TYPE_ICON_PATHS: Record<TypeIconName, ReactNode> = {
       <path d="M10.25 3.25a2.5 2.5 0 010 4.75M12 9.5a4.5 4.5 0 012.5 4" />
     </>
   ),
-  bot: (
-    <>
-      <rect x="2.75" y="5" width="10.5" height="8" rx="2" />
-      <path d="M8 2.5V5M6 9h.01M10 9h.01M6.5 11.25h3" />
-    </>
-  ),
+  bot: builtinTypePaths('agent'),
   bug: (
     <>
       <rect x="4.75" y="5" width="6.5" height="8.5" rx="3.25" />
@@ -85,12 +80,7 @@ export const TYPE_ICON_PATHS: Record<TypeIconName, ReactNode> = {
       <path d="M5.5 8.25l1.75 1.75 3.25-3.75" />
     </>
   ),
-  alert: (
-    <>
-      <path d="M8 2.25l6 10.5H2z" />
-      <path d="M8 6.5v2.75M8 11.25v.01" />
-    </>
-  ),
+  alert: builtinTypePaths('risk'),
   lightbulb: (
     <>
       <path d="M6 11.5v-1.1a4.5 4.5 0 114 0v1.1z" />
@@ -103,12 +93,7 @@ export const TYPE_ICON_PATHS: Record<TypeIconName, ReactNode> = {
       <path d="M9 7a2.75 2.75 0 00-3.9-.1l-2 2a2.75 2.75 0 003.9 3.9l.85-.85" />
     </>
   ),
-  file: (
-    <>
-      <path d="M4 1.75h5l3.5 3.5v9H4z" />
-      <path d="M9 1.75v3.5h3.5M6 8.5h4M6 11h4" />
-    </>
-  ),
+  file: builtinTypePaths('doc'),
   code: <path d="M5.5 4.5L2 8l3.5 3.5M10.5 4.5L14 8l-3.5 3.5M9 3l-2 10" />,
   database: (
     <>
@@ -152,46 +137,14 @@ export function TypeIcon({ name, size = 16 }: { name: TypeIconName; size?: numbe
   );
 }
 
-/** Glyphs for the built-in card types, drawn like the rest. Declared types pick from the set above. */
-const BUILTIN_TYPE_PATHS: Record<string, ReactNode> = {
-  note: (
-    <>
-      <path d="M2.75 2.75h10.5v6.5l-4 4h-6.5z" />
-      <path d="M13.25 9.25h-4v4" />
-    </>
-  ),
-  task: (
-    <>
-      <rect x="2.5" y="2.5" width="11" height="11" rx="3" />
-      <path d="M5.5 8.25l1.75 1.75 3.25-3.75" />
-    </>
-  ),
-  decision: (
-    <>
-      <path d="M8 1.75L14.25 8 8 14.25 1.75 8z" />
-      <path d="M6 8h4M8.5 6.5L10 8 8.5 9.5" />
-    </>
-  ),
-  question: (
-    <>
-      <circle cx="8" cy="8" r="5.75" />
-      <path d="M6.4 6.5a1.7 1.7 0 113 1.1c-.6.5-1.4.8-1.4 1.65M8 11.25v.01" />
-    </>
-  ),
-  risk: TYPE_ICON_PATHS.alert,
-  doc: TYPE_ICON_PATHS.file,
-  code: <path d="M5.5 4.5L2 8l3.5 3.5M10.5 4.5L14 8l-3.5 3.5" />,
-  agent: TYPE_ICON_PATHS.bot,
-  run: (
-    <>
-      <circle cx="8" cy="8" r="5.75" />
-      <path d="M6.75 5.75v4.5L10.5 8z" />
-    </>
-  ),
-};
+function builtinTypePaths(type: string): ReactNode {
+  return builtinTypeGlyph(type)?.map(({ tag, attrs }) =>
+    createElement(tag, { ...attrs, key: `${tag}:${Object.values(attrs).join(',')}` }),
+  );
+}
 
 export function hasBuiltinTypeIcon(type: string): boolean {
-  return Object.hasOwn(BUILTIN_TYPE_PATHS, type);
+  return builtinTypeGlyph(type) !== undefined;
 }
 
 export function BuiltinTypeIcon({ type, size = 16 }: { type: string; size?: number }) {
@@ -210,7 +163,7 @@ export function BuiltinTypeIcon({ type, size = 16 }: { type: string; size?: numb
       focusable="false"
       className="type-icon"
     >
-      {BUILTIN_TYPE_PATHS[type]}
+      {builtinTypePaths(type)}
     </svg>
   );
 }
