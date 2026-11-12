@@ -1,9 +1,11 @@
 /**
- * One card anatomy for every non-frame type (see assets/banner-*.svg):
- *   type label row   coloured dot + mono uppercase type
+ * One card anatomy for every non-frame type:
+ *   type row         the type's glyph and name, in the type's colour
  *   title            one or two lines, as `defaultNodeSize` budgets
  *   body preview     two lines of plain text from the markdown
  *   meta row         status, tags, link count
+ * The whole card is filled with a soft tint of its type's colour, so a board
+ * reads by colour before anyone reads a word.
  * The card never grows past its size; content is clamped to fit, because the
  * server-side layout assumes exactly these sizes.
  */
@@ -18,7 +20,7 @@ import { markdownToPlainText } from '../lib/plainText.js';
 import { useSession } from '../state/context.js';
 import { useNodeTypeDef } from '../state/schema.js';
 import { Icon } from '../ui/Icon.js';
-import { TypeIcon } from '../ui/TypeIcon.js';
+import { BuiltinTypeIcon, hasBuiltinTypeIcon, TypeIcon } from '../ui/TypeIcon.js';
 import { NodeDecorations } from './NodeDecorations.js';
 import { useDiffClass, useReviewClass } from './reviewClass.js';
 import { StatusPill } from './StatusPill.js';
@@ -46,7 +48,11 @@ function CardNodeView({ id, data, selected, height }: NodeProps<FlowNode>) {
   const { ui } = useSession();
   const meta = typeMeta(node.type);
   const def = useNodeTypeDef(node.type);
-  const card = cardModel(node, def, meta);
+  // Built-in types read as their name ("Task"); an undeclared custom type keeps its raw id.
+  const card = cardModel(node, def, {
+    label: meta.tone === 'custom' ? meta.label : meta.name,
+    tone: meta.tone,
+  });
   const problems = useMemo(() => (def ? typeProblems(node, def) : []), [def, node]);
   const lines = titleLines(node.title);
   const body = useMemo(() => (node.body ? markdownToPlainText(node.body) : ''), [node.body]);
@@ -89,6 +95,10 @@ function CardNodeView({ id, data, selected, height }: NodeProps<FlowNode>) {
           {card.icon ? (
             <span className="type-glyph" aria-hidden="true">
               <TypeIcon name={card.icon} size={14} />
+            </span>
+          ) : hasBuiltinTypeIcon(node.type) ? (
+            <span className="type-glyph" aria-hidden="true">
+              <BuiltinTypeIcon type={node.type} size={14} />
             </span>
           ) : (
             <span className="type-dot" aria-hidden="true" />

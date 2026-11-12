@@ -1,27 +1,42 @@
 /*
  * Card anatomy. Heights add up exactly to `defaultNodeSize` in core:
- *   12 + 16 + 12 (border, padding, label row)  = 40
+ *   12 + 16 + 12 (border, padding, type row)   = 40
  *   title: 24 per line budget                  = 24 | 48
  *   body preview                               = 48
  *   meta row                                   = 32
  */
 
 .card {
+  /* Fill, edge and label colour, all from the type's hue (see tokens.css). */
+  --card-fill: oklch(var(--fill-l) calc(var(--fill-c) * var(--tone-cx, 1)) var(--tone-h, 80));
+  --card-line: oklch(
+    var(--fill-line-l) calc(var(--fill-line-c) * var(--tone-cx, 1)) var(--tone-h, 80)
+  );
+  --card-label: oklch(
+    var(--label-l) calc(var(--label-c) * min(var(--tone-cx, 1), 1)) var(--tone-h, 80)
+  );
+  --card-ink-2: color-mix(in oklab, var(--ink) 70%, var(--card-fill));
   position: relative;
   width: 100%;
   height: 100%;
-  border: 1px solid var(--line);
+  border: 1px solid var(--card-line);
   border-radius: var(--radius-card);
-  background: var(--card);
+  background: var(--card-fill);
   color: var(--ink);
-  transition: border-color var(--dur) var(--ease);
+  box-shadow: var(--shadow-card);
+  transition:
+    border-color var(--dur) var(--ease),
+    box-shadow var(--dur) var(--ease);
 }
-.react-flow__node:hover .card:not(.is-selected) {
-  border-color: var(--line-strong);
+.react-flow__node:hover .card:not(.is-selected, .is-ghost) {
+  border-color: var(--card-label);
+}
+.react-flow__node.dragging .card:not(.is-ghost) {
+  box-shadow: var(--shadow-lift);
 }
 .card.is-selected {
   border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
 }
 .card:focus-visible,
 .frame:focus-visible {
@@ -49,24 +64,26 @@
 .card-head {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   height: 16px;
   flex: none;
+  color: var(--card-label);
 }
 .type-label {
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
+  font-weight: 600;
   line-height: 16px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--tone);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .type-label-custom {
-  text-transform: none;
-  letter-spacing: 0.02em;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+}
+.card-head .type-dot {
+  background: currentColor;
 }
 .card-head-end {
   display: flex;
@@ -74,6 +91,7 @@
   gap: 2px;
   margin-left: auto;
   margin-right: -6px;
+  color: var(--card-ink-2);
 }
 
 .card-title {
@@ -81,9 +99,9 @@
   margin: 0;
   padding-top: 4px;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 650;
   line-height: 20px;
-  letter-spacing: -0.005em;
+  letter-spacing: -0.008em;
   overflow: hidden;
   overflow-wrap: anywhere;
   display: -webkit-box;
@@ -104,7 +122,7 @@
   padding-top: 6px;
   font-size: 13px;
   line-height: 20px;
-  color: var(--ink-2);
+  color: var(--card-ink-2);
   overflow: hidden;
   overflow-wrap: anywhere;
   display: -webkit-box;
@@ -123,18 +141,18 @@
   text-overflow: ellipsis;
 }
 .card-field-label {
-  color: var(--ink-3);
+  color: var(--card-label);
+  font-weight: 550;
 }
 .type-glyph {
   display: inline-flex;
   flex: none;
-  color: var(--tone);
   margin-left: -1px;
 }
 .type-mismatch {
   display: inline-flex;
   flex: none;
-  color: var(--ink-3);
+  color: var(--card-ink-2);
 }
 
 .card-meta {
@@ -146,14 +164,24 @@
   padding-top: 8px;
   overflow: hidden;
 }
+/* On a coloured card, chips are lighter or darker patches of the card itself. */
+.card .status-pill {
+  border-color: transparent;
+  background: var(--chip);
+}
+.card .tag {
+  background: var(--chip-quiet);
+  color: var(--card-ink-2);
+}
 .link-count {
   display: inline-flex;
   align-items: center;
   gap: 3px;
   margin-left: auto;
-  color: var(--ink-2);
-  font-family: var(--font-mono);
-  font-size: 11px;
+  color: var(--card-ink-2);
+  font-size: 11.5px;
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
   flex: none;
 }
 .link-count.is-stale {
@@ -178,7 +206,7 @@
   line-height: 20px;
 }
 .frame .title-editor {
-  font-size: 13px;
+  font-size: 14px;
   line-height: 18px;
   height: 26px;
   padding: 3px 4px;
@@ -190,7 +218,7 @@
   height: 10px;
   min-width: 0;
   min-height: 0;
-  border: 1.5px solid var(--ink-2);
+  border: 1.5px solid var(--card-label, var(--ink-2));
   border-radius: 50%;
   background: var(--card);
   opacity: 0;
@@ -218,10 +246,10 @@
   border: 0;
   border-radius: 5px;
   background: transparent;
-  color: var(--ink-3);
+  color: inherit;
 }
 .pin-badge:hover {
-  background: var(--hover);
+  background: var(--chip-quiet);
   color: var(--ink);
 }
 .peer-outline {
@@ -245,13 +273,27 @@
   white-space: nowrap;
 }
 
+/* Connections out of sight in the quiet view: a glyph and a count. */
+.quiet-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 22px;
+  padding: 0 4px;
+  color: inherit;
+  font-size: 11.5px;
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+
 /* Made by an agent: a quiet glyph at the end of the label row. */
 .author-mark {
   display: grid;
   place-items: center;
   width: 22px;
   height: 22px;
-  color: var(--ink-3);
+  color: inherit;
   flex: none;
 }
 
@@ -268,7 +310,7 @@
   animation: recent-life var(--recent-ms, 8000ms) linear both;
 }
 .frame .recent-outline {
-  border-radius: 19px;
+  border-radius: 23px;
 }
 .recent-chip {
   /* Sits on the right of the label row, over the pin and author marks while it lasts,
@@ -328,8 +370,9 @@
   position: relative;
   width: 100%;
   height: 100%;
-  border: 1px solid var(--line);
-  border-radius: 16px;
+  /* A region, not a box: a soft patch of canvas, darker where frames nest. */
+  border: 1px solid transparent;
+  border-radius: 20px;
   background: var(--frame-bg);
   transition:
     border-color var(--dur) var(--ease),
@@ -360,8 +403,9 @@
 }
 .frame-title {
   min-width: 0;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 650;
+  letter-spacing: -0.008em;
   color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
@@ -373,10 +417,11 @@
   height: 18px;
   padding: 0 6px;
   border-radius: 999px;
-  background: var(--sunken);
+  background: var(--chip-quiet);
   color: var(--ink-2);
-  font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
   line-height: 18px;
   text-align: center;
 }
@@ -385,7 +430,7 @@
   margin-left: auto;
 }
 .frame .peer-outline {
-  border-radius: 20px;
+  border-radius: 24px;
 }
 
 .react-flow__resize-control.handle.frame-resize-handle {

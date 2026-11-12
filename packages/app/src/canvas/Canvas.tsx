@@ -15,9 +15,10 @@ import {
   ReactFlow,
   SelectionMode,
   useReactFlow,
+  useStore,
   useStoreApi,
 } from '@xyflow/react';
-import { type DragEvent, type MouseEvent, useCallback } from 'react';
+import { type DragEvent, type MouseEvent, useCallback, useEffect, useRef } from 'react';
 import { moveOps } from '../lib/commands.js';
 import type { FlowEdge, FlowNode } from '../lib/flow.js';
 import { absoluteRect, center, frameAt } from '../lib/geometry.js';
@@ -46,6 +47,11 @@ const PAN_BUTTONS = [1, 2];
 const FIT_OPTIONS = { padding: 0.15, maxZoom: 1 };
 /** A node revealed by keyboard keeps at least this much room to the edge of the view. */
 const REVEAL_MARGIN = 48;
+/** The pointer rests on a node this long before its quiet connections show, so a sweep across the board draws none. */
+const HOVER_REST_MS = 90;
+/** The grid, and the coarser one that takes over when zoomed far out. */
+const GRID_GAP = 32;
+const GRID_FAR = { below: 0.4, gap: 160 };
 
 export interface CanvasProps {
   actions: BoardActions;
@@ -202,6 +208,28 @@ export function Canvas({
     presence.setCursor(null);
   }, [ui, presence]);
 
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const onNodeMouseEnter = useCallback(
+    (_event: MouseEvent, node: FlowNode) => {
+      clearTimeout(hoverTimer.current);
+      hoverTimer.current = setTimeout(() => ui.hoverNode.set(node.id), HOVER_REST_MS);
+    },
+    [ui],
+  );
+  const onNodeMouseLeave = useCallback(() => {
+    clearTimeout(hoverTimer.current);
+    ui.hoverNode.set(null);
+  }, [ui]);
+  useEffect(
+    () => () => {
+      clearTimeout(hoverTimer.current);
+      ui.hoverNode.set(null);
+    },
+    [ui],
+  );
+
+  const farOut = useStore((s) => s.transform[2] < GRID_FAR.below);
+
   return (
     <div
       className={`canvas-root${editable ? '' : ' is-readonly'}`}
@@ -227,6 +255,8 @@ export function Canvas({
         nodesConnectable={editable}
         onMouseMove={readOnly ? undefined : onMouseMove}
         onMouseLeave={readOnly ? undefined : onMouseLeave}
+        onNodeMouseEnter={onNodeMouseEnter}
+        onNodeMouseLeave={onNodeMouseLeave}
         onMoveStart={onMoveStart}
         connectionMode={ConnectionMode.Loose}
         connectionRadius={28}
@@ -252,10 +282,10 @@ export function Canvas({
         colorMode={resolved}
       >
         <Background
-          variant={BackgroundVariant.Dots}
-          gap={24}
-          size={1.3}
-          color="var(--dot)"
+          variant={BackgroundVariant.Lines}
+          gap={farOut ? GRID_FAR.gap : GRID_GAP}
+          lineWidth={1}
+          color="var(--grid)"
           bgColor="var(--canvas)"
         />
         {!readOnly && <Cursors />}

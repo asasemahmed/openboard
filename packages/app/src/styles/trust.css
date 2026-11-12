@@ -343,7 +343,7 @@
   pointer-events: none;
 }
 .frame .ask-outline {
-  border-radius: 19px;
+  border-radius: 23px;
 }
 .ask-tag {
   position: absolute;
@@ -372,7 +372,7 @@
   pointer-events: none;
 }
 .frame .pointer-outline {
-  border-radius: 21px;
+  border-radius: 25px;
 }
 
 /* A frame's agent access, in its title bar. */

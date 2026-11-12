@@ -45,6 +45,13 @@ const PATHS = {
   fit: (
     <path d="M2.5 6V3.5a1 1 0 011-1H6M10 2.5h2.5a1 1 0 011 1V6M13.5 10v2.5a1 1 0 01-1 1H10M6 13.5H3.5a1 1 0 01-1-1V10" />
   ),
+  connection: (
+    <>
+      <circle cx="3.75" cy="11.75" r="1.75" />
+      <circle cx="12.25" cy="4.25" r="1.75" />
+      <path d="M5.5 11.75c3.75 0 1.25-7.5 5-7.5" />
+    </>
+  ),
   minimap: (
     <>
       <rect x="2" y="3" width="12" height="10" rx="1.5" />

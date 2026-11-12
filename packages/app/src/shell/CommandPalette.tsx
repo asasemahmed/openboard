@@ -137,6 +137,17 @@ export function CommandPalette() {
         run: actions.fit,
       },
       {
+        id: 'connections',
+        group: 'Commands',
+        label:
+          ui.connections.get() === 'all'
+            ? 'Show agent-made connections only when pointed at'
+            : 'Show every connection',
+        lead: icon('connection'),
+        keywords: 'edges lines links hide quiet',
+        run: () => ui.connections.set(ui.connections.get() === 'all' ? 'quiet' : 'all'),
+      },
+      {
         id: 'minimap',
         group: 'Commands',
         label: ui.minimap.get() ? 'Hide mini map' : 'Show mini map',

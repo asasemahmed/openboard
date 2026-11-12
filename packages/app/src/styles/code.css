@@ -394,7 +394,7 @@
   border-style: dotted;
 }
 .frame .diff-outline {
-  border-radius: 18px;
+  border-radius: 22px;
 }
 .diff-chip {
   display: inline-flex;

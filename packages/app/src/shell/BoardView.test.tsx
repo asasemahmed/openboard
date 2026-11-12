@@ -26,7 +26,7 @@ describe('BoardView', () => {
     const risk = container.querySelector('[data-id="risk1"]') as HTMLElement;
     expect(risk).not.toBeNull();
     const card = within(risk);
-    expect(card.getByText('risk')).toBeTruthy();
+    expect(card.getByText('Risk')).toBeTruthy();
     expect(card.getByText('Double charge on retry')).toBeTruthy();
     expect(card.getByText('If the gateway times out we may retry twice.')).toBeTruthy();
     expect(card.getByText('In progress')).toBeTruthy();
@@ -34,11 +34,55 @@ describe('BoardView', () => {
     expect(card.getByText('+1')).toBeTruthy();
 
     const task = within(container.querySelector('[data-id="task1"]') as HTMLElement);
-    expect(task.getByText('task')).toBeTruthy();
+    expect(task.getByText('Task')).toBeTruthy();
     expect(task.getByText('Done')).toBeTruthy();
 
     const frame = within(container.querySelector('[data-id="outer"]') as HTMLElement);
     expect(frame.getByText('Release')).toBeTruthy();
+    session.destroy();
+  });
+
+  it("keeps an agent's connections out of sight until their card is selected", () => {
+    const { container, session } = mount();
+    const drawn = () => container.querySelectorAll('path.board-edge').length;
+    // Both sample edges were made by the agent.
+    expect(drawn()).toBe(0);
+    const risk = within(container.querySelector('[data-id="risk1"]') as HTMLElement);
+    expect(risk.getByRole('img', { name: /2 connections made by an agent/ })).toBeTruthy();
+
+    act(() => session.store.select(['task1']));
+    expect(drawn()).toBe(1);
+    act(() => session.store.select(['risk1']));
+    expect(drawn()).toBe(2);
+    act(() => session.store.clearSelection());
+    expect(drawn()).toBe(0);
+
+    act(() => session.ui.hoverNode.set('note1'));
+    expect(drawn()).toBe(1);
+    act(() => session.ui.hoverNode.set(null));
+
+    act(() => session.ui.connections.set('all'));
+    expect(drawn()).toBe(2);
+    expect(risk.queryByRole('img', { name: /connections made by an agent/ })).toBeNull();
+    act(() => session.ui.connections.set('quiet'));
+    session.destroy();
+  });
+
+  it('always draws a connection a person made', () => {
+    const { container, session } = mount();
+    act(() => {
+      session.doc.apply(
+        [
+          {
+            op: 'add_edge',
+            id: 'e3',
+            edge: { type: 'depends_on', source: 'task1', target: 'note1' },
+          },
+        ],
+        { actor: ME },
+      );
+    });
+    expect(container.querySelectorAll('path.board-edge')).toHaveLength(1);
     session.destroy();
   });
 

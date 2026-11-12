@@ -17,6 +17,15 @@ export type ConfirmRequest = {
  */
 export type FollowState = 'off' | 'on' | 'paused';
 
+/**
+ * Which connections the canvas draws. `quiet` keeps the ones an agent made
+ * out of sight until the card they belong to is pointed at or selected, so a
+ * board an agent built reads as cards first; the ones people draw always show.
+ */
+export type ConnectionsMode = 'quiet' | 'all';
+const isConnectionsMode = (value: unknown): value is ConnectionsMode =>
+  value === 'quiet' || value === 'all';
+
 const NONE: readonly string[] = Object.freeze([]);
 
 /** Below this width the inspector overlays the canvas, so it starts closed. */
@@ -30,6 +39,11 @@ export class UiStore {
   readonly palette = new Value<{ open: boolean; query: string }>({ open: false, query: '' });
   readonly shortcuts = new Value(false);
   readonly minimap = new Value(readStored('minimap', isBoolean) ?? false);
+  readonly connections = new Value<ConnectionsMode>(
+    readStored('connections', isConnectionsMode) ?? 'quiet',
+  );
+  /** The node under the pointer, once it has rested there for a moment. */
+  readonly hoverNode = new Value<string | null>(null);
   readonly confirm = new Value<ConfirmRequest | null>(null);
   readonly newBoard = new Value(false);
   readonly connectAgent = new Value(false);
@@ -77,6 +91,7 @@ export class UiStore {
       if (this.readOnly && this.editing.get() !== null) this.editing.set(null);
     });
     this.minimap.subscribe(() => writeStored('minimap', this.minimap.get()));
+    this.connections.subscribe(() => writeStored('connections', this.connections.get()));
     // Pausing is not a preference; only on and off are remembered.
     this.follow.subscribe(() => writeStored('follow', this.follow.get() !== 'off'));
   }

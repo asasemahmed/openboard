@@ -1,8 +1,11 @@
 /**
  * The one edge component. Endpoints float to the facing sides of the two
- * nodes; type is shown by dash, end marker and a small mono label. An edge
- * that would run under another card takes a step path around it instead
- * (see `lib/edgeRoute.ts`).
+ * nodes; type is shown by dash, end marker and a small label. An edge that
+ * would run under another card takes a step path around it instead (see
+ * `lib/edgeRoute.ts`).
+ *
+ * In the quiet view (`ui.connections`) an edge an agent made is not drawn
+ * until one of its two cards is pointed at or selected.
  */
 import {
   BaseEdge,
@@ -14,13 +17,14 @@ import {
   useInternalNode,
 } from '@xyflow/react';
 import { memo } from 'react';
+import { isQuietEdge } from '../lib/connections.js';
 import { edgeEnds, type Side } from '../lib/edgeGeometry.js';
 import { chooseRoute, detourPath, parseRouteKey, routeKey } from '../lib/edgeRoute.js';
-import { edgeMeta } from '../lib/edgeTypes.js';
+import { DEFAULT_EDGE_TYPE, edgeMeta } from '../lib/edgeTypes.js';
 import type { FlowEdge } from '../lib/flow.js';
 import { absoluteRect, type PlacementMap, type Rect } from '../lib/geometry.js';
 import { useSession } from '../state/context.js';
-import { useStoreValue } from '../state/emitter.js';
+import { useStoreValue, useValue } from '../state/emitter.js';
 import { useTypes } from '../state/schema.js';
 import { type MarkerTone, markerUrl } from './EdgeMarkers.js';
 
@@ -81,8 +85,22 @@ function useRouteKey(source: string, target: string, enabled: boolean): string {
   });
 }
 
+/** True while the pointer rests on, or the selection holds, one of the edge's two nodes. */
+function useEndInFocus(source: string, target: string): boolean {
+  const { store, ui } = useSession();
+  const pointed = useStoreValue(ui.hoverNode, () => {
+    const id = ui.hoverNode.get();
+    return id !== null && (id === source || id === target);
+  });
+  const selected = useStoreValue(store, () => {
+    const ids = store.getSelection().nodeIds;
+    return ids.includes(source) || ids.includes(target);
+  });
+  return pointed || selected;
+}
+
 function BoardEdgeView({ id, source, target, data, selected }: EdgeProps<FlowEdge>) {
-  const { store, activity } = useSession();
+  const { store, activity, ui } = useSession();
   const sourceNode = useInternalNode(source);
   const targetNode = useInternalNode(target);
   const ghost = data?.ghost ?? false;
@@ -92,7 +110,16 @@ function BoardEdgeView({ id, source, target, data, selected }: EdgeProps<FlowEdg
     ghost ? undefined : store.review().edgeMarks.get(id)?.kind,
   );
   const declared = useTypes().edge;
+  const quietView = useValue(ui.connections) === 'quiet';
+  const inFocus = useEndInFocus(source, target);
+  const heldBack = useStoreValue(
+    store,
+    () => data !== undefined && isQuietEdge(data.edge, store.meta.actors),
+  );
   if (!sourceNode || !targetNode || !data) return null;
+  // Anything the person is acting on, or is being asked about, is always drawn.
+  const called = ghost || selected || inFocus || recent !== undefined || proposed !== undefined;
+  if (quietView && heldBack && !called) return null;
 
   const edge = data.edge;
   const meta = edgeMeta(edge.type, declared.get(edge.type));
@@ -114,7 +141,12 @@ function BoardEdgeView({ id, source, target, data, selected }: EdgeProps<FlowEdg
       targetPosition: POSITION[ends.targetSide],
     });
   }
-  const tone: MarkerTone = ghost || selected ? 'accent' : meta.tone;
+  const revealed = quietView && heldBack && !ghost;
+  // A connection that was called up is what the person is looking at, so it is never the faint tone.
+  const tone: MarkerTone =
+    ghost || selected ? 'accent' : revealed && meta.tone === 'muted' ? 'ink' : meta.tone;
+  // A plain line says "these belong together" on its own; only a named or typed one needs words.
+  const worded = edge.type !== DEFAULT_EDGE_TYPE || Boolean(edge.label) || selected || ghost;
   const dash = ghost ? '6 5' : meta.dash;
   const recentClass = `${recent ? ' is-recent' : ''}${
     proposed === 'remove'
@@ -133,7 +165,7 @@ function BoardEdgeView({ id, source, target, data, selected }: EdgeProps<FlowEdg
         path={path}
         markerEnd={markerUrl(meta.marker, tone)}
         interactionWidth={18}
-        className={`board-edge edge-${meta.tone}${selected ? ' is-selected' : ''}${ghost ? ' is-ghost' : ''}${recentClass}`}
+        className={`board-edge edge-${meta.tone}${selected ? ' is-selected' : ''}${ghost ? ' is-ghost' : ''}${revealed ? ' is-revealed' : ''}${recentClass}`}
         style={{
           stroke: `var(--edge-${tone})`,
           strokeWidth: selected ? meta.width + 0.75 : meta.width,
@@ -145,7 +177,7 @@ function BoardEdgeView({ id, source, target, data, selected }: EdgeProps<FlowEdg
         <button
           key={recent?.at ?? 'label'}
           type="button"
-          className={`edge-label nodrag nopan${selected ? ' is-selected' : ''}${ghost ? ' is-ghost' : ''}${recentClass}`}
+          className={`edge-label nodrag nopan${selected ? ' is-selected' : ''}${ghost ? ' is-ghost' : ''}${revealed ? ' is-revealed' : ''}${worded ? '' : ' is-wordless'}${recentClass}`}
           style={{
             transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
             ...recentStyle,
