@@ -141,7 +141,7 @@ describe('toSvg', () => {
     const svg = toSvg(board);
     for (const id of Object.keys(board.nodes)) expect(svg).toContain(`data-id="${id}"`);
     expect(svg.match(/marker-end=/g)).toHaveLength(Object.keys(board.edges).length);
-    expect(svg).toContain('>TASK</text>');
+    expect(svg).toContain('>Task</text>');
     expect(svg).toContain('>in progress</text>');
     // Long titles wrap to two lines and are cut with an ellipsis when even that is too long.
     expect(svg).toContain('>Do we need 3-D Secure for</text>');
@@ -155,7 +155,7 @@ describe('toSvg', () => {
     const ids = (svg: string) => [...svg.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]);
     const shared = ids(a).filter((id) => ids(b).includes(id));
     expect(shared).toEqual([]);
-    expect(toSvg(showcaseBoard(), { idPrefix: 'pr42' })).toContain('id="pr42-dots"');
+    expect(toSvg(showcaseBoard(), { idPrefix: 'pr42' })).toContain('id="pr42-grid"');
   });
 
   it('uses the theme colours', () => {
@@ -163,9 +163,36 @@ describe('toSvg', () => {
     const dark = toSvg(showcaseBoard(), { theme: 'dark' });
     expect(light).toContain(`fill="${LIGHT_THEME.canvas}"`);
     expect(light).toContain(`fill="${LIGHT_THEME.types.task}"`);
+    // A card is filled with its type's tint, and the glyph is drawn in the label colour.
+    expect(light).toContain(`fill="${LIGHT_THEME.fills.task}"`);
+    expect(light).toContain(`stroke="${LIGHT_THEME.types.task}"`);
+    expect(dark).toContain(`fill="${DARK_THEME.fills.task}"`);
     expect(dark).toContain(`fill="${DARK_THEME.canvas}"`);
     expect(dark).toContain(`fill="${DARK_THEME.types.task}"`);
     expect(dark).not.toContain(LIGHT_THEME.canvas);
+  });
+
+  it('words a typed or named connection and leaves a plain one bare', () => {
+    const nodes = ['a', 'b', 'c', 'd'].map((id, i) => ({
+      op: 'add_node' as const,
+      id: `n_${id}`,
+      node: { type: 'note', title: `Card ${id}`, view: { x: i * 400, y: 0 } },
+    }));
+    const svg = toSvg(
+      build([
+        ...nodes,
+        { op: 'add_edge', edge: { type: 'relates_to', source: 'n_a', target: 'n_b' } },
+        { op: 'add_edge', edge: { type: 'blocks', source: 'n_b', target: 'n_c' } },
+        {
+          op: 'add_edge',
+          edge: { type: 'relates_to', source: 'n_c', target: 'n_d', label: 'same team' },
+        },
+      ]),
+    );
+    expect(svg.match(/marker-end=/g)).toHaveLength(3);
+    expect(svg).toContain('>blocks</text>');
+    expect(svg).toContain('>same team</text>');
+    expect(svg).not.toContain('>relates to</text>');
   });
 
   it('renders an empty board as a small placeholder', () => {
