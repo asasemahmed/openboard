@@ -1,0 +1,28 @@
+{
+  "name": "openboard",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The open canvas for AI agents.",
+  "license": "MIT",
+  "bin": {
+    "openboard": "./dist/bin.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@openboard/core": "workspace:*",
+    "@openboard/mcp": "workspace:*",
+    "@openboard/sdk": "workspace:*",
+    "@openboard/server": "workspace:*",
+    "commander": "^15.1.0",
+    "open": "^10.2.0"
+  }
+}

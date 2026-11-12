@@ -1,0 +1,23 @@
+{
+  "name": "@openboard/mcp",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "MCP server that exposes an OpenBoard to AI agents.",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@openboard/core": "workspace:*",
+    "@openboard/sdk": "workspace:*",
+    "zod": "^4.6.7"
+  }
+}

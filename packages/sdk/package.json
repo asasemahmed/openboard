@@ -1,0 +1,20 @@
+{
+  "name": "@openboard/sdk",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "TypeScript client for a running OpenBoard server.",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@openboard/core": "workspace:*"
+  }
+}
