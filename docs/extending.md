@@ -79,7 +79,8 @@ Each card type has one OKLCH hue, `--tone-h`, in its `.tone-*` class in
 [`tokens.css`](../packages/app/src/styles/tokens.css). Theme tokens turn that hue into
 the card fill (`--fill-l`, `--fill-c`), its edge (`--fill-line-l`, `--fill-line-c`),
 and the type label (`--label-l`, `--label-c`). `l` controls lightness and `c` controls
-chroma. `--tone-cx` scales the chroma for a particular type and defaults to 1.
+chroma. `--tone-cx` scales the fill and edge chroma for a particular type and
+defaults to 1; the label multiplier is capped at 1.
 The light theme uses pale fills and dark labels; the dark theme reverses their
 lightness. Both the system dark-theme block and the explicit dark-theme block
 define the same tokens.
@@ -97,7 +98,7 @@ themes. Palette tokens used on neutral surfaces must also meet **4.5:1** against
 `--card` (and, for declared-type colours, `--sunken`). Check the rendered colours,
 including any chroma scaling, rather than assuming the shared lightness guarantees
 contrast. Adding a new name to the declared-type colour vocabulary also requires
-updating `TYPE_COLORS` in core and the declared-colour export mapping.
+updating `TYPE_COLORS` in core.
 
 ## Project templates
 
