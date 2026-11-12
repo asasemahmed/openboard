@@ -1,13 +1,9 @@
-## What changed
+## What changed and why
 
-<!-- Link the related issue, if any. -->
+<!-- A few sentences are enough. Link the issue, for example "Fixes #12". -->
 
-## Why
+## How I checked it
 
-## How it was checked
+<!-- For example: pnpm test, pnpm lint, pnpm typecheck, or what you tried by hand. -->
 
-<!-- List the checks you ran and their results, including any limitations. -->
-
-## Contribution terms
-
-- [ ] I agree to the [contribution terms](https://github.com/asasemahmed/openboard/blob/main/CONTRIBUTING.md#licensing-your-contribution).
+- [ ] I agree to the [contribution terms](https://github.com/asasemahmed/openboard/blob/main/CONTRIBUTING.md#the-contribution-terms-in-short).

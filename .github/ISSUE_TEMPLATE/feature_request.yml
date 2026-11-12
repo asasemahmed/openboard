@@ -1,22 +1,18 @@
 name: Feature request
-description: Propose an improvement to working with people and agents on a board.
+description: Suggest something OpenBoard should do.
 body:
   - type: markdown
     attributes:
-      value: For vulnerabilities, follow [SECURITY.md](https://github.com/asasemahmed/openboard/blob/main/SECURITY.md) instead of opening a public issue.
+      value: Not sure yet, or want to talk it through first? Start a [discussion](https://github.com/asasemahmed/openboard/discussions) instead.
   - type: textarea
     id: problem
     attributes:
-      label: Problem or use case
+      label: What do you want to do?
+      description: What you are trying to do, and what gets in the way today.
     validations:
       required: true
   - type: textarea
     id: proposal
     attributes:
-      label: Proposed change
-    validations:
-      required: true
-  - type: textarea
-    id: alternatives
-    attributes:
-      label: Alternatives considered
+      label: How could it work?
+      description: Optional. An idea of the change, or how other tools do it.

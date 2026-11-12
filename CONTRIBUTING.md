@@ -1,53 +1,52 @@
 # Contributing to OpenBoard
 
-OpenBoard is developed in the open under the [PolyForm Noncommercial License 1.0.0](LICENSE): free to use, change and share for personal and other noncommercial purposes.
+Thanks for helping. You do not need to know the whole codebase: most issues touch one or two files, and each one says where to look.
 
-Before you send a contribution, read [Licensing your contribution](#licensing-your-contribution): sending one means you agree to it.
+## Your first contribution
 
-## Licensing your contribution
+1. **Pick something.** Start with a [`good first issue`](https://github.com/asasemahmed/openboard/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22), or [`help wanted`](https://github.com/asasemahmed/openboard/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22) for something bigger. Have an idea instead? Start a [discussion](https://github.com/asasemahmed/openboard/discussions).
+2. **Say you are on it.** Leave a comment on the issue, so two people do not build the same thing.
+3. **Set it up.** You need Node.js 22 or newer:
 
-Anyone may use OpenBoard under the PolyForm Noncommercial License, and its maintainer may also offer it under separate commercial licenses. So that your work can be part of both, by submitting a contribution (a pull request, a patch, or any other material you send to this repository) you agree that:
+   ```bash
+   git clone https://github.com/asasemahmed/openboard.git
+   cd openboard
+   corepack enable
+   pnpm install
+   pnpm build
+   ```
 
-1. **You keep your copyright.** You remain the owner of what you wrote.
-2. **You grant the maintainer a license to it.** You grant the maintainer of OpenBoard (the owner of [github.com/asasemahmed/openboard](https://github.com/asasemahmed/openboard)) and anyone the project is later transferred to a perpetual, worldwide, non-exclusive, royalty-free, irrevocable license to use, copy, change, distribute and sublicense your contribution, and to license it under any terms, including the PolyForm Noncommercial License and commercial licenses.
-3. **Patents are covered too.** If you hold patents that your contribution would infringe, you grant the same people a license under them to make, use, sell and distribute your contribution as part of OpenBoard.
-4. **You have the right to send it.** The contribution is your own work, or you have the right to submit it under these terms. If an employer or anyone else has rights to what you create, you have their permission.
+   If `corepack enable` is not allowed on your machine, put `corepack` in front of every `pnpm` command instead (`corepack pnpm install`).
 
-If you do not agree, do not submit the contribution. These terms do not change how you or anyone else may use OpenBoard.
+4. **Make the change.** Keep it small: one idea per pull request. Before you send it, run:
 
-## Ground rules
+   ```bash
+   pnpm test
+   pnpm lint        # pnpm format fixes most of what it finds
+   pnpm typecheck
+   ```
 
-- **Nothing private in git.** No secrets, tokens, credentials, internal URLs, or personal data — in files or in commit messages. The history is public.
-- **No third-party material without a compatible license.** That includes images, copied docs, and pasted code.
-- **Research stays local.** The `research/` folder is ignored by git on purpose.
+5. **Open a pull request.** Say what you changed and how you checked it, and tick the box for the [contribution terms](#the-contribution-terms-in-short). A draft pull request is fine if you want early feedback.
 
-## Where to start
+Stuck, or not sure what is wanted? Ask in the issue or in a discussion. No question is too small.
 
-- Pick an [open issue](https://github.com/asasemahmed/openboard/issues). `good first issue` marks small, well-scoped work; `help wanted` marks work nobody has taken.
-- Comment on the issue before you start, so two people do not build the same thing. For anything larger than the issue describes, say how you plan to do it first.
-- Found a bug or want something that has no issue? Open one. For a bug, include what you did, what you expected, and what happened.
-- Have an idea that is not a clear task yet, or a question? Start a [discussion](https://github.com/asasemahmed/openboard/discussions) first.
-- Report security problems privately, as [SECURITY.md](SECURITY.md) describes, not in a public issue.
+## Three rules
 
-## Working on the project
+- **Nothing private.** No secrets, tokens, passwords or personal data, in files or in commit messages. The history is public.
+- **Only what you may share.** Your own work, or material under a license that allows it (images, docs and code included).
+- **Security problems go private.** Report them as [SECURITY.md](SECURITY.md) describes, not in a public issue.
 
-- Keep changes small and focused. One idea per pull request.
-- Every feature should serve the loop between a human and their agents. If it does not, it probably belongs in a plugin.
+## The contribution terms, in short
 
-## Commits
+OpenBoard is free for noncommercial use under the [PolyForm Noncommercial License](LICENSE), and its maintainer may also sell commercial licenses. When you send a contribution:
 
-Write commit messages that say what changed and why, in the imperative mood: "Add board schema", not "Added" or "Adds".
+- you keep the copyright in your work;
+- you let the maintainer use your work in OpenBoard under any license, paid ones included;
+- you confirm the work is yours to give.
 
-## Development
+That is all. The full wording is below, in [Licensing your contribution](#licensing-your-contribution).
 
-You need Node 22 or newer. The repo uses pnpm through Corepack, so there is nothing else to install:
-
-```bash
-corepack enable
-pnpm install
-pnpm build
-pnpm test
-```
+## Useful commands
 
 | Command          | What it does                    |
 | ---------------- | ------------------------------- |
@@ -59,25 +58,38 @@ pnpm test
 | `pnpm format`    | Fix formatting                  |
 | `pnpm evals`     | Run the agent evaluation suite  |
 
-How the pieces fit together is described in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Read it before making a change that crosses package boundaries.
+To try your change in the browser, run `node packages/cli/dist/bin.js start` in any folder.
 
-## Packages
+## Where things are
 
 | Path                        | What it is                                                                                            |
 | --------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `packages/app`              | The web canvas                                                                                        |
 | `packages/core`             | Schema, operations, the board document, rendering, policy, types, templates, import and export, merge |
 | `packages/server`           | The local board server: sync, persistence, layout, the HTTP API, shared mode, plugins                 |
-| `packages/sdk`              | `BoardApi` over HTTP, for programs that talk to a running server                                      |
 | `packages/mcp`              | The MCP server: the `board_*` tools on top of any `BoardApi`                                          |
-| `packages/app`              | The web canvas                                                                                        |
 | `packages/cli`              | The `openboard` command                                                                               |
+| `packages/sdk`              | `BoardApi` over HTTP, for programs that talk to a running server                                      |
 | `packages/evals`            | The evaluation harness for agents on a board ([docs/evals.md](docs/evals.md))                         |
+| `integrations/`             | Ready-made setups for specific agents                                                                 |
 | `examples/plugin-estimates` | An example server plugin ([docs/extending.md](docs/extending.md))                                     |
 
-## Evaluations
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) explains how the packages fit together. You only need it for a change that crosses packages.
 
-`pnpm evals run` runs every scenario's scripted reference against the real MCP server; each must score 1.0, and `corepack pnpm exec vitest run --project evals` enforces it. Run the suite before and after a change to tool descriptions, rendering, the server instructions or a policy, and with a real agent (`--runner claude-code`) when the change is meant to alter behaviour. See [docs/evals.md](docs/evals.md).
+## Only if you change what agents see
 
-## Tool descriptions are budgeted
+Most contributions can skip this section. It applies when you change an MCP tool, its description, the server instructions, rendering for agents, or a review policy.
 
-Everything in the MCP `tools/list` and the server instructions is sent to the model on every turn of every session, so it is the most expensive text in the project. A test in `packages/mcp` caps `tools/list` at a fixed number of tokens (`TOOLS_LIST_TOKEN_CEILING`). A new tool, parameter or sentence has to fit under it: tighten existing wording rather than raising the ceiling, and do not remove information an agent needs to use a tool correctly. The scripted evaluation suite must still score 1.0 after the change.
+- **Run the evaluations.** `pnpm evals run` runs every scenario against the real MCP server, and each must still score 1.0 (`corepack pnpm exec vitest run --project evals` checks it). If the change is meant to alter how agents behave, run it with a real agent too (`--runner claude-code`). See [docs/evals.md](docs/evals.md).
+- **Keep tool descriptions short.** Tool descriptions and the server instructions are sent to the model on every turn, so a test in `packages/mcp` caps them at a fixed number of tokens (`TOOLS_LIST_TOKEN_CEILING`). If something new does not fit, tighten existing wording rather than raising the cap, without removing what an agent needs.
+
+## Licensing your contribution
+
+Anyone may use OpenBoard under the PolyForm Noncommercial License, and its maintainer may also offer it under separate commercial licenses. So that your work can be part of both, by submitting a contribution (a pull request, a patch, or any other material you send to this repository) you agree that:
+
+1. **You keep your copyright.** You remain the owner of what you wrote.
+2. **You grant the maintainer a license to it.** You grant the maintainer of OpenBoard (the owner of [github.com/asasemahmed/openboard](https://github.com/asasemahmed/openboard)) and anyone the project is later transferred to a perpetual, worldwide, non-exclusive, royalty-free, irrevocable license to use, copy, change, distribute and sublicense your contribution, and to license it under any terms, including the PolyForm Noncommercial License and commercial licenses.
+3. **Patents are covered too.** If you hold patents that your contribution would infringe, you grant the same people a license under them to make, use, sell and distribute your contribution as part of OpenBoard.
+4. **You have the right to send it.** The contribution is your own work, or you have the right to submit it under these terms. If an employer or anyone else has rights to what you create, you have their permission.
+
+If you do not agree, do not submit the contribution. These terms do not change how you or anyone else may use OpenBoard.
