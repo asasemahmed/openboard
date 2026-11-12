@@ -17,6 +17,7 @@ import {
   slugify,
 } from '@openboard/core';
 import { type FSWatcher, watch } from 'chokidar';
+import { AccessStore } from './access.js';
 import { CodeLinks } from './code.js';
 import { ConfigStore } from './config.js';
 import { ensureLocalDir, errorMessage, isErrno } from './fsutil.js';
@@ -47,6 +48,8 @@ export interface BoardsOptions {
   onProposalsStale?: (room: Room) => Promise<void>;
   /** Milliseconds since the epoch for presence, sessions and claims. Injectable for tests. */
   clock?: () => number;
+  /** Shared mode: an access file that does not parse stops the start instead of being ignored. */
+  shared?: boolean;
 }
 
 export class Boards {
@@ -66,6 +69,12 @@ export class Boards {
   readonly code: CodeLinks;
   /** The project's git repository, if any. */
   readonly git: Git;
+  /** Access grants, sessions and tickets (`.openboard/.local/access.json`). */
+  readonly access: AccessStore;
+  /** Whether the server runs in shared mode. */
+  readonly shared: boolean;
+  /** The URL people use to reach the server; set once it listens. Invite links start with it. */
+  publicUrl = '';
   private readonly opts: BoardsOptions & { config: ConfigStore };
 
   constructor(
@@ -82,6 +91,12 @@ export class Boards {
     });
     this.code = new CodeLinks(paths.root, this.log);
     this.git = new Git(paths.root);
+    this.shared = opts.shared === true;
+    this.access = new AccessStore(paths.local, {
+      clock: this.clock,
+      log: this.log,
+      strict: this.shared,
+    });
     this.opts = {
       onProposalsStale: (room) => refreshProposals(room, this.log),
       ...opts,
@@ -93,6 +108,7 @@ export class Boards {
   async start(): Promise<void> {
     await ensureLocalDir(this.paths.local);
     await this.config.load();
+    await this.access.load();
     const watcher = watch(this.paths.dir, {
       depth: 0,
       ignoreInitial: true,
@@ -221,6 +237,11 @@ export class Boards {
     return out;
   }
 
+  /** The boards that are open right now. */
+  openRooms(): Room[] {
+    return [...this.open.values()];
+  }
+
   /** Flush every live board to disk. */
   async flush(): Promise<void> {
     await Promise.all([...this.open.values()].map((room) => room.flush()));
@@ -236,6 +257,7 @@ export class Boards {
     this.watcher = null;
     await Promise.allSettled([...this.rooms.values()]);
     await Promise.all([...this.open.values()].map((room) => room.close()));
+    await this.access.close();
   }
 }
 

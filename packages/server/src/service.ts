@@ -2,19 +2,27 @@
  * `BoardApi` in-process: one session per actor, all sessions sharing the
  * server's live boards. The HTTP routes are a thin layer over this class.
  *
- * "People only" operations check the kind of the calling actor, as declared
- * by the caller (over HTTP, the `x-openboard-actor-kind` header). That is a
- * guard against mistakes, such as an agent accepting its own proposal, not a
- * security boundary: the server has no authentication, and anything that can
- * reach it on loopback can claim to be a person.
+ * Every method first checks the session's role against `API_ACTIONS` (core
+ * access.ts); in-process sessions without a role are the owner.
+ *
+ * "People only" operations check the kind of the calling actor. In local mode
+ * that kind is declared by the caller (the `x-openboard-actor-kind` header), so
+ * it is a guard against mistakes, such as an agent accepting its own proposal,
+ * not a security boundary. In shared mode a remote caller's kind comes from its
+ * access grant, so there it is a real control: an agent grant can never decide
+ * a proposal, answer a question or change settings.
  */
 import {
+  type AccessGrant,
+  type AccessList,
+  type AccessVia,
   type ActivityEvent,
   ActivityEventSchema,
   type Actor,
   ActorSchema,
   type AnswerInput,
   AnswerInputSchema,
+  API_ACTIONS,
   type ApplyRequest,
   ApplyRequestSchema,
   type ApplyResult,
@@ -44,6 +52,7 @@ import {
   CommentInputSchema,
   type CreateBoardInput,
   CreateBoardInputSchema,
+  can,
   checkItems,
   classifyOps,
   type Decision,
@@ -60,6 +69,9 @@ import {
   explainVerdicts,
   findExporter,
   findImporter,
+  forbiddenMessage,
+  type GrantAccessInput,
+  type GrantAccessResult,
   type HistoryOptions,
   HistoryOptionsSchema,
   type HistoryResult,
@@ -106,6 +118,7 @@ import {
   type RevisionsOptions,
   RevisionsOptionsSchema,
   type RevisionsResult,
+  type Role,
   renderAsks,
   renderChanges,
   renderClaims,
@@ -132,6 +145,7 @@ import {
   type UndoRequest,
   UndoRequestSchema,
   type UndoResult,
+  type WhoAmI,
 } from '@openboard/core';
 import { z } from 'zod';
 import type { Boards } from './boards.js';
@@ -209,11 +223,20 @@ export interface SessionOptions {
    * changing something.
    */
   anonymous?: boolean;
+  /** The role every call is checked against. Defaults to `owner`. */
+  role?: Role;
+  /** How the caller authenticated, for `whoami`. Defaults to `local`. */
+  via?: AccessVia;
+  /** The caller's access grant; once it is revoked or expired, every call fails with `unauthorized`. */
+  grantId?: string;
 }
 
 export class LocalBoardApi implements BoardApi {
   readonly actor: Actor;
   readonly session: string | undefined;
+  readonly role: Role;
+  readonly via: AccessVia;
+  readonly grantId: string | undefined;
   private readonly anonymous: boolean;
 
   constructor(
@@ -226,6 +249,27 @@ export class LocalBoardApi implements BoardApi {
     this.session =
       options.session === undefined ? undefined : parseInput(IdSchema, options.session, 'session');
     this.anonymous = options.anonymous === true;
+    this.role = options.role ?? 'owner';
+    this.via = options.via ?? 'local';
+    this.grantId = options.grantId;
+  }
+
+  /**
+   * Refuse a call the session's role does not cover (`forbidden`, naming the
+   * missing permission), or any call once its grant was revoked or expired
+   * (`unauthorized`).
+   */
+  private authorize(method: keyof typeof API_ACTIONS): void {
+    if (this.grantId !== undefined) {
+      const access = this.boards.access;
+      if (!access.isActive(access.get(this.grantId))) {
+        throw new OpenBoardError('unauthorized', 'this access grant was revoked or has expired');
+      }
+    }
+    const action = API_ACTIONS[method];
+    if (action !== null && !can(this.role, action)) {
+      throw new OpenBoardError('forbidden', forbiddenMessage(this.role, action));
+    }
   }
 
   /**
@@ -313,26 +357,31 @@ export class LocalBoardApi implements BoardApi {
   // ── Boards and reading ─────────────────────────────────────────────────────
 
   async listBoards(): Promise<BoardSummary[]> {
+    this.authorize('listBoards');
     return this.boards.list();
   }
 
   async createBoard(input: CreateBoardInput): Promise<BoardSummary> {
+    this.authorize('createBoard');
     const parsed = parseInput(CreateBoardInputSchema, input, 'board');
     const room = await this.boards.create(parsed, this.actor);
     return room.doc.summary();
   }
 
   async getBoard(boardId: string): Promise<Board> {
+    this.authorize('getBoard');
     return (await this.room(boardId)).doc.toJSON();
   }
 
   async outline(boardId: string, options?: OutlineOptions): Promise<Outline> {
+    this.authorize('outline');
     const opts = parseInput(OutlineOptionsSchema, options ?? {}, 'outline options');
     const room = await this.room(boardId);
     return renderOutline(room.doc.toJSON(), room.cursor, opts);
   }
 
   async read(boardId: string, query?: ReadQuery): Promise<ReadResult> {
+    this.authorize('read');
     const q = parseInput(ReadQuerySchema, query ?? {}, 'read query');
     const room = await this.room(boardId);
     const board = room.doc.toJSON();
@@ -353,6 +402,7 @@ export class LocalBoardApi implements BoardApi {
   }
 
   async changes(boardId: string, options: ChangesOptions): Promise<ChangesResult> {
+    this.authorize('changes');
     const opts = parseInput(ChangesOptionsSchema, options, 'changes options');
     const room = await this.room(boardId);
     const cursor = room.cursor;
@@ -373,6 +423,7 @@ export class LocalBoardApi implements BoardApi {
   }
 
   async selection(boardId: string): Promise<SelectionResult> {
+    this.authorize('selection');
     const room = await this.room(boardId);
     const selection = room.humanSelection();
     const result = renderSelection(
@@ -396,6 +447,7 @@ export class LocalBoardApi implements BoardApi {
   // ── Writing ────────────────────────────────────────────────────────────────
 
   async apply(boardId: string, request: ApplyRequest): Promise<ApplyResult> {
+    this.authorize('apply');
     const req = parseInput(ApplyEnvelopeSchema, request, 'apply request');
     // Core validates each operation and reports problems by index.
     // Code links get their hash in the same batch that stores them.
@@ -500,6 +552,7 @@ export class LocalBoardApi implements BoardApi {
   }
 
   async layout(boardId: string, request?: LayoutRequest): Promise<LayoutResult> {
+    this.authorize('layout');
     const req = parseInput(LayoutRequestSchema, request ?? {}, 'layout request');
     const room = await this.room(boardId, 'writing');
     return room.lock.run(async () => {
@@ -568,6 +621,7 @@ export class LocalBoardApi implements BoardApi {
     boardId: string,
     options?: { status?: 'pending' | 'all'; maxTokens?: number },
   ): Promise<ProposalsResult> {
+    this.authorize('proposals');
     const opts = parseInput(ProposalsOptionsSchema, options ?? {}, 'proposals options');
     const room = await this.room(boardId);
     const status = opts.status ?? 'pending';
@@ -589,6 +643,7 @@ export class LocalBoardApi implements BoardApi {
   }
 
   async decideProposal(boardId: string, proposalId: string, decision: Decision): Promise<Proposal> {
+    this.authorize('decideProposal');
     this.requirePerson('deciding on a proposal');
     const input = parseInput(DecisionSchema, decision, 'decision');
     const room = await this.room(boardId, 'writing');
@@ -692,6 +747,7 @@ export class LocalBoardApi implements BoardApi {
   }
 
   async withdrawProposal(boardId: string, proposalId: string): Promise<Proposal> {
+    this.authorize('withdrawProposal');
     const room = await this.room(boardId, 'writing');
     return room.lock.run(async () => {
       const proposal = this.proposalOf(room, proposalId);
@@ -768,6 +824,7 @@ export class LocalBoardApi implements BoardApi {
   // ── History and undo ───────────────────────────────────────────────────────
 
   async history(boardId: string, options?: HistoryOptions): Promise<HistoryResult> {
+    this.authorize('history');
     const opts = parseInput(HistoryOptionsSchema, options ?? {}, 'history options');
     const room = await this.room(boardId);
     const { batches, more } = room.history.list(opts);
@@ -780,6 +837,7 @@ export class LocalBoardApi implements BoardApi {
   }
 
   async undo(boardId: string, request: UndoRequest): Promise<UndoResult> {
+    this.authorize('undo');
     const req = parseInput(UndoRequestSchema, request, 'undo request');
     const room = await this.room(boardId, 'writing');
     return room.lock.run(async () => {
@@ -1055,6 +1113,7 @@ export class LocalBoardApi implements BoardApi {
   // ── Comments and inbox ─────────────────────────────────────────────────────
 
   async comment(boardId: string, input: CommentInput): Promise<Comment> {
+    this.authorize('comment');
     const parsed = parseInput(CommentInputSchema, input, 'comment');
     const room = await this.room(boardId, 'writing');
     const id = newId('c');
@@ -1090,6 +1149,7 @@ export class LocalBoardApi implements BoardApi {
   }
 
   async resolveThread(boardId: string, thread: string, resolved = true): Promise<Comment> {
+    this.authorize('resolveThread');
     const room = await this.room(boardId, 'writing');
     if (typeof resolved !== 'boolean') {
       throw new OpenBoardError('invalid_request', '"resolved" must be true or false');
@@ -1112,6 +1172,7 @@ export class LocalBoardApi implements BoardApi {
   }
 
   async inbox(boardId: string, options?: InboxOptions): Promise<InboxResult> {
+    this.authorize('inbox');
     const opts = parseInput(InboxOptionsSchema, options ?? {}, 'inbox options');
     const room = await this.room(boardId);
     const items = room.inbox.unread(this.actor.id, opts.since);
@@ -1138,6 +1199,7 @@ export class LocalBoardApi implements BoardApi {
   }
 
   async ask(boardId: string, input: AskInput): Promise<Ask> {
+    this.authorize('ask');
     const parsed = parseInput(AskInputSchema, input, 'question');
     const room = await this.room(boardId, 'writing');
     const missing = (parsed.nodeIds ?? []).filter((id) => !room.doc.getNode(id));
@@ -1163,6 +1225,7 @@ export class LocalBoardApi implements BoardApi {
   }
 
   async asks(boardId: string, options?: AsksOptions): Promise<AsksResult> {
+    this.authorize('asks');
     const opts = parseInput(AsksOptionsSchema, options ?? {}, 'questions options');
     const room = await this.room(boardId);
     const status = opts.status ?? 'open';
@@ -1184,6 +1247,7 @@ export class LocalBoardApi implements BoardApi {
     askId: string,
     options?: { waitMs?: number; signal?: AbortSignal },
   ): Promise<Ask> {
+    this.authorize('askResult');
     const { waitMs } = parseInput(AskWaitSchema, { waitMs: options?.waitMs }, 'wait options');
     const room = await this.room(boardId);
     const ask = this.askOf(room, askId);
@@ -1209,6 +1273,7 @@ export class LocalBoardApi implements BoardApi {
   }
 
   async answerAsk(boardId: string, askId: string, answer: AnswerInput): Promise<Ask> {
+    this.authorize('answerAsk');
     this.requirePerson('answering a question');
     const parsed = parseInput(AnswerInputSchema, answer, 'answer');
     const room = await this.room(boardId, 'writing');
@@ -1239,6 +1304,7 @@ export class LocalBoardApi implements BoardApi {
   }
 
   async cancelAsk(boardId: string, askId: string): Promise<Ask> {
+    this.authorize('cancelAsk');
     const room = await this.room(boardId, 'writing');
     const ask = this.askOf(room, askId);
     if (ask.author !== this.actor.id && this.actor.kind !== 'human') {
@@ -1258,11 +1324,13 @@ export class LocalBoardApi implements BoardApi {
   // ── Live work ──────────────────────────────────────────────────────────────
 
   async reportActivity(event: ActivityEvent): Promise<Session> {
+    this.authorize('reportActivity');
     const parsed = parseInput(ActivityEventSchema, event, 'activity event');
     return this.boards.live.report(this.actor, parsed);
   }
 
   async sessions(options?: SessionsOptions): Promise<SessionsResult> {
+    this.authorize('sessions');
     const opts = parseInput(SessionsOptionsSchema, options ?? {}, 'sessions options');
     return renderSessions(this.boards.live.list(opts.includeEnded ?? false), {
       actors: this.boards.live.actors(),
@@ -1272,6 +1340,7 @@ export class LocalBoardApi implements BoardApi {
   }
 
   async claim(boardId: string, request: ClaimRequest): Promise<ClaimResult> {
+    this.authorize('claim');
     const req = parseInput(ClaimRequestSchema, request, 'claim request');
     const room = await this.room(boardId, 'writing');
     return room.lock.run(async () => {
@@ -1350,6 +1419,7 @@ export class LocalBoardApi implements BoardApi {
   }
 
   async snapshotAt(boardId: string, cursor: number): Promise<Board> {
+    this.authorize('snapshotAt');
     const at = parseInput(z.number().int().min(0), cursor, 'cursor');
     const room = await this.room(boardId);
     return room.history.snapshot(room.doc.raw(), at, room.cursor);
@@ -1358,6 +1428,7 @@ export class LocalBoardApi implements BoardApi {
   // ── Code and git ───────────────────────────────────────────────────────────
 
   async links(boardId: string, options?: LinksOptions): Promise<LinksResult> {
+    this.authorize('links');
     const opts = parseInput(LinksOptionsSchema, options ?? {}, 'links options');
     const room = await this.room(boardId);
     let entries = await this.boards.code.entries(room);
@@ -1369,6 +1440,7 @@ export class LocalBoardApi implements BoardApi {
   }
 
   async refreshLinks(boardId: string, request: RefreshLinksRequest): Promise<ApplyResult> {
+    this.authorize('refreshLinks');
     const req = parseInput(RefreshLinksRequestSchema, request, 'refresh request');
     const room = await this.room(boardId, 'writing');
     let nodes: BoardNode[];
@@ -1415,6 +1487,7 @@ export class LocalBoardApi implements BoardApi {
   }
 
   async revisions(boardId: string, options?: RevisionsOptions): Promise<RevisionsResult> {
+    this.authorize('revisions');
     const opts = parseInput(RevisionsOptionsSchema, options ?? {}, 'revisions options');
     const room = await this.room(boardId);
     const file = this.boardFile(room);
@@ -1426,6 +1499,7 @@ export class LocalBoardApi implements BoardApi {
   }
 
   async boardAtRevision(boardId: string, rev: string): Promise<Board> {
+    this.authorize('boardAtRevision');
     const parsed = parseInput(RevisionSchema, rev, 'revision');
     const room = await this.room(boardId);
     const text = await this.boards.git.show(parsed, this.boardFile(room));
@@ -1440,6 +1514,7 @@ export class LocalBoardApi implements BoardApi {
   }
 
   async diffRevisions(boardId: string, request: DiffRequest): Promise<DiffResult> {
+    this.authorize('diffRevisions');
     const req = parseInput(DiffRequestSchema, request, 'diff request');
     const room = await this.room(boardId);
     const before = await this.boardAtRevision(room.id, req.from);
@@ -1456,6 +1531,7 @@ export class LocalBoardApi implements BoardApi {
   }
 
   async importInto(boardId: string, request: ImportRequest): Promise<ImportIntoResult> {
+    this.authorize('importInto');
     const req = parseInput(ImportRequestSchema, request, 'import request');
     const room = await this.room(boardId, req.dryRun ? 'reading' : 'writing');
     const format = req.format ?? detectFormat(req.filename ?? '', req.text);
@@ -1506,6 +1582,7 @@ export class LocalBoardApi implements BoardApi {
   }
 
   async exportBoard(boardId: string, options: ExportOptions): Promise<ExportResult> {
+    this.authorize('exportBoard');
     const opts = parseInput(ExportOptionsSchema, options, 'export options');
     const room = await this.room(boardId);
     const exporter = findExporter(opts.format);
@@ -1536,12 +1613,86 @@ export class LocalBoardApi implements BoardApi {
   // ── Settings ───────────────────────────────────────────────────────────────
 
   async getConfig(): Promise<ProjectConfig> {
+    this.authorize('getConfig');
     return this.boards.config.config;
   }
 
   async setConfig(config: ProjectConfig): Promise<ProjectConfig> {
+    this.authorize('setConfig');
     this.requirePerson('changing the project settings');
     return this.boards.config.set(config);
+  }
+
+  // ── Access ─────────────────────────────────────────────────────────────────
+
+  async whoami(): Promise<WhoAmI> {
+    this.authorize('whoami');
+    const result: WhoAmI = {
+      actor: this.actor,
+      role: this.role,
+      shared: this.boards.shared,
+      via: this.via,
+    };
+    if (this.grantId !== undefined) {
+      result.grantId = this.grantId;
+      const expiresAt = this.boards.access.get(this.grantId)?.expiresAt;
+      if (expiresAt !== undefined) result.expiresAt = expiresAt;
+    }
+    return result;
+  }
+
+  async listAccess(): Promise<AccessList> {
+    this.authorize('listAccess');
+    this.requirePerson('managing access');
+    return { grants: this.boards.access.list() };
+  }
+
+  async grantAccess(input: GrantAccessInput): Promise<GrantAccessResult> {
+    this.authorize('grantAccess');
+    this.requirePerson('managing access');
+    const made = await this.boards.access.grant(input, this.actor);
+    const result: GrantAccessResult = { ...made };
+    if (made.grant.kind === 'human') {
+      result.inviteUrl = `${this.boards.publicUrl.replace(/\/+$/, '')}/join#${made.token}`;
+    }
+    this.log(
+      `access: ${this.actor.id} granted ${made.grant.role} to ${made.grant.kind} grant ${made.grant.id}`,
+    );
+    return result;
+  }
+
+  /**
+   * Revoke a grant. Its sessions end and its sockets close (through the
+   * store's listeners). On every open board its claims are released and its
+   * open questions cancelled, since nobody can collect an answer for it any
+   * more; its pending proposals stay for people to accept or reject.
+   */
+  async revokeAccess(grantId: string): Promise<AccessGrant> {
+    this.authorize('revokeAccess');
+    this.requirePerson('managing access');
+    if (typeof grantId !== 'string') {
+      throw new OpenBoardError('invalid_request', 'the grant id must be a string');
+    }
+    const grant = await this.boards.access.revoke(grantId);
+    const origin = (room: Room) => room.doc.origin(SYSTEM_ACTOR.id, 'ops');
+    for (const room of this.boards.openRooms()) {
+      await room.lock.run(() => {
+        const claims = room.doc.claims().filter((claim) => claim.by === grant.actorId);
+        if (claims.length > 0) {
+          room.doc.deleteClaims(
+            claims.map((claim) => claim.nodeId),
+            origin(room),
+          );
+        }
+        for (const ask of room.doc.asks()) {
+          if (ask.author === grant.actorId && ask.status === 'open') {
+            room.doc.putAsk({ ...ask, status: 'cancelled' }, origin(room));
+          }
+        }
+      });
+    }
+    this.log(`access: ${this.actor.id} revoked grant ${grant.id}`);
+    return grant;
   }
 }
 
