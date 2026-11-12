@@ -41,6 +41,7 @@ export const SHORTCUTS: ShortcutDef[] = [
   { keys: ['escape'], label: 'Deselect, close', group: 'Select' },
   { keys: ['mod+k'], label: 'Search and commands', group: 'View' },
   { keys: ['shift+1'], label: 'Fit the board in view', group: 'View' },
+  { keys: ['c'], label: 'Show or hide all connections', group: 'View' },
   { keys: ['?'], label: 'Show shortcuts', group: 'View' },
 ];
 
@@ -80,6 +81,9 @@ export function useShortcuts(actions: BoardActions): void {
       if (is('?')) return run(() => ui.shortcuts.set(true));
       if (is('mod+a')) return run(() => store.selectAll());
       if (is('shift+1')) return run(actions.fit);
+      if (is('c')) {
+        return run(() => ui.connections.set(ui.connections.get() === 'all' ? 'quiet' : 'all'));
+      }
       if (is('escape')) {
         return run(() => {
           if (ui.editing.get()) ui.editing.set(null);

@@ -123,6 +123,38 @@ describe('BoardView', () => {
     session.destroy();
   });
 
+  it('toggles every connection with C without changing the board', () => {
+    const { container, session } = mount();
+    act(() => session.ui.connections.set('quiet'));
+    const before = session.store.nodeCount;
+    expect(container.querySelectorAll('path.board-edge')).toHaveLength(0);
+    fireEvent.keyDown(window, { key: 'c' });
+    expect(session.ui.connections.get()).toBe('all');
+    expect(container.querySelectorAll('path.board-edge')).toHaveLength(2);
+    fireEvent.keyDown(window, { key: 'c' });
+    expect(session.ui.connections.get()).toBe('quiet');
+    expect(container.querySelectorAll('path.board-edge')).toHaveLength(0);
+    expect(session.store.nodeCount).toBe(before);
+    session.destroy();
+  });
+
+  it('keeps C inert while typing, composing, or a modal is open', () => {
+    const { container, session } = mount();
+    act(() => session.ui.connections.set('quiet'));
+    const input = document.createElement('input');
+    container.append(input);
+    fireEvent.keyDown(input, { key: 'c' });
+    expect(session.ui.connections.get()).toBe('quiet');
+    fireEvent.keyDown(window, { key: 'c', isComposing: true });
+    expect(session.ui.connections.get()).toBe('quiet');
+    fireEvent.keyDown(window, { key: 'c', ctrlKey: true });
+    expect(session.ui.connections.get()).toBe('quiet');
+    act(() => session.ui.shortcuts.set(true));
+    fireEvent.keyDown(window, { key: 'c' });
+    expect(session.ui.connections.get()).toBe('quiet');
+    session.destroy();
+  });
+
   it('marks nodes an agent created, and leaves people’s nodes unmarked', () => {
     const { container, session } = mount();
     act(() => {
