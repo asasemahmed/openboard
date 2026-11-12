@@ -112,6 +112,19 @@ export function fakeApi(overrides: Partial<ApiClient> = {}): ApiClient {
     diff: vi.fn(),
     importInto: vi.fn(),
     exportBoard: vi.fn(),
+    whoami: vi.fn(async () => ({
+      actor: ME,
+      role: 'owner' as const,
+      shared: false,
+      via: 'local' as const,
+    })),
+    signIn: vi.fn(),
+    signOut: vi.fn(async () => {}),
+    listAccess: vi.fn(async () => ({ grants: [] })),
+    grantAccess: vi.fn(),
+    revokeAccess: vi.fn(),
+    comment: vi.fn(),
+    resolveThread: vi.fn(),
     ...overrides,
   };
 }

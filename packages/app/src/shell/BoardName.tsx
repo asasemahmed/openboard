@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useCan } from '../state/access.js';
 import { useMeta, useSession } from '../state/context.js';
 import { toasts } from '../state/toasts.js';
 
@@ -7,6 +8,7 @@ export function BoardName() {
   const session = useSession();
   const { meta } = useMeta();
   const [editing, setEditing] = useState(false);
+  const canEdit = useCan('board.edit');
   const [value, setValue] = useState(meta.name);
 
   const commit = () => {
@@ -40,6 +42,7 @@ export function BoardName() {
       />
     );
   }
+  if (!canEdit) return <h1 className="board-name board-name-static">{meta.name}</h1>;
   return (
     <button
       type="button"

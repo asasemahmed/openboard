@@ -2,6 +2,7 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
 import { ApiError } from '../lib/api.js';
 import { navigate } from '../lib/router.js';
+import { canNow, signedOut } from '../state/access.js';
 import { api, boards, rememberBoard, useBoards } from '../state/boards.js';
 import { useStoreValue } from '../state/emitter.js';
 import { currentActor } from '../state/identity.js';
@@ -75,12 +76,26 @@ function useBoardSession(boardId: string, enabled: boolean): BoardConnection {
       boardId,
       actor,
       api,
+      // People who may not edit get a read-only board (the server drops their document writes anyway).
+      readOnly: !canNow('board.edit'),
       transport: (ydoc) => createWebsocketTransport(ydoc, boardId, actor, lineage),
     });
     setSession(next);
     rememberBoard(boardId);
+    // Losing the connection may mean access ended (an upgrade refused with 401 says
+    // nothing to the socket): ask once per outage; a 401 signs out and nothing retries.
+    let probed = false;
     const off = next.connection.subscribe(() => {
       const c = next.connection.get();
+      if (c.revoked) {
+        signedOut('revoked', '', next.connection.dirty());
+        return;
+      }
+      if (c.status === 'live') probed = false;
+      else if (c.status === 'offline' && !probed) {
+        probed = true;
+        next.api.whoami().catch(() => {});
+      }
       if (c.stale)
         dispatch({ type: 'closed', code: CLOSE_STALE_DOCUMENT, dirty: next.connection.dirty() });
       else if (c.gone) dispatch({ type: 'closed', code: CLOSE_BOARD_NOT_FOUND, dirty: false });

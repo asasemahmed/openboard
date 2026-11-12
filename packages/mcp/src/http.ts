@@ -5,11 +5,17 @@
  * default board and cursors). Sessions are keyed by the `mcp-session-id`
  * header the transport hands out at initialize; DELETE ends one, and a
  * session that has been quiet for `idleTimeoutMs` is closed.
+ *
+ * Behind a board server the handler is mounted, and each request comes with
+ * the caller the server authenticated. A session belongs to the credentials
+ * that opened it: a request for that session with another grant's
+ * credentials, or with none where it was opened with some, is refused.
  */
 import { randomUUID } from 'node:crypto';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
+import type { McpCaller } from './actor.js';
 import { createMcpServer, type McpServerOptions } from './server.js';
 
 export const DEFAULT_IDLE_TIMEOUT_MS = 30 * 60_000;
@@ -21,7 +27,8 @@ export interface HttpHandlerOptions extends McpServerOptions {
 }
 
 export interface McpHttpHandler {
-  (request: Request): Promise<Response>;
+  /** `caller`: who the board server authenticated for this request, when mounted. */
+  (request: Request, caller?: McpCaller): Promise<Response>;
   /** Open sessions. */
   readonly sessionCount: number;
   /** End every session and stop the idle timer. */
@@ -32,6 +39,15 @@ interface Entry {
   server: McpServer;
   transport: WebStandardStreamableHTTPServerTransport;
   lastSeen: number;
+  /** Whose session it is: see `bindingOf`. */
+  binding: string;
+}
+
+/** Which credentials a request carries: the same grant, the local owner, or none. */
+function bindingOf(caller: McpCaller | undefined): string {
+  if (!caller) return 'none';
+  if (caller.via === 'local') return 'local';
+  return `grant:${caller.grantId ?? caller.actor.id}`;
 }
 
 function rpcError(status: number, code: number, message: string): Response {
@@ -74,12 +90,19 @@ export function createHttpHandler(options: HttpHandlerOptions): McpHttpHandler {
     timer.unref?.();
   };
 
-  const handle = async (request: Request): Promise<Response> => {
+  const handle = async (request: Request, caller?: McpCaller): Promise<Response> => {
     sweep();
     const sessionId = request.headers.get(SESSION_HEADER);
     if (sessionId) {
       const entry = sessions.get(sessionId);
       if (!entry) return rpcError(404, -32001, 'Session not found; initialize a new session');
+      if (entry.binding !== bindingOf(caller)) {
+        return rpcError(
+          403,
+          -32002,
+          'This MCP session belongs to other credentials; initialize a new session with your own',
+        );
+      }
       entry.lastSeen = Date.now();
       return entry.transport.handleRequest(request);
     }
@@ -99,11 +122,16 @@ export function createHttpHandler(options: HttpHandlerOptions): McpHttpHandler {
     }
 
     // The MCP session id doubles as the agent session id; it exists before the first tool call.
-    const server = createMcpServer({ ...options, session: () => transport.sessionId });
+    const binding = bindingOf(caller);
+    const server = createMcpServer({
+      ...options,
+      session: () => transport.sessionId,
+      ...(caller ? { caller } : {}),
+    });
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
       onsessioninitialized: (id) => {
-        sessions.set(id, { server, transport, lastSeen: Date.now() });
+        sessions.set(id, { server, transport, lastSeen: Date.now(), binding });
         startTimer();
       },
       onsessionclosed: (id) => {

@@ -3,6 +3,8 @@
  * already running for it.
  */
 import { existsSync, readFileSync, realpathSync, rmSync, statSync } from 'node:fs';
+import { isIP } from 'node:net';
+import { networkInterfaces } from 'node:os';
 import path from 'node:path';
 import { IdSchema, OpenBoardError } from '@openboard/core';
 import type { ProjectPaths, ServerInfo } from './types.js';
@@ -128,11 +130,37 @@ function readServerInfo(file: string): ServerInfo | null {
 
 const HEALTH_TIMEOUT_MS = 500;
 
+/**
+ * Whether `raw` is a plain http URL of this machine: a loopback name or the
+ * address of one of its network interfaces. `server.json` sits in the project
+ * directory, and a repository can ship one; a URL of another machine in it is
+ * never contacted, so it cannot make the CLI or the hook talk to that host.
+ */
+export function isOwnMachineUrl(raw: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== 'http:' || url.username || url.password) return false;
+  const host = url.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (host === 'localhost' || host === '::1' || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)) {
+    return true;
+  }
+  if (isIP(host) === 0) return false;
+  return Object.values(networkInterfaces()).some((list) =>
+    (list ?? []).some((entry) => entry.address.toLowerCase() === host),
+  );
+}
+
 /** The server recorded for this root, or null when there is none or it is no longer running. */
 export async function findRunningServer(root: string): Promise<ServerInfo | null> {
   const paths = projectPaths(root);
   if (!existsSync(paths.serverInfo)) return null;
   const info = readServerInfo(paths.serverInfo);
+  // Not ours to delete or to contact: see `isOwnMachineUrl`.
+  if (info && !isOwnMachineUrl(info.url)) return null;
   const stale = () => {
     rmSync(paths.serverInfo, { force: true });
     return null;

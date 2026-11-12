@@ -18,6 +18,8 @@
 export const CLOSE_BOARD_NOT_FOUND = 4404;
 /** WebSocket close code: the document belongs to another lineage. */
 export const CLOSE_STALE_DOCUMENT = 4409;
+/** WebSocket close code: the connection's access was revoked, expired or signed out. */
+export const CLOSE_ACCESS_REVOKED = 4401;
 
 const RETRY_MIN_MS = 500;
 const RETRY_MAX_MS = 8000;

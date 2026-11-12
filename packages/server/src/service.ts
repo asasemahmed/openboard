@@ -153,6 +153,7 @@ import { errorMessage } from './fsutil.js';
 import type { BatchRecord, Snapshot, TxContext } from './history.js';
 import { jsonEqual } from './json.js';
 import { type LayoutPatch, layoutFull, layoutIncremental } from './layout/index.js';
+import { redactSession, seesActivityDetail } from './live.js';
 import { placePreview, refreshProposal } from './review.js';
 import type { Room } from './room.js';
 
@@ -1332,7 +1333,10 @@ export class LocalBoardApi implements BoardApi {
   async sessions(options?: SessionsOptions): Promise<SessionsResult> {
     this.authorize('sessions');
     const opts = parseInput(SessionsOptionsSchema, options ?? {}, 'sessions options');
-    return renderSessions(this.boards.live.list(opts.includeEnded ?? false), {
+    const all = this.boards.live.list(opts.includeEnded ?? false);
+    // What agents do in detail is for roles that edit boards (see live.ts).
+    const visible = seesActivityDetail(this) ? all : all.map(redactSession);
+    return renderSessions(visible, {
       actors: this.boards.live.actors(),
       ...(opts.includeEnded !== undefined ? { includeEnded: opts.includeEnded } : {}),
       ...(opts.maxTokens !== undefined ? { maxTokens: opts.maxTokens } : {}),

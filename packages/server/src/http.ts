@@ -209,6 +209,7 @@ export function createHttpApp(ctx: HttpContext): Hono<Env> {
     remoteAddress: c.env?.incoming?.socket.remoteAddress,
     host: c.req.header('host'),
     header: (name: string) => c.req.header(name),
+    headerNames: () => Object.keys(c.req.header()),
     method: c.req.method,
   });
 
@@ -291,6 +292,20 @@ export function createHttpApp(ctx: HttpContext): Hono<Env> {
     }
   });
 
+  const limitBody = bodyLimit({
+    maxSize: MAX_BODY_BYTES,
+    onError: (c) =>
+      c.json(
+        new OpenBoardError(
+          'invalid_request',
+          `request body is larger than ${MAX_BODY_BYTES} bytes`,
+        ).toJSON(),
+        413,
+      ),
+  });
+  // Mounted handlers get the same cap on request bodies as the API.
+  app.use('*', (c, next) => (mountFor(ctx.mounts, c.req.path) ? limitBody(c, next) : next()));
+
   // Mounted handlers come before every route and the web app. Routes cannot
   // be added to a running Hono app, so mounts are looked up per request. The
   // handler gets the caller as its second argument; in shared mode a remote
@@ -309,20 +324,7 @@ export function createHttpApp(ctx: HttpContext): Hono<Env> {
     return handler(request, publicCaller(caller));
   });
 
-  app.use(
-    '/api/*',
-    bodyLimit({
-      maxSize: MAX_BODY_BYTES,
-      onError: (c) =>
-        c.json(
-          new OpenBoardError(
-            'invalid_request',
-            `request body is larger than ${MAX_BODY_BYTES} bytes`,
-          ).toJSON(),
-          413,
-        ),
-    }),
-  );
+  app.use('/api/*', limitBody);
 
   // `x-openboard-session` names the agent session a call belongs to (see live.ts).
   const api = (c: Context<Env>) => {

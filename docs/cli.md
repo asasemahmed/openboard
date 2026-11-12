@@ -18,6 +18,8 @@ openboard [command] [options]
 | [`doctor`](#doctor)                      | Check the installation and the project                              |
 | [`mcp`](#mcp)                            | Serve the boards to an MCP client over stdio                        |
 | [`connect`](#connect)                    | Show how to connect an agent (writes nothing)                       |
+| [`whoami`](#whoami)                      | Who a server takes you to be, and your role                         |
+| [`access`](#access)                      | Invite people and agents to a shared server; list and revoke        |
 | [`policy`](#policy)                      | Show or change the review policy for agents                         |
 | [`proposals`](#proposals)                | List agent changes waiting for review                               |
 | [`accept`, `reject`](#accept-and-reject) | Decide on a proposal, in whole or in part                           |
@@ -44,23 +46,29 @@ Global options: `-v`, `--version` prints the version; `-h`, `--help` shows help,
 
 **Who you are.** Everything done from the command line is attributed to the actor `cli`, a person named after your user account. That is what lets `accept`, `reject` and `policy` do what only people may do.
 
+**Remote servers.** Every command that talks to a server (`boards`, `new`, `export`, `import`, `diff`, `policy`, `proposals`, `accept`, `reject`, `history`, `undo`, `snapshot`, `activity`, `links`, `revisions`, `whoami`, `access`) takes `--url <url>` to use a [shared server](sharing.md) elsewhere instead of the project's own. The token comes from the environment variable `OPENBOARD_TOKEN`, never from a flag: command-line arguments end up in shell history and process lists, and `--token` is refused. On a remote server you are who the token's grant says, with its role; a command your role does not cover fails with a message that names the missing permission (`your access (viewer) does not include "board.create" ...`). Without `--url`, `OPENBOARD_TOKEN` is not sent.
+
 **Errors and exit codes.** A failure prints one line, `openboard: <message>`, on stderr and exits with status 1. `diff` and `merge-driver` have their own exit codes, described with them. Set `OPENBOARD_DEBUG=1` to also print stack traces, and the server's log lines for `start`.
 
 ## start
 
 ```text
-openboard start [--root <dir>] [-p, --port <n>] [--host <host>] [--board <id>] [--no-open]
+openboard start [--root <dir>] [-p, --port <n>] [--host <host>] [--share] [--public-url <url>] [--board <id>] [--no-open]
 ```
 
 Start the board server for the project in the foreground and keep it running until <kbd>Ctrl</kbd>+<kbd>C</kbd> (SIGINT or SIGTERM). It serves the web canvas, the HTTP API, document sync for browsers, and MCP over Streamable HTTP at `/mcp`. `openboard` with no command runs `start`.
 
-| Option             | Default     | Meaning                                                                                                                                                                                     |
-| ------------------ | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--root <dir>`     | discovered  | Project root                                                                                                                                                                                |
-| `-p`, `--port <n>` | `4747`      | Preferred port, 0 to 65535. If it is taken, the next free port is used.                                                                                                                     |
-| `--host <host>`    | `127.0.0.1` | Interface to bind. On anything other than a loopback address, the server stops checking that requests name a loopback host; there is no authentication, so only bind to networks you trust. |
-| `--board <id>`     | none        | Open this board in the browser instead of the default view. An unknown id is an error.                                                                                                      |
-| `--no-open`        | opens       | Do not open a browser. A newly started server also skips the browser when stdout is not a terminal.                                                                                         |
+| Option               | Default          | Meaning                                                                                                                                                                   |
+| -------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--root <dir>`       | discovered       | Project root                                                                                                                                                              |
+| `-p`, `--port <n>`   | `4747`           | Preferred port, 0 to 65535. If it is taken, the next free port is used.                                                                                                   |
+| `--host <host>`      | `127.0.0.1`      | Interface to bind. Anything but a loopback address requires `--share`; every interface (`0.0.0.0`) also requires `--public-url`.                                          |
+| `--share`            | off              | [Shared mode](sharing.md): people and agents on other machines sign in with an invite; you at this machine stay the owner without one.                                    |
+| `--public-url <url>` | the server's own | With `--share`: the address people use, such as `https://board.example.com` on a TLS reverse proxy or tunnel. Used for invite links and the accepted `Host` and `Origin`. |
+| `--board <id>`       | none             | Open this board in the browser instead of the default view. An unknown id is an error.                                                                                    |
+| `--no-open`          | opens            | Do not open a browser. A newly started server also skips the browser when stdout is not a terminal.                                                                       |
+
+In shared mode, `start` also prints the public address, that everyone but this machine must sign in, and how to invite (`openboard access invite`); it warns when the public URL is plain http on another host.
 
 If the project has no boards, `start` creates `main`, named after the project directory. If a server is already running for the project, `start` prints its URL, opens the browser (unless `--no-open`) and exits. If the web app has not been built, the server starts without it and says so.
 
@@ -292,18 +300,19 @@ openboard doctor [--root <dir>] [--json]
 
 Check the installation and the project. Each line is `ok`, `warn` or `FAIL`, and every warning and failure has a `fix:` line. Exits with status 1 when any check fails; warnings do not fail.
 
-| Check           | Fails or warns when                                                           |
-| --------------- | ----------------------------------------------------------------------------- |
-| Node.js version | Older than 22 (fail)                                                          |
-| Project root    | It cannot be determined (fail)                                                |
-| `.openboard/`   | Missing (fail; fix: `openboard init`)                                         |
-| Board files     | None (warn), or one does not parse (fail, with the reason)                    |
-| `config.json`   | Present but does not parse (fail, with the reason)                            |
-| Merge driver    | In a git repository, board files do not use the OpenBoard merge driver (warn) |
-| Web app         | Not built (fail; fix: `pnpm build`)                                           |
-| MCP server      | Does not load (fail)                                                          |
-| Server          | Not running (warn), or recorded but not answering (fail)                      |
-| Git             | In a git repository, `.openboard/.local` is not ignored (fail)                |
+| Check           | Fails or warns when                                                                                                |
+| --------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Node.js version | Older than 22 (fail)                                                                                               |
+| Project root    | It cannot be determined (fail)                                                                                     |
+| `.openboard/`   | Missing (fail; fix: `openboard init`)                                                                              |
+| Board files     | None (warn), or one does not parse (fail, with the reason)                                                         |
+| `config.json`   | Present but does not parse (fail, with the reason)                                                                 |
+| Merge driver    | In a git repository, board files do not use the OpenBoard merge driver (warn)                                      |
+| Web app         | Not built (fail; fix: `pnpm build`)                                                                                |
+| MCP server      | Does not load (fail)                                                                                               |
+| Server          | Not running (warn), or recorded but not answering (fail)                                                           |
+| Shared mode     | When the server is shared: its public URL and active grants (info); a plain-http public URL on another host (warn) |
+| Git             | In a git repository, `.openboard/.local` is not ignored (fail)                                                     |
 
 ```text
 $ openboard doctor
@@ -327,6 +336,7 @@ Everything looks good.
 
 ```text
 openboard mcp [--root <dir>] [--board <id>]
+openboard mcp --url <url> [--board <id>]
 ```
 
 Serve the project's boards to an MCP client over stdio. MCP clients run this command; you do not run it by hand. Stdout carries only protocol messages; messages go to stderr.
@@ -340,10 +350,13 @@ On start it creates `.openboard/` with an empty `main` board if the project has 
 
 Environment: `OPENBOARD_AGENT_ID` and `OPENBOARD_AGENT_NAME` set the identity that the session's changes are attributed to, and `OPENBOARD_SESSION` the agent session it shows as; see [identity](agents.md#identity).
 
+With `--url`, it serves a remote [shared server](sharing.md) instead, for MCP clients that only start local commands: every tool call goes to that server with the token from `OPENBOARD_TOKEN`, and no local server or `.openboard/` is created. Who the agent is and what it may do come from the token's grant; `OPENBOARD_AGENT_NAME` only sets the display name. A revoked or expired token makes tool calls fail with a message that says so.
+
 ## connect
 
 ```text
 openboard connect [agent] [--root <dir>] [--json]
+openboard connect [agent] --remote [--url <public url>] [--json]
 ```
 
 Print how to connect an agent to this project. It only prints; it never writes a config file. `agent` is one of `claude-code`, `cursor`, `codex` or `generic`; without it, every agent is shown in brief.
@@ -370,6 +383,38 @@ The server is named "openboard"; its tools start with board_.
 ```
 
 The HTTP URL is the running server's, or `http://127.0.0.1:4747/mcp` with a note that the port may differ when no server runs. `--json` prints `{ root, stdio: { command, args }, http: { url, running }, agents }`, where `agents` holds the selected agent (or all of them) as `{ label, command?, file?, config? }`.
+
+With `--remote`, it prints the setup for an agent on another machine connecting to a [shared server](sharing.md) (the running server's public URL, or `--url`). It never contains a token: the setups read `OPENBOARD_TOKEN` from the environment or show a placeholder, and you create the token with `openboard access invite --agent`.
+
+| Agent         | Remote setup                                                                                                          |
+| ------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `claude-code` | `claude mcp add --transport http ... --header "Authorization: Bearer ${OPENBOARD_TOKEN}"`, or the same as `.mcp.json` |
+| `cursor`      | The stdio bridge (`openboard mcp --url`) for `.cursor/mcp.json`, with `OPENBOARD_TOKEN` in its `env` block            |
+| `codex`       | The stdio bridge as a `[mcp_servers.openboard]` table with `env = { OPENBOARD_TOKEN = ... }`                          |
+| `generic`     | The HTTP URL with the header to send, and the stdio bridge                                                            |
+
+```text
+$ openboard connect claude-code --remote --url https://board.example.com
+Connect an agent on another machine to https://board.example.com:
+
+First create a token for it on the server's machine: openboard access invite --agent
+Put the token in OPENBOARD_TOKEN where the agent runs. Nothing below contains a token.
+
+Claude Code:
+  claude mcp add --transport http openboard https://board.example.com/mcp --header "Authorization: Bearer ${OPENBOARD_TOKEN}"
+  or in .mcp.json:
+    {
+      "mcpServers": {
+        "openboard": {
+          "type": "http",
+          "url": "https://board.example.com/mcp",
+          "headers": {
+            "Authorization": "Bearer ${OPENBOARD_TOKEN}"
+          }
+        }
+      }
+    }
+```
 
 Ready-made integrations that also give the agent guidance are in [`integrations/`](../integrations/README.md).
 
@@ -537,7 +582,7 @@ $ echo '{"session": "ci-1842", "kind": "tool_start", "tool": "deploy", "summary"
     | OPENBOARD_AGENT_ID=deploy-bot openboard hook --format generic
 ```
 
-Environment: `OPENBOARD_HOOK=off` sends nothing; `OPENBOARD_HOOK_DETAIL=off` sends tool names only; `OPENBOARD_HOOK_PROMPTS=1` sends the start of each prompt instead of its length; `OPENBOARD_AGENT_ID` and `OPENBOARD_AGENT_NAME` name the actor, as for [`mcp`](#mcp). What each format sends is listed in [the Claude Code integration](../integrations/claude-code/README.md#what-the-recorder-sends); setups for Cursor and Codex are in their [integrations](../integrations/README.md).
+With `OPENBOARD_URL` and `OPENBOARD_TOKEN` set, it reports to that [shared server](sharing.md) instead of the project's own (waiting at most 1 second), as the token's grant; the URL must be https unless it is on this machine, so the token never crosses a network unencrypted. Environment: `OPENBOARD_HOOK=off` sends nothing; `OPENBOARD_HOOK_DETAIL=off` sends tool names only; `OPENBOARD_HOOK_PROMPTS=1` sends the start of each prompt instead of its length; `OPENBOARD_AGENT_ID` and `OPENBOARD_AGENT_NAME` name the actor, as for [`mcp`](#mcp). What each format sends is listed in [the Claude Code integration](../integrations/claude-code/README.md#what-the-recorder-sends); setups for Cursor and Codex are in their [integrations](../integrations/README.md).
 
 ## revisions
 
@@ -578,3 +623,53 @@ Refreshed the code links of 1 node on main.
 ```
 
 `--json` prints the links as an array of `{ nodeId, title, index, link, state, detail? }`.
+
+## whoami
+
+```text
+openboard whoami [--root <dir>] [--url <url>] [--json]
+```
+
+Who a server takes you to be: your actor, role, how you were recognized (as the owner at the server's machine, with a token, or with a browser session), whether the server is shared, and your grant and its expiry.
+
+```text
+$ OPENBOARD_TOKEN=... openboard whoami --url https://board.example.com
+CI agent (agent, id ci-agent-i6caer)
+Role: editor, with an access token
+Server: shared mode
+Grant: i6caerjfy2kcn0nh, does not expire
+```
+
+## access
+
+```text
+openboard access list [--json]
+openboard access invite [--role owner|editor|commenter|viewer] [--agent] [--label <text>] [--expires <hours>] [--json]
+openboard access revoke <id> [--json]
+```
+
+Manage who may use a [shared server](sharing.md). These run against the project's running server as you, the owner at its machine (or against `--url` with an owner's token in `OPENBOARD_TOKEN`).
+
+| Command         | Effect                                                                                                                                                      |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `access list`   | Every grant: id, label, person or agent, role, actor, state (active, expired, revoked), expiry and last use. Never a token.                                 |
+| `access invite` | A grant for a person (default): prints the invite link `<public url>/join#<token>`. With `--agent`: prints the token once, and the remote MCP setup for it. |
+| `access revoke` | Ends a grant at once: its requests, browser sessions and open connections; its claims are released and its open questions cancelled.                        |
+
+`--role` defaults to `editor`; agents can be `editor`, `commenter` or `viewer`. `--label` names who it is for (`"Ada's laptop"`, `"CI agent"`; defaults `Guest` and `Remote agent`) and becomes the start of the actor id. `--expires <hours>` limits it; without it, it lasts until revoked. A server not in shared mode refuses invites: start it with `--share`.
+
+```text
+$ openboard access invite --agent --label "CI agent"
+Token for the agent "CI agent" (editor, actor ci-agent-i6caer), valid until revoked:
+
+  ob_i6caerjfy2kcn0nh_...
+
+It is shown only now and cannot be recovered: store it where the agent runs (for example
+in OPENBOARD_TOKEN, or a secret store). Anyone with it has this access until you revoke it:
+  openboard access revoke i6caerjfy2kcn0nh
+
+MCP over HTTP: http://127.0.0.1:56353/mcp, with the header "Authorization: Bearer <token>".
+...
+```
+
+The token and the invite link are printed only by `invite` (and by `--json`, which includes them): the server keeps only their hash.

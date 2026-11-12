@@ -2,14 +2,27 @@ import { randomUUID } from 'node:crypto';
 import { format } from 'node:util';
 import { emptyBoard, OpenBoardError } from '@openboard/core';
 import { actorForClient, runStdio, sessionFromEnv } from '@openboard/mcp';
+import { connect } from '@openboard/sdk';
+import { CliError } from '../lib/errors.js';
 import type { CliIo } from '../lib/io.js';
+import { println } from '../lib/io.js';
 import { ensureServer, reconnectingApi, shared } from '../lib/mcp.js';
 import { cliVersion, projectName, resolveRoot } from '../lib/project.js';
 import { findRunningServer, projectPaths } from '../lib/server.js';
-import { ensureProjectDir, readBoardFiles, writeNewBoardFile } from '../lib/store.js';
+import {
+  assertTokenTransport,
+  ensureProjectDir,
+  readBoardFiles,
+  writeNewBoardFile,
+} from '../lib/store.js';
 
 export interface McpOptions {
   root?: string;
+  /**
+   * A remote OpenBoard to proxy to, with the token from `OPENBOARD_TOKEN`. No
+   * local server is started, and identity and role come from the token's grant.
+   */
+  url?: string;
   /** Board used when a tool call names none. */
   board?: string;
 }
@@ -48,8 +61,9 @@ async function ensureMainBoard(root: string): Promise<void> {
  * the client disconnects.
  */
 export async function mcpCommand(io: CliIo, options: McpOptions = {}): Promise<number> {
-  const root = resolveRoot(io, options.root);
   consoleToStderr(io);
+  if (options.url !== undefined) return remoteMcp(io, options);
+  const root = resolveRoot(io, options.root);
 
   // Nothing is created or started until a client actually uses the board: an
   // agent that has this server configured everywhere must not leave a board
@@ -67,6 +81,45 @@ export async function mcpCommand(io: CliIo, options: McpOptions = {}): Promise<n
     resolveApi: async (client) => {
       const server = await ensure();
       return reconnectingApi(actorForClient(client, io.env), server, ensure, client.session);
+    },
+    ...(options.board !== undefined ? { defaultBoard: options.board } : {}),
+    version: cliVersion(),
+  });
+  return 0;
+}
+
+/**
+ * `openboard mcp --url`: the stdio MCP server for a remote OpenBoard. Every
+ * tool call goes to that server with the token from `OPENBOARD_TOKEN`; who the
+ * agent is and what it may do come from the token's grant.
+ */
+async function remoteMcp(io: CliIo, options: McpOptions): Promise<number> {
+  let url: URL;
+  try {
+    url = new URL(options.url as string);
+  } catch {
+    throw new CliError(`--url ${options.url}: not a URL`);
+  }
+  const token = io.env.OPENBOARD_TOKEN?.trim();
+  const local = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+  if (!token) {
+    println(
+      io.stderr,
+      `openboard: OPENBOARD_TOKEN is not set; a shared server refuses calls without it${local ? ' unless they come from its own machine' : ''}`,
+    );
+  }
+  if (token) assertTokenTransport(url.toString());
+  const session = sessionFromEnv(io.env) ?? randomUUID();
+  await runStdio({
+    session,
+    resolveApi: async (client) => {
+      const named = actorForClient(client, io.env);
+      const api = token
+        ? connect({ url: url.toString(), token, name: named.name, session: client.session })
+        : connect({ url: url.toString(), actor: named, session: client.session });
+      // Learn who the grant says we are, and fail early on a bad token.
+      await api.whoami();
+      return api;
     },
     ...(options.board !== undefined ? { defaultBoard: options.board } : {}),
     version: cliVersion(),

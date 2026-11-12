@@ -96,6 +96,52 @@ async function gitCheck(root: string, local: string): Promise<Check | undefined>
       };
 }
 
+/** For a server in shared mode: its public URL and grants. Informational, except plain http. */
+async function sharedChecks(
+  io: CliIo,
+  server: { url: string; publicUrl?: string },
+): Promise<Check[]> {
+  const publicUrl = server.publicUrl ?? server.url;
+  const checks: Check[] = [];
+  let host = '';
+  try {
+    host = new URL(publicUrl).hostname.replace(/^\[|\]$/g, '');
+  } catch {
+    // Reported below as it is.
+  }
+  const loopback = host === 'localhost' || host === '::1' || /^127\./.test(host);
+  checks.push({ status: 'ok', label: `Shared mode: people and agents sign in at ${publicUrl}` });
+  if (publicUrl.startsWith('http://') && !loopback) {
+    checks.push({
+      status: 'warn',
+      label: `The public URL ${publicUrl} is plain http: tokens and session cookies cross the network unencrypted`,
+      hint: 'bind to loopback and put a TLS reverse proxy or tunnel in front, then start with --public-url https://... (see docs/sharing.md)',
+    });
+  }
+  try {
+    const { grants } = await connect({
+      url: server.url,
+      actor: cliActor(io.env),
+      timeoutMs: 3000,
+    }).listAccess();
+    const now = Date.now();
+    const active = grants.filter(
+      (g) => !g.revokedAt && !(g.expiresAt && Date.parse(g.expiresAt) <= now),
+    );
+    const agents = active.filter((g) => g.kind === 'agent').length;
+    checks.push({
+      status: 'ok',
+      label: `${active.length} active access grant${active.length === 1 ? '' : 's'} (${active.length - agents} for people, ${agents} for agents); see \`openboard access list\``,
+    });
+  } catch (error) {
+    checks.push({
+      status: 'warn',
+      label: `Could not list access grants: ${error instanceof Error ? error.message : String(error)}`,
+    });
+  }
+  return checks;
+}
+
 /** In a git repository: whether board files merge with the OpenBoard driver. Informational. */
 async function mergeDriverCheck(io: CliIo, root: string): Promise<Check> {
   try {
@@ -214,6 +260,7 @@ export async function runChecks(io: CliIo, options: DoctorOptions = {}): Promise
         actor: cliActor(io.env),
         timeoutMs: 3000,
       }).health();
+      if (health.ok && server.shared) checks.push(...(await sharedChecks(io, server)));
       checks.push(
         health.ok
           ? { status: 'ok', label: `Server is running at ${server.url} (pid ${health.pid})` }

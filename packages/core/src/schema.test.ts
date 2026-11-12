@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ActorSchema,
   ApplyRequestSchema,
   BoardSchema,
   NodeInputSchema,
   newId,
   OpSchema,
   slugify,
+  ViewSchema,
 } from './index.js';
 
 const now = '2026-01-01T00:00:00.000Z';
@@ -63,5 +65,22 @@ describe('ids', () => {
     expect(slugify('My Board!')).toBe('my-board');
     expect(slugify('***')).toBe('board');
     expect(slugify('Ünïcode Plan')).toBe('unicode-plan');
+  });
+});
+
+describe('colors, which clients put into CSS', () => {
+  it('are hex, a name or a number in stored actors and views, never url() or a declaration', () => {
+    for (const color of ['#c2410c', '#FFF', '#11223344', 'red', '3']) {
+      expect(ActorSchema.safeParse({ id: 'a', kind: 'agent', name: 'A', color }).success).toBe(
+        true,
+      );
+      expect(ViewSchema.safeParse({ x: 0, y: 0, color }).success).toBe(true);
+    }
+    for (const color of ['url(//evil.example/p)', 'red;background:red', 'var(--x)', '#12']) {
+      expect(ActorSchema.safeParse({ id: 'a', kind: 'agent', name: 'A', color }).success).toBe(
+        false,
+      );
+      expect(ViewSchema.safeParse({ x: 0, y: 0, color }).success).toBe(false);
+    }
   });
 });

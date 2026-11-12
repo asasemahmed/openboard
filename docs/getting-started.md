@@ -118,6 +118,10 @@ Commit the `*.board.json` files and `config.json`. They are written with a stabl
 
 More boards: `openboard new "Release plan"` creates `.openboard/release-plan.board.json`. `openboard boards` lists them. `openboard import flow.mmd` adds a Mermaid flowchart (or a JSON Canvas) to a board, and `openboard export --format markdown` (or `mermaid`, `canvas`, `svg`) writes one out. Run `openboard git setup --diff` once per clone so git merges and diffs boards by meaning; see [Boards in git](git.md).
 
+## Share with others
+
+`openboard start --share` lets people and agents on other machines work on the same boards, each with an invite and a role; `openboard access invite` creates one. See [Sharing boards](sharing.md).
+
 ## Stop
 
 - A server started with `openboard start` stops with <kbd>Ctrl</kbd>+<kbd>C</kbd>.

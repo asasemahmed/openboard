@@ -2,6 +2,7 @@ import type { Actor, AgentStatus } from '@openboard/core';
 import { useRef, useState } from 'react';
 import { type AgentGroup, groupByAgent, workingCount } from '../lib/agents.js';
 import { confirmUndoAll } from '../panels/ActivityPanel.js';
+import { useCan } from '../state/access.js';
 import { useSession } from '../state/context.js';
 import { useStoreValue } from '../state/emitter.js';
 import { ACTIVITY_PANEL, AGENTS_PANEL } from '../state/review.js';
@@ -100,6 +101,7 @@ function AgentsMenu() {
   const session = useSession();
   const { ui } = session;
   const agents = useMenuAgents();
+  const canUndo = useCan('board.undo');
   const [open, setOpen] = useState(false);
   const anchor = useRef<HTMLButtonElement>(null);
   if (agents.length === 0) return null;
@@ -135,23 +137,24 @@ function AgentsMenu() {
       <Popover anchor={anchor} open={open} onClose={close} align="end" role="menu" label="Agents">
         <MenuList label="Agents">
           <MenuHeading>Agents on this board</MenuHeading>
-          {agents.map((agent) => (
-            <MenuItem
-              key={agent.actor.id}
-              lead={<Avatar actor={agent.actor} size={16} />}
-              hint={
-                agent.group
-                  ? `${STATUS_WORD[agent.group.status]}${agent.group.sessions.length > 1 ? `, ${agent.group.sessions.length} sessions` : ''}. Revert what it changed that is still in place`
-                  : 'Revert what it changed that is still in place'
-              }
-              onSelect={() => {
-                close();
-                void confirmUndoAll(session, agent.actor.id);
-              }}
-            >
-              Undo everything by {agent.actor.name}…
-            </MenuItem>
-          ))}
+          {canUndo &&
+            agents.map((agent) => (
+              <MenuItem
+                key={agent.actor.id}
+                lead={<Avatar actor={agent.actor} size={16} />}
+                hint={
+                  agent.group
+                    ? `${STATUS_WORD[agent.group.status]}${agent.group.sessions.length > 1 ? `, ${agent.group.sessions.length} sessions` : ''}. Revert what it changed that is still in place`
+                    : 'Revert what it changed that is still in place'
+                }
+                onSelect={() => {
+                  close();
+                  void confirmUndoAll(session, agent.actor.id);
+                }}
+              >
+                Undo everything by {agent.actor.name}…
+              </MenuItem>
+            ))}
           <MenuSeparator />
           <MenuItem
             icon="agent"

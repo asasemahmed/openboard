@@ -79,6 +79,15 @@ Differences from stdio:
 
 The tools describe themselves, and the server sends short instructions when a client connects. For better results, add the condensed guide in [`AGENT_GUIDE.md`](AGENT_GUIDE.md) to your agent's instructions.
 
+## A shared server on another machine
+
+When the boards run in [shared mode](../../docs/sharing.md) on another machine, an agent connects with a token that the server's owner creates with `openboard access invite --agent`. Keep the token in the environment variable `OPENBOARD_TOKEN`, never in a command line.
+
+- Clients that can send headers: Streamable HTTP to `<public url>/mcp` with `Authorization: Bearer <token>`.
+- Any client: the stdio bridge, which runs this CLI on the agent's machine and forwards every call: `openboard mcp --url <public url>`, with `OPENBOARD_TOKEN` in its environment. It starts no local server.
+
+`openboard connect --remote --url <public url>` prints both forms for Claude Code, Cursor, Codex and other clients, with a placeholder where the token goes. The agent is who its grant says, with the grant's role, and stays under the review policy.
+
 ## Reporting activity
 
 Any tool or script can show an agent at work on the canvas by piping one event per call into `openboard hook --format generic`, in the project or with `cwd` in the event:
@@ -88,7 +97,7 @@ echo '{"session": "ci-1842", "kind": "tool_start", "tool": "deploy", "summary": 
   | OPENBOARD_AGENT_ID=deploy-bot openboard hook --format generic
 ```
 
-The event is an `ActivityEvent`: `session` (an id), `kind` (`session_start`, `session_end`, `prompt`, `tool_start`, `tool_end`, `subagent_start`, `subagent_end` or `note`), and optionally `parent`, `tool`, `summary`, `ok`, `label` and `at`. It goes to the board server running for the project, or nowhere when none runs; the command prints nothing and always exits 0. `OPENBOARD_AGENT_ID` and `OPENBOARD_AGENT_NAME` name the actor, as for `openboard mcp`; set the same values for the MCP server so the board shows one agent, and `OPENBOARD_SESSION` to the same session id to merge the two into one session. Ready-made wiring exists for [Claude Code](../claude-code/README.md#what-the-recorder-sends), [Cursor](../cursor/README.md) and [Codex](../codex/README.md).
+The event is an `ActivityEvent`: `session` (an id), `kind` (`session_start`, `session_end`, `prompt`, `tool_start`, `tool_end`, `subagent_start`, `subagent_end` or `note`), and optionally `parent`, `tool`, `summary`, `ok`, `label` and `at`. It goes to the board server running for the project, or nowhere when none runs; the command prints nothing and always exits 0. `OPENBOARD_AGENT_ID` and `OPENBOARD_AGENT_NAME` name the actor, as for `openboard mcp`; set the same values for the MCP server so the board shows one agent, and `OPENBOARD_SESSION` to the same session id to merge the two into one session. To report to a shared server elsewhere, set `OPENBOARD_URL` (its public URL) and `OPENBOARD_TOKEN` in the hook's environment. Ready-made wiring exists for [Claude Code](../claude-code/README.md#what-the-recorder-sends), [Cursor](../cursor/README.md) and [Codex](../codex/README.md).
 
 ## Check the connection
 

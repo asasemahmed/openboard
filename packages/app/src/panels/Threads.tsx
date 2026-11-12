@@ -5,7 +5,7 @@
  * Comments are written straight into the board document as this person, so
  * they work while the server is unreachable and sync when it is back.
  */
-import type { Comment } from '@openboard/core';
+import type { Comment, CommentInput } from '@openboard/core';
 import {
   type KeyboardEvent,
   type ReactNode,
@@ -15,6 +15,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { calmMessage } from '../lib/api.js';
 import { newComment, type Thread, withResolved } from '../lib/comments.js';
 import {
   ALL_AGENTS,
@@ -26,6 +27,7 @@ import {
 } from '../lib/mentions.js';
 import { IS_MAC } from '../lib/shortcuts.js';
 import { absoluteTime, relativeTime } from '../lib/time.js';
+import { access, roleOf, useCan, writesThroughSync } from '../state/access.js';
 import { useSession } from '../state/context.js';
 import { useStoreValue } from '../state/emitter.js';
 import type { BoardSession } from '../state/session.js';
@@ -50,18 +52,48 @@ function write(session: BoardSession, comment: Comment): boolean {
   }
 }
 
-/** Start a thread (on a node or the board) or reply in one. */
+/**
+ * Start a thread (on a node or the board) or reply in one. People who may
+ * edit write into the document, so it works offline; others (commenters)
+ * have a read-only sync connection whose writes the server drops, so their
+ * comment goes through the API.
+ */
 export function postComment(
   session: BoardSession,
   body: string,
   mentions: readonly string[],
   where: { thread?: Thread; nodeId?: string },
-): boolean {
+): boolean | Promise<boolean> {
   if (body.trim() === '') return false;
+  if (!writesThroughSync(roleOf(access.get()))) {
+    const input: CommentInput = { body: body.trim().slice(0, 4000) };
+    if (where.thread) input.thread = where.thread.id;
+    else if (where.nodeId) input.nodeId = where.nodeId;
+    if (mentions.length > 0) input.mentions = [...new Set(mentions)];
+    return session.api.comment(session.boardId, input).then(
+      () => true,
+      (error: unknown) => {
+        toasts.show(calmMessage(error), { tone: 'error' });
+        return false;
+      },
+    );
+  }
   const input: Parameters<typeof newComment>[0] = { author: session.actor(), body, mentions };
   if (where.thread) input.thread = where.thread;
   if (where.nodeId) input.nodeId = where.nodeId;
   return write(session, newComment(input));
+}
+
+/** Resolve or reopen a thread, the same way comments are written. */
+function setResolved(session: BoardSession, thread: Thread, resolved: boolean): void {
+  if (!writesThroughSync(roleOf(access.get()))) {
+    session.api
+      .resolveThread(session.boardId, thread.id, resolved)
+      .catch((error: unknown) => toasts.show(calmMessage(error), { tone: 'error' }));
+    return;
+  }
+  const head = session.doc.getComment(thread.id);
+  if (head) write(session, withResolved(head, resolved, session.actor().id));
 }
 
 /** People and agents on this board that can be mentioned, plus "All agents". */
@@ -85,7 +117,7 @@ export function Composer({
   submitLabel = 'Comment',
   onCancel,
 }: {
-  onSubmit: (body: string, mentions: string[]) => boolean;
+  onSubmit: (body: string, mentions: string[]) => boolean | Promise<boolean>;
   placeholder?: string;
   label: string;
   submitLabel?: string;
@@ -122,9 +154,13 @@ export function Composer({
     });
   };
 
-  const submit = () => {
-    if (text.trim() === '') return;
-    if (onSubmit(text, mentionsIn(text, picked))) {
+  const [sending, setSending] = useState(false);
+  const submit = async () => {
+    if (text.trim() === '' || sending) return;
+    setSending(true);
+    const ok = await onSubmit(text, mentionsIn(text, picked));
+    setSending(false);
+    if (ok) {
       setText('');
       setPicked([]);
       setQuery(null);
@@ -156,7 +192,7 @@ export function Composer({
     }
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
       event.preventDefault();
-      submit();
+      void submit();
     } else if (event.key === 'Escape' && onCancel) {
       event.preventDefault();
       onCancel();
@@ -224,7 +260,12 @@ export function Composer({
             Cancel
           </Button>
         )}
-        <Button size="sm" variant="primary" disabled={text.trim() === ''} onClick={submit}>
+        <Button
+          size="sm"
+          variant="primary"
+          disabled={sending || text.trim() === ''}
+          onClick={() => void submit()}
+        >
           {submitLabel}
         </Button>
       </div>
@@ -272,13 +313,12 @@ export function ThreadView({ thread, context }: { thread: Thread; context?: Reac
   const me = session.actor().id;
   const [replying, setReplying] = useState(false);
 
+  const canComment = useCan('comment');
+  // Deleting has no route of its own: only people who write through sync can.
+  const canDelete = useCan('board.edit');
   const resolve = useCallback(
-    (resolved: boolean) => {
-      const head = session.doc.getComment(thread.id);
-      if (!head) return;
-      write(session, withResolved(head, resolved, session.actor().id));
-    },
-    [session, thread.id],
+    (resolved: boolean) => setResolved(session, thread, resolved),
+    [session, thread],
   );
 
   const remove = (comment: Comment) =>
@@ -306,7 +346,7 @@ export function ThreadView({ thread, context }: { thread: Thread; context?: Reac
           <CommentView
             key={comment.id}
             comment={comment}
-            {...(comment.author === me ? { onDelete: () => remove(comment) } : {})}
+            {...(comment.author === me && canDelete ? { onDelete: () => remove(comment) } : {})}
           />
         ))}
       </ol>
@@ -316,13 +356,13 @@ export function ThreadView({ thread, context }: { thread: Thread; context?: Reac
           placeholder="Reply"
           submitLabel="Reply"
           onCancel={() => setReplying(false)}
-          onSubmit={(body, mentions) => {
-            const ok = postComment(session, body, mentions, { thread });
+          onSubmit={async (body, mentions) => {
+            const ok = await postComment(session, body, mentions, { thread });
             if (ok) setReplying(false);
             return ok;
           }}
         />
-      ) : (
+      ) : !canComment ? null : (
         <div className="thread-actions">
           <Button size="sm" variant="ghost" icon="comment" onClick={() => setReplying(true)}>
             Reply
@@ -346,6 +386,7 @@ export function ThreadView({ thread, context }: { thread: Thread; context?: Reac
 /** The comments section of a card's inspector. */
 export function NodeComments({ nodeId }: { nodeId: string }) {
   const session = useSession();
+  const canComment = useCan('comment');
   const threads = useStoreValue(session.store, () => session.store.comments().byNode.get(nodeId));
   const open = (threads ?? []).filter((t) => !t.resolved);
   const resolved = (threads ?? []).filter((t) => t.resolved);
@@ -359,11 +400,13 @@ export function NodeComments({ nodeId }: { nodeId: string }) {
       {open.map((thread) => (
         <ThreadView key={thread.id} thread={thread} />
       ))}
-      <Composer
-        label="New comment on this card"
-        placeholder="Comment on this card"
-        onSubmit={(body, mentions) => postComment(session, body, mentions, { nodeId })}
-      />
+      {canComment && (
+        <Composer
+          label="New comment on this card"
+          placeholder="Comment on this card"
+          onSubmit={(body, mentions) => postComment(session, body, mentions, { nodeId })}
+        />
+      )}
       {resolved.length > 0 && (
         <details className="resolved-threads">
           <summary>

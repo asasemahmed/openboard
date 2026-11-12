@@ -3,6 +3,12 @@
  * lives in `commands/`, so it can be called and tested without a process.
  */
 import { Command, CommanderError, InvalidArgumentError, Option } from 'commander';
+import {
+  accessInviteCommand,
+  accessListCommand,
+  accessRevokeCommand,
+  whoamiCommand,
+} from './commands/access.js';
 import { boardsCommand, newBoardCommand } from './commands/boards.js';
 import { linksCommand, revisionsCommand } from './commands/code.js';
 import { AGENTS, connectCommand } from './commands/connect.js';
@@ -62,6 +68,13 @@ function parsePort(value: string): number {
   return port;
 }
 
+/** `--url`: a remote server. The token is read from the environment only, never from a flag. */
+const urlOption = () =>
+  new Option(
+    '--url <url>',
+    "talk to this OpenBoard server instead of the project's (token from OPENBOARD_TOKEN, never a flag: flags end up in shell history and process lists)",
+  );
+
 const rootOption = () =>
   new Option('--root <dir>', 'project root (default: discovered from the current directory)');
 
@@ -73,6 +86,17 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
     <A extends unknown[]>(fn: (...args: A) => Promise<number>) =>
     async (...args: A) => {
       try {
+        // `--url` on this command or a parent: talk to that server (see lib/store.ts).
+        const command = args[args.length - 1];
+        if (command instanceof Command) {
+          for (let c: Command | null = command; c; c = c.parent) {
+            const url = c.opts().url as string | undefined;
+            if (url !== undefined) {
+              io.remoteUrl = url;
+              break;
+            }
+          }
+        }
         setExitCode(await fn(...args));
       } catch (error) {
         setExitCode(reportError(io, error));
@@ -101,13 +125,25 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
       'preferred port (the next free one is used if it is taken)',
       parsePort,
     )
-    .option('--host <host>', 'interface to bind (default: loopback)')
+    .option('--host <host>', 'interface to bind (default: loopback; anything else needs --share)')
+    .option('--share', 'shared mode: everyone except this machine signs in (see docs/sharing.md)')
+    .option(
+      '--public-url <url>',
+      'with --share: the https URL people use, such as a tunnel or reverse proxy',
+    )
     .option('--board <id>', 'board to open in the browser')
     .option('--no-open', 'do not open a browser')
     .action(
       action(
-        (opts: { root?: string; port?: number; host?: string; board?: string; open: boolean }) =>
-          startCommand(io, opts),
+        (opts: {
+          root?: string;
+          port?: number;
+          host?: string;
+          board?: string;
+          open: boolean;
+          share?: boolean;
+          publicUrl?: string;
+        }) => startCommand(io, opts),
       ),
     );
 
@@ -139,6 +175,7 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
     .command('boards')
     .description('list boards')
     .addOption(rootOption())
+    .addOption(urlOption())
     .option('--json', 'print JSON')
     .action(action((opts: { root?: string; json?: boolean }) => boardsCommand(io, opts)));
 
@@ -147,6 +184,7 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
     .description('create a board')
     .argument('<name>', 'board name')
     .addOption(rootOption())
+    .addOption(urlOption())
     .option('--id <id>', 'board id (default: derived from the name)')
     .option('--description <text>', 'board description')
     .option('--json', 'print the new board as JSON')
@@ -164,6 +202,7 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
     .description('write a board as JSON, Markdown, Mermaid, JSON Canvas, SVG or text')
     .argument('[board]', 'board id (default: the only board, or "main")')
     .addOption(rootOption())
+    .addOption(urlOption())
     .addOption(
       new Option('-f, --format <format>', 'output format (default: from --out, else json)').choices(
         FORMAT_NAMES,
@@ -188,6 +227,7 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
     .argument('<file>', 'the file to import, or - for standard input')
     .argument('[board]', 'board id (default: the only board, or "main")')
     .addOption(rootOption())
+    .addOption(urlOption())
     .addOption(
       new Option('--format <format>', 'input format (default: recognized from the file)').choices([
         'mermaid',
@@ -214,6 +254,7 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
     )
     .argument('[board]', 'board id (default: every board)')
     .addOption(rootOption())
+    .addOption(urlOption())
     .option('--from <rev>', 'revision to compare from (default: HEAD)')
     .option('--to <rev>', 'revision to compare to (default: the working tree)')
     .addOption(
@@ -321,6 +362,7 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
       '[board], or refresh and the node ids (a last argument naming a board is the board)',
     )
     .addOption(rootOption())
+    .addOption(urlOption())
     .option('--all', 'list every link; with refresh, refresh every node')
     .option('--json', 'print JSON')
     .action(
@@ -334,6 +376,7 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
     .description('the git history of a board file, newest first')
     .argument('[board]', 'board id (default: the only board, or "main")')
     .addOption(rootOption())
+    .addOption(urlOption())
     .option('--limit <n>', 'how many revisions, 1 to 200 (default: 20)', parseLimit)
     .option('--json', 'print JSON')
     .action(
@@ -354,7 +397,17 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
     .description('serve the boards to an MCP client over stdio (starts the server if needed)')
     .addOption(rootOption())
     .option('--board <id>', 'board used when a tool call names none')
-    .action(action((opts: { root?: string; board?: string }) => mcpCommand(io, opts)));
+    .option(
+      '--url <url>',
+      'proxy to this remote OpenBoard instead (token from OPENBOARD_TOKEN, never a flag); starts no local server',
+    )
+    .action(
+      action((opts: { root?: string; board?: string; url?: string }) => {
+        // `--url` here is the proxy target, not the CLI's own remote.
+        io.remoteUrl = undefined;
+        return mcpCommand(io, opts);
+      }),
+    );
 
   const policy = program
     .command('policy')
@@ -362,6 +415,7 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
     // `--root` after `set` or `unset` belongs to them; before, to `policy`.
     .enablePositionalOptions()
     .addOption(rootOption())
+    .addOption(urlOption())
     .option('--json', 'print JSON')
     .action(action((opts: { root?: string; json?: boolean }) => policyCommand(io, opts)));
   policy
@@ -369,6 +423,7 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
     .description("set the default mode, or one agent's mode with --agent")
     .argument('<mode>', 'auto, review_destructive, review_all or locked')
     .addOption(rootOption())
+    .addOption(urlOption())
     .option('--agent <id>', 'set the mode of this agent only')
     .action(
       action((mode: string, opts: { root?: string; agent?: string }) =>
@@ -379,6 +434,7 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
     .command('unset')
     .description("remove an agent's own mode, so it uses the default again")
     .addOption(rootOption())
+    .addOption(urlOption())
     .requiredOption('--agent <id>', 'the agent')
     .action(
       action((opts: { root?: string; agent?: string }) =>
@@ -391,6 +447,7 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
     .description('list agent changes waiting for review (needs the running server)')
     .argument('[board]', 'board id (default: the only board, or "main")')
     .addOption(rootOption())
+    .addOption(urlOption())
     .option('--all', 'also list decided and withdrawn proposals')
     .option('--json', 'print JSON')
     .action(
@@ -406,6 +463,7 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
       .argument('<proposalId>', 'the proposal, as `openboard proposals` lists it')
       .argument('[board]', 'board id (default: the only board, or "main")')
       .addOption(rootOption())
+      .addOption(urlOption())
       .option('--items <list>', `item numbers to ${verb}, like 0,2 (default: every pending item)`)
       .option('--note <text>', 'a note for the agent; it reaches the agent in its inbox')
       .option('--json', 'print the proposal as JSON')
@@ -425,6 +483,7 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
     .description('list recent batches of changes, newest first (needs the running server)')
     .argument('[board]', 'board id (default: the only board, or "main")')
     .addOption(rootOption())
+    .addOption(urlOption())
     .option('--limit <n>', 'how many batches, 1 to 200 (default: 20)', parseLimit)
     .option('--actor <id>', 'only batches by this actor')
     .option('--json', 'print JSON')
@@ -445,6 +504,7 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
     .usage('<batchId> [board] | --actor <id> [--all] [board]')
     .argument('[args...]', '<batchId> [board], or with --actor just [board]')
     .addOption(rootOption())
+    .addOption(urlOption())
     .option('--actor <id>', "undo this actor's most recent batch")
     .option('--all', 'with --actor: undo all of its batches that are still in place')
     .option('--json', 'print JSON')
@@ -479,6 +539,7 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
     .command('activity')
     .description('show what agents are doing: the session tree (needs the running server)')
     .addOption(rootOption())
+    .addOption(urlOption())
     .option('--all', 'also list sessions that have ended')
     .option('--json', 'print JSON')
     .action(
@@ -491,6 +552,7 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
     .argument('<cursor>', 'the cursor, as history and changes show it')
     .argument('[board]', 'board id (default: the only board, or "main")')
     .addOption(rootOption())
+    .addOption(urlOption())
     .addOption(
       new Option('-f, --format <format>', 'output format (default: from --out, else json)').choices(
         FORMAT_NAMES,
@@ -512,10 +574,82 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
     .description('show how to connect an agent to this project (writes nothing)')
     .argument('[agent]', `one of: ${AGENTS.join(', ')} (default: all, briefly)`)
     .addOption(rootOption())
+    .option('--remote', 'the setup for an agent on another machine, for a shared server')
+    .option('--url <url>', "with --remote: the server's public URL (default: the running server's)")
     .option('--json', 'print JSON')
     .action(
-      action((agent: string | undefined, opts: { root?: string; json?: boolean }) =>
-        connectCommand(io, agent, opts),
+      action(
+        (
+          agent: string | undefined,
+          opts: { root?: string; json?: boolean; remote?: boolean; url?: string },
+        ) => {
+          io.remoteUrl = undefined;
+          return connectCommand(io, agent, opts);
+        },
+      ),
+    );
+
+  program
+    .command('whoami')
+    .description('who a server takes you to be, and your role')
+    .addOption(rootOption())
+    .addOption(urlOption())
+    .option('--json', 'print JSON')
+    .action(action((opts: { root?: string; json?: boolean }) => whoamiCommand(io, opts)));
+
+  const access = program
+    .command('access')
+    .description('invite people and agents to a shared server, list and revoke their access')
+    .enablePositionalOptions()
+    .addOption(urlOption());
+  access
+    .command('list')
+    .description('list the access grants')
+    .addOption(rootOption())
+    .addOption(urlOption())
+    .option('--json', 'print JSON')
+    .action(action((opts: { root?: string; json?: boolean }) => accessListCommand(io, opts)));
+  access
+    .command('invite')
+    .description(
+      'create an invite link for a person, or with --agent a token for an agent (shown once)',
+    )
+    .addOption(rootOption())
+    .addOption(urlOption())
+    .addOption(
+      new Option('--role <role>', 'what they may do (default: editor)').choices([
+        'owner',
+        'editor',
+        'commenter',
+        'viewer',
+      ]),
+    )
+    .option('--agent', 'invite an agent: print a token and the remote MCP setup')
+    .option('--label <text>', 'who it is for, such as "Ada\'s laptop" or "CI agent"')
+    .option('--expires <hours>', 'hours until it expires (default: never)')
+    .option('--json', 'print JSON (includes the token)')
+    .action(
+      action(
+        (opts: {
+          root?: string;
+          role?: string;
+          agent?: boolean;
+          label?: string;
+          expires?: string;
+          json?: boolean;
+        }) => accessInviteCommand(io, opts),
+      ),
+    );
+  access
+    .command('revoke')
+    .description('revoke a grant at once: its requests, sessions and connections end')
+    .argument('<id>', 'the grant id, as `openboard access list` shows it')
+    .addOption(rootOption())
+    .addOption(urlOption())
+    .option('--json', 'print JSON')
+    .action(
+      action((id: string, opts: { root?: string; json?: boolean }) =>
+        accessRevokeCommand(io, id, opts),
       ),
     );
 
@@ -528,6 +662,15 @@ export async function run(argv: readonly string[], io: CliIo): Promise<number> {
   const program = createProgram(io, (code) => {
     exitCode = code;
   });
+  // Tokens are never taken from arguments: they would end up in shell history and process lists.
+  if (argv.some((arg) => arg === '--token' || arg.startsWith('--token='))) {
+    return reportError(
+      io,
+      new CliError(
+        'tokens are not accepted as flags, because flags end up in shell history and process lists; set OPENBOARD_TOKEN in the environment instead',
+      ),
+    );
+  }
   // `start` is the default command, so commander would read an unknown command
   // as an excess argument to `start`. Name the real problem instead.
   const first = argv[0];

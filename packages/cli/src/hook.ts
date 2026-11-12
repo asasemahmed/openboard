@@ -16,14 +16,20 @@
  *   OPENBOARD_HOOK_DETAIL=off   tool names only, no summaries
  *   OPENBOARD_HOOK_PROMPTS=1    include the start of each prompt (default: its length)
  *   OPENBOARD_AGENT_ID, OPENBOARD_AGENT_NAME   the actor, as for `openboard mcp`
+ *   OPENBOARD_URL with OPENBOARD_TOKEN          report to that remote server instead
+ *                                               (https, or http on this machine only)
  */
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { request } from 'node:http';
+import { isIP } from 'node:net';
+import { networkInterfaces } from 'node:os';
 import path from 'node:path';
 import type { ActivityEvent, Actor } from '@openboard/core';
 
 /** How long the post to the server may take before the hook gives up. */
 export const HOOK_TIMEOUT_MS = 300;
+/** The same for a remote server, which is further away. */
+export const REMOTE_HOOK_TIMEOUT_MS = 1000;
 /** Events larger than this (a tool response with a whole file, say) are not read further. */
 const MAX_INPUT_BYTES = 8 * 1024 * 1024;
 /** Longest summary the hook builds itself; the server cuts again. */
@@ -303,25 +309,72 @@ export function hookRoot(cwd: string): string {
   );
 }
 
-/** The URL of the server recorded for `root`, or undefined. Reads one small file. */
-function serverUrl(root: string): string | undefined {
+/** `OPENBOARD_URL` and `OPENBOARD_TOKEN`, when both are set and the URL is http(s). */
+export function remoteTarget(env: Env): { url: string; token: string } | undefined {
+  const url = env.OPENBOARD_URL?.trim();
+  const token = env.OPENBOARD_TOKEN?.trim();
+  if (!url || !token || !/^https?:\/\//.test(url)) return undefined;
+  // Never send a token over plain http to another machine.
+  if (url.startsWith('http://')) {
+    let host = '';
+    try {
+      host = new URL(url).hostname.replace(/^\[|\]$/g, '');
+    } catch {
+      return undefined;
+    }
+    if (!(host === 'localhost' || host === '::1' || /^127\./.test(host))) return undefined;
+  }
+  return { url, token };
+}
+
+/**
+ * Whether `raw` is a plain http URL of this machine (a loopback name or an
+ * interface address); the same rule as `isOwnMachineUrl` in the server.
+ */
+export function isOwnMachineUrl(raw: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== 'http:' || url.username || url.password) return false;
+  const host = url.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (host === 'localhost' || host === '::1' || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)) {
+    return true;
+  }
+  if (isIP(host) === 0) return false;
+  return Object.values(networkInterfaces()).some((list) =>
+    (list ?? []).some((entry) => entry.address.toLowerCase() === host),
+  );
+}
+
+/**
+ * The URL of the server recorded for `root`, or undefined. Reads one small
+ * file. A repository can ship that file, so a URL that is not this machine's
+ * is ignored: activity never goes to a host the project names.
+ */
+export function serverUrl(root: string): string | undefined {
   try {
     const info = JSON.parse(
       readFileSync(path.join(root, '.openboard', '.local', 'server.json'), 'utf8'),
     ) as { url?: unknown };
-    return typeof info.url === 'string' && info.url.startsWith('http://') ? info.url : undefined;
+    return typeof info.url === 'string' && isOwnMachineUrl(info.url) ? info.url : undefined;
   } catch {
     return undefined;
   }
 }
 
 /** POST the event; resolves (never rejects) when done, failed, or after `timeoutMs`. */
-export function postActivity(
+export async function postActivity(
   url: string,
   actor: Actor,
   event: ActivityEvent,
   timeoutMs = HOOK_TIMEOUT_MS,
+  token?: string,
 ): Promise<boolean> {
+  // https only for a remote server; the local path stays on node:http.
+  const send = url.startsWith('https://') ? (await import('node:https')).request : request;
   return new Promise((resolve) => {
     let settled = false;
     const done = (ok: boolean) => {
@@ -333,7 +386,7 @@ export function postActivity(
     const body = JSON.stringify(event);
     let req: ReturnType<typeof request>;
     try {
-      req = request(new URL('/api/activity', url), {
+      req = send(new URL('/api/activity', url), {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
@@ -342,6 +395,7 @@ export function postActivity(
           'x-openboard-actor-name': encodeURIComponent(actor.name),
           'x-openboard-actor-kind': actor.kind,
           'x-openboard-session': event.session,
+          ...(token ? { authorization: `Bearer ${token}` } : {}),
         },
       });
     } catch {
@@ -417,12 +471,20 @@ export async function runHook(
             ? mapGeneric(json, io.env)
             : null;
     if (!event) return { code: 0 };
-    const url = serverUrl(hookRoot(eventCwd(json) ?? io.cwd));
+    // A remote server when OPENBOARD_URL and OPENBOARD_TOKEN say so, else the project's own.
+    const remote = remoteTarget(io.env);
+    const url = remote?.url ?? serverUrl(hookRoot(eventCwd(json) ?? io.cwd));
     if (!url) return { code: 0 };
-    // The same actor the MCP server derives from the client's name.
+    // The same actor the MCP server derives from the client's name (a remote server uses the grant's).
     const client = format === 'claude-code' ? 'claude-code' : format === 'cursor' ? 'cursor' : '';
     const actor = hookActor(client, io.env);
-    await (io.post ?? postActivity)(url, actor, event);
+    await (io.post ?? postActivity)(
+      url,
+      actor,
+      event,
+      remote ? REMOTE_HOOK_TIMEOUT_MS : HOOK_TIMEOUT_MS,
+      remote?.token,
+    );
     return { code: 0, sent: event };
   } catch {
     return { code: 0 };

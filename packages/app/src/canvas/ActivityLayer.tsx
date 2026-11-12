@@ -14,6 +14,7 @@ import {
   offscreenGroups,
   type ViewSide,
 } from '../lib/offscreen.js';
+import { useCan } from '../state/access.js';
 import {
   actorName,
   byActor,
@@ -143,6 +144,7 @@ function RemovalNotices() {
   const removals = useStoreValue(activity, () => activity.get().removals);
   const actors = useStoreValue(store, () => store.meta.actors);
   const [busy, setBusy] = useState<number | null>(null);
+  const canUndo = useCan('board.undo');
   if (removals.length === 0) return null;
 
   const undo = async (notice: RemovalNotice) => {
@@ -186,14 +188,16 @@ function RemovalNotices() {
           <span className="removal-notice-text">
             {removalMessage(notice, actorName(actors, notice.actorId))}
           </span>
-          <button
-            type="button"
-            className="removal-undo"
-            disabled={busy === notice.id}
-            onClick={() => void undo(notice)}
-          >
-            {busy === notice.id ? 'Undoing…' : 'Undo'}
-          </button>
+          {canUndo && (
+            <button
+              type="button"
+              className="removal-undo"
+              disabled={busy === notice.id}
+              onClick={() => void undo(notice)}
+            >
+              {busy === notice.id ? 'Undoing…' : 'Undo'}
+            </button>
+          )}
           <IconButton
             icon="close"
             label="Dismiss"

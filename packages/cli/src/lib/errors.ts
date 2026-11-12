@@ -21,6 +21,9 @@ export function reportError(io: CliIo, error: unknown): number {
 }
 
 function describeError(error: unknown): string {
+  if (error instanceof OpenBoardError && error.code === 'unauthorized') {
+    return `${error.message} (set OPENBOARD_TOKEN to a valid token; an owner creates one with \`openboard access invite\`)`;
+  }
   if (error instanceof CliError || error instanceof OpenBoardError) return error.message;
   if (isNodeError(error)) {
     if (error.code === 'EACCES' || error.code === 'EPERM') {

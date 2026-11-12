@@ -41,6 +41,8 @@ describe('argument parsing and exit codes', () => {
       'textconv',
       'links',
       'revisions',
+      'whoami',
+      'access',
     ]) {
       expect(io.out()).toContain(`  ${command} `);
     }

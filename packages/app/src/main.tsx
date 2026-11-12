@@ -1,3 +1,5 @@
+// Before anything else: take an invite token out of the address bar.
+import './joinToken.js';
 import '@xyflow/react/dist/base.css';
 import './styles/tokens.css';
 import './styles/base.css';

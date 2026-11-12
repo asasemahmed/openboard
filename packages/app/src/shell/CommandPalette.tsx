@@ -1,3 +1,4 @@
+import { type AccessAction, can } from '@openboard/core';
 /**
  * Cmd/Ctrl+K: find a node by title, id or tag and jump to it, or run a
  * command (add a node, tidy up, switch theme or board).
@@ -8,6 +9,7 @@ import { fuzzyScore, searchNodes } from '../lib/fuzzy.js';
 import { ADDABLE_TYPES, STATUS_META, typeMeta } from '../lib/nodeTypes.js';
 import { boardPath, navigate } from '../lib/router.js';
 import { setThemePref, type ThemePref } from '../lib/theme.js';
+import { useRole } from '../state/access.js';
 import { boards, useBoards } from '../state/boards.js';
 import { useSession } from '../state/context.js';
 import { useValue } from '../state/emitter.js';
@@ -35,11 +37,22 @@ function icon(name: IconName) {
   return <Icon name={name} />;
 }
 
+/** What a command needs beyond reading the board (`add:<type>` commands need `board.edit`). */
+const COMMAND_NEEDS: Record<string, AccessAction> = {
+  tidy: 'board.edit',
+  'tidy-all': 'board.edit',
+  undo: 'board.undo',
+  redo: 'board.undo',
+  import: 'board.edit',
+  'new-board': 'board.create',
+};
+
 export function CommandPalette() {
   const session = useSession();
   const { ui, store } = session;
   const state = useValue(ui.palette);
   const actions = useActions();
+  const role = useRole();
   const list = useBoards();
   const [query, setQuery] = useState(state.query);
   const [active, setActive] = useState(0);
@@ -216,8 +229,12 @@ export function CommandPalette() {
         run: () => navigate('/'),
       },
     );
-    return out;
-  }, [actions, ui, store]);
+    // Commands that change the board are not offered to people who may not.
+    return out.filter((item) => {
+      const needs = COMMAND_NEEDS[item.id] ?? (item.id.startsWith('add:') ? 'board.edit' : null);
+      return needs === null || can(role, needs);
+    });
+  }, [actions, ui, store, role]);
 
   const items = useMemo<Item[]>(() => {
     const q = query.trim();

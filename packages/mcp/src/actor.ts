@@ -3,7 +3,7 @@
  * to this actor, so it is derived from what the client says about itself
  * (`clientInfo` at initialize), unless the environment names it explicitly.
  */
-import { type Actor, IdSchema, slugify } from '@openboard/core';
+import { type AccessVia, type Actor, IdSchema, type Role, slugify } from '@openboard/core';
 
 /** What an MCP client reports about itself in `initialize`. */
 export interface ClientInfo {
@@ -11,8 +11,23 @@ export interface ClientInfo {
   version?: string;
 }
 
+/**
+ * Who opened an MCP session over HTTP, as the board server established it
+ * (the `caller` a mounted handler receives). For a `token` or `session` caller
+ * the identity comes from its access grant; a `local` caller is the owner at
+ * the server's machine.
+ */
+export interface McpCaller {
+  actor: Actor;
+  role: Role;
+  via: AccessVia;
+  grantId?: string;
+}
+
 /** What `resolveApi` gets: the client, and the agent session this MCP session is. */
 export interface SessionInfo extends ClientInfo {
+  /** Over HTTP behind a board server: who opened the session. */
+  caller?: McpCaller;
   /**
    * Stable for the life of the MCP session (one per stdio process, the MCP
    * session id over HTTP). Pass it to the `BoardApi` (`connect({ session })`,
@@ -67,4 +82,17 @@ export function actorForClient(
   const envName = env.OPENBOARD_AGENT_NAME?.trim();
   const name = (envName || readableName(clientName)).slice(0, 80);
   return { id, kind: 'agent', name };
+}
+
+/**
+ * The actor an MCP session acts as. A caller with credentials is who its grant
+ * says, whatever the client calls itself; otherwise the actor is derived from
+ * the client, as for a local session.
+ */
+export function actorForSession(
+  client: SessionInfo,
+  env: Record<string, string | undefined> = process.env,
+): Actor {
+  if (client.caller && client.caller.via !== 'local') return client.caller.actor;
+  return actorForClient(client, env);
 }

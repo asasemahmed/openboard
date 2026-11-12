@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { boardPath, navigate } from '../lib/router.js';
 import { relativeTime } from '../lib/time.js';
+import { useCan } from '../state/access.js';
 import { boards, lastBoardId, useBoards } from '../state/boards.js';
 import { Button } from '../ui/Button.js';
 import { Logo } from '../ui/Icon.js';
@@ -14,6 +15,7 @@ import { ThemeToggle } from './ThemeToggle.js';
 export function HomeScreen({ resumeLast }: { resumeLast: boolean }) {
   const list = useBoards();
   const [creating, setCreating] = useState(false);
+  const canCreate = useCan('board.create');
 
   useEffect(() => {
     void boards.refresh();
@@ -60,9 +62,11 @@ export function HomeScreen({ resumeLast }: { resumeLast: boolean }) {
       <main className="home-main">
         <div className="home-title-row">
           <h1>Boards</h1>
-          <Button variant="primary" icon="plus" onClick={() => setCreating(true)}>
-            New board
-          </Button>
+          {canCreate && (
+            <Button variant="primary" icon="plus" onClick={() => setCreating(true)}>
+              New board
+            </Button>
+          )}
         </div>
         {list.status === 'error' && (
           <p className="field-error" role="alert">

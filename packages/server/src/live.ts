@@ -23,6 +23,7 @@
 import {
   ACTIVITY_LABEL_MAX,
   ACTIVITY_SUMMARY_MAX,
+  type AccessVia,
   type ActivityEvent,
   type Actor,
   AGENT_IDLE_MS,
@@ -30,6 +31,7 @@ import {
   type AgentPresence,
   type AgentStatus,
   type Claim,
+  can,
   DEFAULT_SESSION,
   ENDED_SESSION_TTL_MS,
   LIVE_RECENT_MAX,
@@ -38,6 +40,7 @@ import {
   OpenBoardError,
   PRESENCE_FOCUS_MAX,
   type Presence,
+  type Role,
   SESSION_RECENT,
   SESSIONS_KEPT,
   type Session,
@@ -62,6 +65,50 @@ export function cleanText(text: string, max: number): string {
   const flat = text.replace(CONTROL, ' ').replace(/\s+/g, ' ').trim();
   if (flat.length <= max) return flat;
   return `${flat.slice(0, Math.max(0, max - 3))}...`;
+}
+
+// ── Who sees activity detail ─────────────────────────────────────────────────
+
+/**
+ * Whether a caller may see what agents are doing in detail: session labels,
+ * summaries and steps, and the `detail` and `focus` of agent presence. Only
+ * the owner at this machine and roles that edit boards may; viewers and
+ * commenters see that an agent is there and its coarse status.
+ */
+export function seesActivityDetail(caller: { role: Role; via: AccessVia }): boolean {
+  return caller.via === 'local' || can(caller.role, 'board.edit');
+}
+
+/** A session with its untrusted, possibly sensitive text taken out. */
+export function redactSession(session: Session): Session {
+  const { label: _label, current: _current, recent: _recent, ...rest } = session;
+  return { ...rest, recent: [] };
+}
+
+/** Agent presence with only its coarse status. */
+export function redactAgentPresence(agent: AgentPresence): AgentPresence {
+  const { detail: _detail, focus: _focus, ...rest } = agent;
+  return rest;
+}
+
+/**
+ * An awareness state as a caller without `seesActivityDetail` may see it:
+ * server-published agent presence and session lists are redacted, anything
+ * else is returned unchanged.
+ */
+export function redactPresenceState(state: unknown): unknown {
+  if (typeof state !== 'object' || state === null) return state;
+  const record = state as Record<string, unknown>;
+  if (record.agent === undefined && record.live === undefined) return state;
+  const out: Record<string, unknown> = { ...record };
+  if (typeof record.agent === 'object' && record.agent !== null) {
+    out.agent = redactAgentPresence(record.agent as AgentPresence);
+  } else delete out.agent;
+  const live = record.live as LiveSessions | undefined;
+  if (typeof live === 'object' && live !== null && Array.isArray(live.sessions)) {
+    out.live = { ...live, sessions: live.sessions.map(redactSession) };
+  } else delete out.live;
+  return out;
 }
 
 /** One awareness entry the server owns. */

@@ -36,7 +36,7 @@
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import type { Actor, TxOrigin } from '@openboard/core';
-import { can, OpenBoardError } from '@openboard/core';
+import { ColorSchema, can, OpenBoardError } from '@openboard/core';
 import * as decoding from 'lib0/decoding';
 import * as encoding from 'lib0/encoding';
 import { type RawData, type WebSocket, WebSocketServer } from 'ws';
@@ -51,6 +51,7 @@ import { actorFromQuery } from './actor.js';
 import { type Auth, type Caller, headerGetter, scrubSecrets } from './auth.js';
 import type { Boards } from './boards.js';
 import { errorMessage } from './fsutil.js';
+import { redactPresenceState, seesActivityDetail } from './live.js';
 import { isBoardId } from './paths.js';
 import type { Room } from './room.js';
 import { checkRequest, type SecurityConfig } from './security.js';
@@ -104,6 +105,8 @@ interface Connection {
   readOnly: boolean;
   /** Whether the client was told it is read-only. */
   told: boolean;
+  /** Agent activity detail is taken out of the presence this connection receives (see live.ts). */
+  redacted: boolean;
 }
 
 /** Room listeners shared by all connections of one board. */
@@ -186,6 +189,7 @@ export class SyncServer {
           remoteAddress: request.socket.remoteAddress,
           host: request.headers.host,
           header,
+          headerNames: () => Object.keys(request.headers),
           method: 'GET',
         },
         {
@@ -238,8 +242,10 @@ export class SyncServer {
       !(can(caller.role, 'board.edit') && caller.actor.kind === 'human');
 
     const grantId = caller?.grantId;
-    if (grantId !== undefined) this.perGrant.set(grantId, (this.perGrant.get(grantId) ?? 0) + 1);
+    // Counted once the socket is open: a handshake that ws refuses (no
+    // Sec-WebSocket-Key, say) never calls back, and must not use up a slot.
     this.wss.handleUpgrade(request, socket, head, (ws) => {
+      if (grantId !== undefined) this.perGrant.set(grantId, (this.perGrant.get(grantId) ?? 0) + 1);
       this.sockets.set(ws, caller);
       ws.on('close', () => {
         this.sockets.delete(ws);
@@ -308,6 +314,7 @@ export class SyncServer {
       alive: true,
       readOnly,
       told: false,
+      redacted: caller !== null && !seesActivityDetail(caller),
     };
     const hub = this.hub(room);
     hub.connections.add(conn);
@@ -324,7 +331,7 @@ export class SyncServer {
     syncProtocol.writeSyncStep1(step1, room.doc.ydoc);
     send(conn, encoding.toUint8Array(step1));
     const states = room.awareness.getStates();
-    if (states.size > 0) send(conn, awarenessMessage(room, [...states.keys()]));
+    if (states.size > 0) send(conn, awarenessMessage(conn, [...states.keys()]));
 
     for (const data of early) this.receive(conn, data);
   }
@@ -350,8 +357,16 @@ export class SyncServer {
         for (const id of changes.added) owner.clients.add(id);
         for (const id of changes.removed) owner.clients.delete(id);
       }
-      const message = awarenessMessage(room, changed);
-      for (const conn of connections) send(conn, message);
+      // Built at most twice: in full, and redacted for roles that may not see agent activity.
+      const messages = new Map<boolean, Uint8Array>();
+      for (const conn of connections) {
+        let message = messages.get(conn.redacted);
+        if (!message) {
+          message = awarenessMessage(conn, changed);
+          messages.set(conn.redacted, message);
+        }
+        send(conn, message);
+      }
     };
     room.doc.ydoc.on('update', onUpdate);
     room.awareness.on('update', onAwareness);
@@ -402,7 +417,7 @@ export class SyncServer {
           break;
         }
         case MESSAGE_QUERY_AWARENESS:
-          send(conn, awarenessMessage(conn.room, [...conn.room.awareness.getStates().keys()]));
+          send(conn, awarenessMessage(conn, [...conn.room.awareness.getStates().keys()]));
           break;
         default:
           // Unknown message types (auth included) are ignored, as the reference server does.
@@ -564,7 +579,7 @@ function cleanAwareness(
     if (typeof claimed === 'object' && claimed !== null) {
       const { name, color } = claimed as { name?: unknown; color?: unknown };
       if (typeof name === 'string' && name.trim() !== '' && name.length <= 80) actor.name = name;
-      if (typeof color === 'string' && color.length <= 32) actor.color = color;
+      if (typeof color === 'string' && ColorSchema.safeParse(color).success) actor.color = color;
     }
     kept.push({ id, clock, json: JSON.stringify({ ...rest, actor }) });
   }
@@ -579,10 +594,26 @@ function cleanAwareness(
   return encoding.toUint8Array(encoder);
 }
 
-function awarenessMessage(room: Room, clients: number[]): Uint8Array {
+/**
+ * The awareness message for `clients`, as `conn` may see it. Every awareness
+ * message a connection receives is built here, so a redacted connection
+ * never gets agent activity detail by another path.
+ */
+function awarenessMessage(conn: Connection, clients: number[]): Uint8Array {
+  const awareness = conn.room.awareness;
+  let states = awareness.getStates();
+  if (conn.redacted) {
+    const redacted = new Map<number, Record<string, unknown>>();
+    for (const id of clients) {
+      const state = states.get(id);
+      if (state !== undefined)
+        redacted.set(id, redactPresenceState(state) as Record<string, unknown>);
+    }
+    states = redacted;
+  }
   const encoder = encoding.createEncoder();
   encoding.writeVarUint(encoder, MESSAGE_AWARENESS);
-  encoding.writeVarUint8Array(encoder, encodeAwarenessUpdate(room.awareness, clients));
+  encoding.writeVarUint8Array(encoder, encodeAwarenessUpdate(awareness, clients, states));
   return encoding.toUint8Array(encoder);
 }
 

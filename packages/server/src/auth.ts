@@ -37,8 +37,34 @@ const FORWARDING_HEADERS = [
   'true-client-ip',
   'cf-connecting-ip',
   'fly-client-ip',
+  'fastly-client-ip',
+  'x-cluster-client-ip',
+  'cdn-loop',
   'via',
 ] as const;
+
+/**
+ * Header name prefixes that relays use for what they add: `X-Forwarded-Server`,
+ * `X-Original-Forwarded-For`, Cloudflare's `CF-*`, Fly's `Fly-*`, Envoy's,
+ * Tailscale's. Any such header means the request was relayed too.
+ */
+const FORWARDING_PREFIXES = [
+  'x-forwarded-',
+  'x-original-',
+  'cf-',
+  'fly-',
+  'x-envoy-',
+  'tailscale-',
+] as const;
+
+/** Whether a header name is one a relay adds. */
+export function isForwardingHeader(name: string): boolean {
+  const lower = name.toLowerCase();
+  return (
+    (FORWARDING_HEADERS as readonly string[]).includes(lower) ||
+    FORWARDING_PREFIXES.some((prefix) => lower.startsWith(prefix))
+  );
+}
 
 const LOOPBACK_HOSTS = ['localhost', '127.0.0.1', '[::1]'];
 
@@ -56,6 +82,8 @@ export interface LocalRequest {
   /** The port this server listens on. */
   port: number;
   header: (name: string) => string | undefined;
+  /** The names of every header of the request, for the forwarding check. */
+  headerNames?: () => Iterable<string>;
 }
 
 /**
@@ -65,7 +93,8 @@ export interface LocalRequest {
  *
  * 1. the socket's peer address is loopback;
  * 2. the `Host` header is a loopback name on this server's port;
- * 3. it carries no forwarding header (`Forwarded`, `X-Forwarded-*`, ...).
+ * 3. it carries no forwarding header (`Forwarded`, `X-Forwarded-*`, ...;
+ *    see `isForwardingHeader`).
  *
  * Why all three: a tunnel or reverse proxy on this machine (cloudflared, ngrok,
  * a local nginx) connects from loopback, so (1) alone would hand everyone on
@@ -79,7 +108,9 @@ export function isLocalOwnerRequest(request: LocalRequest): boolean {
   if (!isLoopbackAddress(request.remoteAddress)) return false;
   const host = request.host?.toLowerCase();
   if (!host || !LOOPBACK_HOSTS.some((name) => host === `${name}:${request.port}`)) return false;
-  return FORWARDING_HEADERS.every((name) => request.header(name) === undefined);
+  if (!FORWARDING_HEADERS.every((name) => request.header(name) === undefined)) return false;
+  for (const name of request.headerNames?.() ?? []) if (isForwardingHeader(name)) return false;
+  return true;
 }
 
 /**

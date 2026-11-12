@@ -2,9 +2,11 @@ import { type BoardEdge, LIMITS } from '@openboard/core';
 import { applyOrReport, useActions } from '../canvas/actions.js';
 import { EDGE_TYPES, edgeMeta } from '../lib/edgeTypes.js';
 import { typeMeta } from '../lib/nodeTypes.js';
+import { useCan } from '../state/access.js';
 import { useBoardNode, useSession } from '../state/context.js';
 import { Button } from '../ui/Button.js';
 import { Field, IdRow, Provenance, Section } from './fields.js';
+import { ReadOnlyNote } from './ReadOnlyNote.js';
 import { useDraft } from './useDraft.js';
 
 function Endpoint({ id, label }: { id: string; label: string }) {
@@ -29,6 +31,7 @@ function Endpoint({ id, label }: { id: string; label: string }) {
 }
 
 export function EdgeInspector({ edge }: { edge: BoardEdge }) {
+  const canEdit = useCan('board.edit');
   const session = useSession();
   const actions = useActions();
   const update = (patch: { type?: string; label?: string | null }) =>
@@ -38,58 +41,61 @@ export function EdgeInspector({ edge }: { edge: BoardEdge }) {
 
   return (
     <div className="inspector-edge">
-      <Section>
-        <p className="inspector-kicker">Connection</p>
-        <Endpoint id={edge.source} label="From" />
-        <Endpoint id={edge.target} label="To" />
-        <Field label="Relationship">
-          {(id) => (
-            <select
-              id={id}
-              className="input"
-              value={edge.type}
-              onChange={(event) => update({ type: event.target.value })}
-            >
-              {options.map((type) => (
-                <option key={type} value={type}>
-                  {edgeMeta(type).label}
-                </option>
-              ))}
-            </select>
-          )}
-        </Field>
-        <Field label="Label">
-          {(id) => (
-            <input
-              id={id}
-              className="input"
-              value={label.draft}
-              maxLength={LIMITS.label}
-              placeholder="Optional"
-              onChange={(event) => label.change(event.target.value)}
-              onBlur={() => label.save()}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') label.save();
-                if (event.key === 'Escape') label.reset();
-              }}
-            />
-          )}
-        </Field>
-      </Section>
-      <Section title="About">
-        <IdRow id={edge.id} kind="edge" />
-        <Provenance
-          createdBy={edge.createdBy}
-          createdAt={edge.createdAt}
-          updatedBy={edge.updatedBy}
-          updatedAt={edge.updatedAt}
-        />
-        <div className="inspector-actions">
-          <Button size="sm" variant="danger" icon="trash" onClick={actions.deleteSelection}>
-            Delete connection
-          </Button>
-        </div>
-      </Section>
+      {!canEdit && <ReadOnlyNote />}
+      <fieldset className="inspector-fieldset" disabled={!canEdit}>
+        <Section>
+          <p className="inspector-kicker">Connection</p>
+          <Endpoint id={edge.source} label="From" />
+          <Endpoint id={edge.target} label="To" />
+          <Field label="Relationship">
+            {(id) => (
+              <select
+                id={id}
+                className="input"
+                value={edge.type}
+                onChange={(event) => update({ type: event.target.value })}
+              >
+                {options.map((type) => (
+                  <option key={type} value={type}>
+                    {edgeMeta(type).label}
+                  </option>
+                ))}
+              </select>
+            )}
+          </Field>
+          <Field label="Label">
+            {(id) => (
+              <input
+                id={id}
+                className="input"
+                value={label.draft}
+                maxLength={LIMITS.label}
+                placeholder="Optional"
+                onChange={(event) => label.change(event.target.value)}
+                onBlur={() => label.save()}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') label.save();
+                  if (event.key === 'Escape') label.reset();
+                }}
+              />
+            )}
+          </Field>
+        </Section>
+        <Section title="About">
+          <IdRow id={edge.id} kind="edge" />
+          <Provenance
+            createdBy={edge.createdBy}
+            createdAt={edge.createdAt}
+            updatedBy={edge.updatedBy}
+            updatedAt={edge.updatedAt}
+          />
+          <div className="inspector-actions">
+            <Button size="sm" variant="danger" icon="trash" onClick={actions.deleteSelection}>
+              Delete connection
+            </Button>
+          </div>
+        </Section>
+      </fieldset>
     </div>
   );
 }
