@@ -62,5 +62,6 @@ describe('ids', () => {
   it('slugifies names', () => {
     expect(slugify('My Board!')).toBe('my-board');
     expect(slugify('***')).toBe('board');
+    expect(slugify('Ünïcode Plan')).toBe('unicode-plan');
   });
 });

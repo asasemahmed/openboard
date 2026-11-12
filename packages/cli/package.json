@@ -18,6 +18,7 @@
     "dist"
   ],
   "dependencies": {
+    "@openboard/app": "workspace:*",
     "@openboard/core": "workspace:*",
     "@openboard/mcp": "workspace:*",
     "@openboard/sdk": "workspace:*",

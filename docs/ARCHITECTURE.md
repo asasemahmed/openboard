@@ -38,6 +38,7 @@ Defined in [`packages/core/src/schema.ts`](../packages/core/src/schema.ts).
 - A **node** has a `type` (`note`, `task`, `decision`, `question`, `risk`, `doc`, `code`, `agent`, `run`, `frame`, or a custom `x:name`), a `title`, and optionally a markdown `body`, a `status`, `tags`, free-form `props`, `links` to code or URLs, and a `parent` frame.
 - An **edge** has a `type` (`relates_to`, `depends_on`, `blocks`, `implements`, `evidence_for`, `flows_to`, or custom), a `source`, a `target`, and an optional `label`.
 - A node's **view** (`x`, `y`, `w`, `h`, `pinned`, `color`, `collapsed`) is presentation. It is kept apart from meaning on purpose: agents do not place nodes, the layout engine does, and a node a human dragged is `pinned` and left alone.
+- View coordinates are relative to the parent frame's top-left corner (or to the canvas origin for a node with no parent), so moving a frame moves its children without rewriting them. Default node sizes come from `defaultNodeSize` in `core`, which the layout engine and the canvas share so a server-side layout does not overlap in the browser.
 - Every node and edge records who created and last changed it. `updatedAt` moves only on semantic changes, never on a move or resize.
 
 ### Semantic rules
@@ -47,6 +48,7 @@ These hold at all times and are enforced when operations are validated:
 - `parent` must be an existing `frame` node, and the parent chain must not form a cycle.
 - An edge's `source` and `target` must exist and must differ.
 - There is at most one edge per (`type`, `source`, `target`).
+- Changing a node's `parent` without also giving it a position clears its position, so the layout engine places it in the new frame.
 - Removing a node removes the edges that touch it. Removing a frame moves its children to the frame's own parent, unless the operation asks to cascade.
 
 ## Operations
