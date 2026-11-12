@@ -123,6 +123,15 @@ describe('HTTP API', () => {
     );
     expect(withMoves.json.changes.length).toBe(cursor);
 
+    // Agents may change each other's work only with a review policy that allows it.
+    const config = await api(
+      server,
+      'PUT',
+      '/api/config',
+      { version: 1, policy: { default: 'review_destructive', agents: { 'bob-agent': 'auto' } } },
+      { 'x-openboard-actor-id': 'carol', 'x-openboard-actor-kind': 'human' },
+    );
+    expect(config.status).toBe(200);
     const later = await api(
       server,
       'POST',

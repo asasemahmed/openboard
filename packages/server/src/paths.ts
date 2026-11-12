@@ -8,6 +8,8 @@ import { IdSchema, OpenBoardError } from '@openboard/core';
 import type { ProjectPaths, ServerInfo } from './types.js';
 
 export const BOARD_SUFFIX = '.board.json';
+/** Project settings, next to the board files. */
+export const CONFIG_FILE = 'config.json';
 
 /** Throws `invalid_request` unless `id` is a valid board id. Run before any path is built from it. */
 export function assertBoardId(id: string): string {
@@ -68,6 +70,7 @@ export function projectPaths(root: string): ProjectPaths {
     dir,
     local,
     serverInfo: path.join(local, 'server.json'),
+    config: path.join(dir, CONFIG_FILE),
     boardFile: (boardId: string) => path.join(dir, `${assertBoardId(boardId)}${BOARD_SUFFIX}`),
   };
 }
@@ -78,6 +81,8 @@ export function localBoardFiles(paths: ProjectPaths, boardId: string) {
   return {
     ydoc: path.join(paths.local, `${boardId}.ydoc`),
     changes: path.join(paths.local, `${boardId}.changes.jsonl`),
+    history: path.join(paths.local, `${boardId}.history.jsonl`),
+    inbox: path.join(paths.local, `${boardId}.inbox.jsonl`),
   };
 }
 

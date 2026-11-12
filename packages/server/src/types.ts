@@ -61,6 +61,8 @@ export interface ProjectPaths {
   local: string;
   /** `<root>/.openboard/.local/server.json` */
   serverInfo: string;
+  /** `<root>/.openboard/config.json` */
+  config: string;
   /** `<root>/.openboard/<boardId>.board.json` */
   boardFile(boardId: string): string;
 }

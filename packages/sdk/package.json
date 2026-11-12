@@ -16,5 +16,8 @@
   ],
   "dependencies": {
     "@openboard/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@openboard/server": "workspace:*"
   }
 }

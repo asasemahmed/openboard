@@ -10,7 +10,7 @@
  */
 import { z } from 'zod';
 import { OpSchema } from './ops.js';
-import { EdgeSchema, IdSchema, NodeSchema } from './schema.js';
+import { CommentSchema, EdgeSchema, IdSchema, NodeSchema } from './schema.js';
 
 // ── Policy ───────────────────────────────────────────────────────────────────
 
@@ -25,7 +25,24 @@ import { EdgeSchema, IdSchema, NodeSchema } from './schema.js';
  * `review_all`         every change waits for review.
  * `locked`             the agent may read but not change anything.
  *
- * People are never restricted.
+ * People are never restricted. The rules in detail (implemented by
+ * `classifyOps`):
+ *
+ * - An agent in `locked` mode is refused everything; frame overrides do not
+ *   lift that.
+ * - Otherwise the nearest enclosing frame that sets `FRAME_POLICY_PROP` wins
+ *   (for a frame itself, its own setting counts). `locked` refuses, `review`
+ *   waits for review, `auto` frees. Frames that existed before the batch are
+ *   judged by their setting before the batch, so a batch cannot loosen its own
+ *   rules.
+ * - Under `review_destructive`, moving a node that is not pinned is free.
+ * - Operations on nodes and edges created earlier in the same batch count as
+ *   adding.
+ * - An edge is judged at both of its ends; the stricter verdict wins.
+ * - Moving a node into or out of a `locked` frame is refused, into or out of a
+ *   `review` frame waits for review. Removing a node also judges what goes
+ *   with it: a frame's children (removed or lifted out) and the edges that
+ *   touch it.
  */
 export const PolicyModeSchema = z.enum(['auto', 'review_destructive', 'review_all', 'locked']);
 export type PolicyMode = z.infer<typeof PolicyModeSchema>;
@@ -77,8 +94,19 @@ export const ProposalItemSchema = z.object({
   dependsOn: z.array(z.number().int().min(0)),
   /** One line a person can read, e.g. `Update "Payment API": status in_progress → done`. */
   summary: z.string(),
-  /** Why an accepted item could not be applied, when `status` is `conflict`. */
+  /**
+   * Why the item cannot be applied, when `status` is `conflict`: its target was
+   * changed or removed after it was proposed (detected while the proposal is
+   * pending), or it failed validation when it was accepted.
+   */
   conflict: z.string().optional(),
+  /**
+   * A fingerprint (`itemFingerprint`) of each existing node or edge the item
+   * changes or removes, as it was when proposed. A different value later means
+   * someone changed it in the meantime (moving it does not count), and the item
+   * becomes a conflict instead of overwriting that change.
+   */
+  base: z.record(IdSchema, z.string()).optional(),
 });
 export type ProposalItem = z.infer<typeof ProposalItemSchema>;
 
@@ -131,23 +159,8 @@ export type Decision = z.infer<typeof DecisionSchema>;
 /** Mention this instead of an actor id to address every agent on the board. */
 export const MENTION_AGENTS = 'agents';
 
-export const CommentSchema = z.object({
-  id: IdSchema,
-  /** Id of the first comment of the thread; the first comment's `thread` is its own id. */
-  thread: IdSchema,
-  /** The node the thread is attached to. A thread without one belongs to the board. */
-  nodeId: IdSchema.optional(),
-  author: IdSchema,
-  /** Markdown. */
-  body: z.string().min(1).max(4000),
-  createdAt: z.iso.datetime(),
-  /** Actor ids this comment addresses, or `MENTION_AGENTS`. */
-  mentions: z.array(z.string().max(64)).max(20).optional(),
-  /** Set on the first comment of a thread when the thread is resolved. */
-  resolvedAt: z.iso.datetime().optional(),
-  resolvedBy: IdSchema.optional(),
-});
-export type Comment = z.infer<typeof CommentSchema>;
+// `CommentSchema` and `Comment` live in schema.ts, because comments are part of
+// the saved board. They are exported from the package entry point as usual.
 
 export const CommentInputSchema = z.object({
   body: CommentSchema.shape.body,
@@ -215,6 +228,11 @@ export interface Batch {
   cursor: number;
   at: string;
   actor: string;
+  /**
+   * `ops` an agent's batch, an accepted proposal, or a comment made through the
+   * API; `ui` edits made in a browser (they reach the server over sync);
+   * `layout` a layout run; `file` a reload of the board file; `undo` an undo.
+   */
   source: 'ops' | 'ui' | 'layout' | 'file' | 'undo' | 'sync';
   reason?: string;
   /** The proposal this batch came from, if it was reviewed. */
@@ -225,8 +243,11 @@ export interface Batch {
   undoneBy?: string;
   /** One line, e.g. `Added 4 nodes and 3 edges`. */
   summary: string;
+  /** Touched node, edge and comment ids, each sorted. */
   nodeIds: string[];
   edgeIds: string[];
+  /** Omitted when the batch touched no comment. */
+  commentIds?: string[];
 }
 
 export const HistoryOptionsSchema = z.object({
@@ -269,7 +290,7 @@ export interface UndoResult {
    * Things left as they are because someone changed them after the batch being
    * undone. Undo never overwrites later work.
    */
-  conflicts: Array<{ kind: 'node' | 'edge'; id: string; reason: string }>;
+  conflicts: Array<{ kind: 'node' | 'edge' | 'comment'; id: string; reason: string }>;
   text: string;
 }
 

@@ -2,7 +2,7 @@ import { format } from 'node:util';
 import { emptyBoard, OpenBoardError } from '@openboard/core';
 import { actorForClient, runStdio } from '@openboard/mcp';
 import type { CliIo } from '../lib/io.js';
-import { ensureServer, ReconnectingApi, shared } from '../lib/mcp.js';
+import { ensureServer, reconnectingApi, shared } from '../lib/mcp.js';
 import { cliVersion, projectName, resolveRoot } from '../lib/project.js';
 import { findRunningServer, projectPaths } from '../lib/server.js';
 import { ensureProjectDir, readBoardFiles, writeNewBoardFile } from '../lib/store.js';
@@ -61,7 +61,7 @@ export async function mcpCommand(io: CliIo, options: McpOptions = {}): Promise<n
   await runStdio({
     resolveApi: async (client) => {
       const server = await ensure();
-      return new ReconnectingApi(actorForClient(client, io.env), server, ensure);
+      return reconnectingApi(actorForClient(client, io.env), server, ensure);
     },
     ...(options.board !== undefined ? { defaultBoard: options.board } : {}),
     version: cliVersion(),

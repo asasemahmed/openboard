@@ -16,7 +16,6 @@ import type {
   AnswerInput,
   Ask,
   AskInput,
-  Comment,
   CommentInput,
   Decision,
   HistoryOptions,
@@ -36,6 +35,7 @@ import {
   type BoardEdge,
   type BoardNode,
   type BoardSummary,
+  type Comment,
   IdSchema,
   NodeTypeSchema,
   StatusSchema,
@@ -161,6 +161,10 @@ export interface ChangeEntry {
   fields?: string[];
   /** Title of the node (or "source -> target" for an edge) at the time. */
   title?: string;
+  /** The `reason` given with the batch that made this change, if any. */
+  reason?: string;
+  /** The history batch this change belongs to (see `BoardApi.history`). */
+  batchId?: string;
 }
 
 export const ChangesOptionsSchema = z.object({

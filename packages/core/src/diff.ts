@@ -37,6 +37,8 @@ export interface BoardDiff {
   actors: { added: string[]; removed: string[]; updated: string[] };
   nodes: { added: BoardNode[]; removed: BoardNode[]; updated: NodeUpdate[]; moved: NodeMove[] };
   edges: { added: BoardEdge[]; removed: BoardEdge[]; updated: EdgeUpdate[] };
+  /** Comment ids, sorted. */
+  comments: { added: string[]; removed: string[]; updated: string[] };
   isEmpty: boolean;
 }
 
@@ -94,13 +96,25 @@ export function diffBoards(before: Board, after: Board): BoardDiff {
     }
   }
 
+  const comments = { added: [] as string[], removed: [] as string[], updated: [] as string[] };
+  const beforeComments = before.comments ?? {};
+  const afterComments = after.comments ?? {};
+  for (const id of unionKeys(beforeComments, afterComments)) {
+    const a = beforeComments[id];
+    const b = afterComments[id];
+    if (!a && b) comments.added.push(id);
+    else if (a && !b) comments.removed.push(id);
+    else if (a && b && !jsonEqual(a, b)) comments.updated.push(id);
+  }
+
   const isEmpty =
     meta.length === 0 &&
     actors.added.length + actors.removed.length + actors.updated.length === 0 &&
     nodes.added.length + nodes.removed.length + nodes.updated.length + nodes.moved.length === 0 &&
-    edges.added.length + edges.removed.length + edges.updated.length === 0;
+    edges.added.length + edges.removed.length + edges.updated.length === 0 &&
+    comments.added.length + comments.removed.length + comments.updated.length === 0;
 
-  return { meta, actors, nodes, edges, isEmpty };
+  return { meta, actors, nodes, edges, comments, isEmpty };
 }
 
 function unionKeys(a: Record<string, unknown>, b: Record<string, unknown>): string[] {

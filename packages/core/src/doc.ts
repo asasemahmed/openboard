@@ -6,6 +6,9 @@
  *   actors  Y.Map   plain actor objects by id
  *   nodes   Y.Map   one Y.Map per node, one key per field, plain JSON values
  *   edges   Y.Map   one Y.Map per edge, same shape
+ *   proposals  Y.Map   plain `Proposal` objects by id
+ *   asks       Y.Map   plain `Ask` objects by id
+ *   comments   Y.Map   plain `Comment` objects by id
  *
  * `BoardDoc` is the only code that reads or writes these maps. It keeps a
  * parsed copy of every entry, refreshed after each transaction, so reads are
@@ -14,9 +17,11 @@
  * reported through `issues()` rather than thrown.
  */
 import * as Y from 'yjs';
+import type { z } from 'zod';
 import type { ChangeKind } from './api.js';
 import { OpenBoardError } from './api.js';
 import { type ApplyContext, type ApplyOutcome, applyOps } from './apply.js';
+import { type Ask, AskSchema, type Proposal, ProposalSchema } from './collab.js';
 import type { AppliedOps, Op } from './ops.js';
 import {
   type Actor,
@@ -27,6 +32,8 @@ import {
   BoardMetaSchema,
   type BoardNode,
   type BoardSummary,
+  type Comment,
+  CommentSchema,
   EdgeSchema,
   IdSchema,
   NodeSchema,
@@ -57,8 +64,26 @@ export interface DocChange {
   title?: string;
 }
 
+/** An item's state before and after a transaction; null means absent. */
+export interface ItemState<T> {
+  before: T | null;
+  after: T | null;
+}
+
+/**
+ * Exact states of the nodes, edges and comments a transaction changed, as
+ * stored (bookkeeping fields included, no repairs applied). Only items whose
+ * state differs are listed.
+ */
+export interface DocStates {
+  nodes: Record<string, ItemState<BoardNode>>;
+  edges: Record<string, ItemState<BoardEdge>>;
+  comments: Record<string, ItemState<Comment>>;
+}
+
 /** Everything one transaction changed. */
 export interface DocEvent {
+  /** Node and edge changes. Comments, proposals and questions are listed by id below. */
   changes: DocChange[];
   /** The transaction's origin, or null when it was not a `TxOrigin` (for example a sync provider). */
   origin: TxOrigin | null;
@@ -66,6 +91,14 @@ export interface DocEvent {
   local: boolean;
   /** True when board metadata or the actor registry changed. */
   metaChanged: boolean;
+  /** Ids of proposals whose stored value changed (added, updated or removed). */
+  proposals?: string[];
+  /** Ids of questions whose stored value changed. */
+  asks?: string[];
+  /** Ids of comments whose stored value changed. */
+  comments?: string[];
+  /** Before and after states of the nodes, edges and comments that changed. */
+  states?: DocStates;
 }
 
 export type DocListener = (event: DocEvent) => void;
@@ -90,6 +123,16 @@ interface Touched {
   actors: Set<string>;
   nodes: Set<string>;
   edges: Set<string>;
+  proposals: Set<string>;
+  asks: Set<string>;
+  comments: Set<string>;
+}
+
+/** What `restore` sets: each listed item to exactly this state, null meaning absent. */
+export interface RestoreItems {
+  nodes?: Record<string, BoardNode | null>;
+  edges?: Record<string, BoardEdge | null>;
+  comments?: Record<string, Comment | null>;
 }
 
 type Entry<T> = { value: T } | { issue: string };
@@ -100,12 +143,18 @@ export class BoardDoc {
   private readonly actorsMap: Y.Map<unknown>;
   private readonly nodesMap: Y.Map<unknown>;
   private readonly edgesMap: Y.Map<unknown>;
+  private readonly proposalsMap: Y.Map<unknown>;
+  private readonly asksMap: Y.Map<unknown>;
+  private readonly commentsMap: Y.Map<unknown>;
 
   private metaState: { meta: BoardMeta; issues: string[]; ready: boolean };
   private readonly actorCache = new Map<string, Actor>();
   private readonly nodeCache = new Map<string, BoardNode>();
   private readonly edgeCache = new Map<string, BoardEdge>();
-  /** Problems with individual entries, keyed by `nodes/<id>`, `edges/<id>` or `actors/<id>`. */
+  private readonly proposalCache = new Map<string, Proposal>();
+  private readonly askCache = new Map<string, Ask>();
+  private readonly commentCache = new Map<string, Comment>();
+  /** Problems with individual entries, keyed by `<collection>/<id>`, e.g. `nodes/n_1`. */
   private readonly entryIssues = new Map<string, string>();
   private boardCache: { board: Board; issues: string[] } | null = null;
 
@@ -121,11 +170,17 @@ export class BoardDoc {
     this.actorsMap = ydoc.getMap('actors');
     this.nodesMap = ydoc.getMap('nodes');
     this.edgesMap = ydoc.getMap('edges');
+    this.proposalsMap = ydoc.getMap('proposals');
+    this.asksMap = ydoc.getMap('asks');
+    this.commentsMap = ydoc.getMap('comments');
 
     this.metaState = this.readMeta();
     for (const id of this.actorsMap.keys()) this.refreshActor(id);
     for (const id of this.nodesMap.keys()) this.refreshNode(id);
     for (const id of this.edgesMap.keys()) this.refreshEdge(id);
+    for (const id of this.proposalsMap.keys()) this.refreshPlain('proposals', id);
+    for (const id of this.asksMap.keys()) this.refreshPlain('asks', id);
+    for (const id of this.commentsMap.keys()) this.refreshPlain('comments', id);
 
     this.watch(this.metaMap, (touched) => {
       touched.meta = true;
@@ -133,6 +188,9 @@ export class BoardDoc {
     this.watch(this.actorsMap, (touched, id) => touched.actors.add(id));
     this.watch(this.nodesMap, (touched, id) => touched.nodes.add(id));
     this.watch(this.edgesMap, (touched, id) => touched.edges.add(id));
+    this.watch(this.proposalsMap, (touched, id) => touched.proposals.add(id));
+    this.watch(this.asksMap, (touched, id) => touched.asks.add(id));
+    this.watch(this.commentsMap, (touched, id) => touched.comments.add(id));
     const onAfter = (tr: Y.Transaction) => this.flush(tr);
     ydoc.on('afterTransaction', onAfter);
     this.detach.push(() => ydoc.off('afterTransaction', onAfter));
@@ -214,6 +272,47 @@ export class BoardDoc {
     return [...this.edgeCache.values()].filter((edge) => this.hasEndpoints(edge));
   }
 
+  /**
+   * A node exactly as stored, bookkeeping included and without the repairs
+   * `getNode` applies (a dangling `parent` is kept). Used to compare against
+   * recorded history.
+   */
+  storedNode(id: string): BoardNode | undefined {
+    return this.nodeCache.get(id);
+  }
+
+  /** An edge exactly as stored, even when an endpoint is missing. */
+  storedEdge(id: string): BoardEdge | undefined {
+    return this.edgeCache.get(id);
+  }
+
+  /** Every valid proposal, oldest first (by `createdAt`, then id). */
+  proposals(): Proposal[] {
+    return sortByCreated([...this.proposalCache.values()]);
+  }
+
+  getProposal(id: string): Proposal | undefined {
+    return this.proposalCache.get(id);
+  }
+
+  /** Every valid question, oldest first. */
+  asks(): Ask[] {
+    return sortByCreated([...this.askCache.values()]);
+  }
+
+  getAsk(id: string): Ask | undefined {
+    return this.askCache.get(id);
+  }
+
+  /** Every valid comment, oldest first. */
+  comments(): Comment[] {
+    return sortByCreated([...this.commentCache.values()]);
+  }
+
+  getComment(id: string): Comment | undefined {
+    return this.commentCache.get(id);
+  }
+
   summary(): BoardSummary {
     let edgeCount = 0;
     for (const edge of this.edgeCache.values()) if (this.hasEndpoints(edge)) edgeCount++;
@@ -230,12 +329,14 @@ export class BoardDoc {
    */
   toJSON(): Board {
     const { board } = this.sanitized();
-    return {
+    const out: Board = {
       ...board,
       actors: { ...board.actors },
       nodes: { ...board.nodes },
       edges: { ...board.edges },
     };
+    if (board.comments) out.comments = { ...board.comments };
+    return out;
   }
 
   /** What `toJSON()` had to skip or repair, one line each. Empty for a healthy document. */
@@ -345,6 +446,147 @@ export class BoardDoc {
     return true;
   }
 
+  // ── Proposals, questions, comments ─────────────────────────────────────────
+
+  /** Store a proposal (replacing one with the same id). Throws `invalid_request` when it fails its schema. */
+  putProposal(proposal: Proposal, origin: TxOrigin): void {
+    this.putPlain(this.proposalsMap, ProposalSchema, proposal, 'proposal', origin);
+  }
+
+  /** Remove a proposal. Returns false when there was none. */
+  deleteProposal(id: string, origin: TxOrigin): boolean {
+    return this.deletePlain(this.proposalsMap, id, origin);
+  }
+
+  /** Store a question (replacing one with the same id). */
+  putAsk(ask: Ask, origin: TxOrigin): void {
+    this.putPlain(this.asksMap, AskSchema, ask, 'question', origin);
+  }
+
+  /**
+   * Store a comment (replacing one with the same id). With `actor`, the
+   * author is also added to the board's actor registry in the same
+   * transaction, so readers can label it.
+   */
+  putComment(comment: Comment, origin: TxOrigin, opts?: { actor?: Actor }): void {
+    const actor = opts?.actor === undefined ? undefined : ActorSchema.safeParse(opts.actor);
+    if (actor && !actor.success) {
+      throw new OpenBoardError('invalid_request', `invalid actor: ${formatIssues(actor.error)}`);
+    }
+    this.ydoc.transact(() => {
+      if (actor?.success && !jsonEqual(this.actorsMap.get(actor.data.id), actor.data)) {
+        this.actorsMap.set(actor.data.id, cloneJson(actor.data));
+      }
+      this.putPlain(this.commentsMap, CommentSchema, comment, 'comment', origin);
+    }, origin);
+  }
+
+  /** Remove one comment (not its replies). Returns false when there was none. */
+  deleteComment(id: string, origin: TxOrigin): boolean {
+    return this.deletePlain(this.commentsMap, id, origin);
+  }
+
+  /**
+   * Set each listed node, edge and comment to exactly the given state (null:
+   * absent), bookkeeping fields included, in one transaction tagged `origin`.
+   * Only fields that differ are written; nothing is written when everything
+   * already matches. This is the primitive behind exact undo: it does not
+   * check semantic rules, so the caller restores consistent sets.
+   *
+   * Throws `invalid_request` when a value fails its schema or its id does not
+   * match its key.
+   */
+  restore(items: RestoreItems, origin: TxOrigin): AppliedOps {
+    const applied: AppliedOps = {
+      refs: {},
+      addedNodes: [],
+      updatedNodes: [],
+      removedNodes: [],
+      addedEdges: [],
+      updatedEdges: [],
+      removedEdges: [],
+    };
+    const writes: Array<() => void> = [];
+    const plan = (
+      what: 'node' | 'edge',
+      map: Y.Map<unknown>,
+      cache: Map<string, unknown>,
+      desired: Record<string, BoardNode | BoardEdge | null>,
+      added: string[],
+      updated: string[],
+      removed: string[],
+    ) => {
+      const schema = what === 'node' ? NodeSchema : EdgeSchema;
+      for (const [id, value] of Object.entries(desired)) {
+        const raw = map.get(id);
+        if (value === null) {
+          if (raw === undefined) continue;
+          writes.push(() => map.delete(id));
+          if (cache.has(id)) removed.push(id);
+          continue;
+        }
+        const parsed = schema.safeParse(value);
+        if (!parsed.success) {
+          throw new OpenBoardError(
+            'invalid_request',
+            `cannot restore ${what} "${id}": ${formatIssues(parsed.error)}`,
+          );
+        }
+        if (parsed.data.id !== id) {
+          throw new OpenBoardError(
+            'invalid_request',
+            `cannot restore ${what} "${id}": its id field is "${parsed.data.id}"`,
+          );
+        }
+        if (raw instanceof Y.Map) {
+          const before = writes.length;
+          planExact(raw, value as unknown as Record<string, unknown>, writes);
+          if (writes.length > before) (cache.has(id) ? updated : added).push(id);
+        } else {
+          writes.push(() => map.set(id, toYMap(value)));
+          (cache.has(id) ? updated : added).push(id);
+        }
+      }
+    };
+    plan(
+      'node',
+      this.nodesMap,
+      this.nodeCache,
+      items.nodes ?? {},
+      applied.addedNodes,
+      applied.updatedNodes,
+      applied.removedNodes,
+    );
+    plan(
+      'edge',
+      this.edgesMap,
+      this.edgeCache,
+      items.edges ?? {},
+      applied.addedEdges,
+      applied.updatedEdges,
+      applied.removedEdges,
+    );
+    for (const [id, value] of Object.entries(items.comments ?? {})) {
+      if (value === null) {
+        if (this.commentsMap.has(id)) writes.push(() => this.commentsMap.delete(id));
+        continue;
+      }
+      const parsed = CommentSchema.safeParse(value);
+      if (!parsed.success || parsed.data.id !== id) {
+        throw new OpenBoardError('invalid_request', `cannot restore comment "${id}"`);
+      }
+      if (!jsonEqual(this.commentsMap.get(id), value)) {
+        writes.push(() => this.commentsMap.set(id, cloneJson(value)));
+      }
+    }
+    if (writes.length > 0) {
+      this.ydoc.transact(() => {
+        for (const write of writes) write();
+      }, origin);
+    }
+    return applied;
+  }
+
   /**
    * Make the document equal to `target` with as few writes as possible. All
    * values, bookkeeping included, are taken from `target` verbatim; entries
@@ -417,6 +659,15 @@ export class BoardDoc {
       applied.removedEdges,
     );
 
+    const comments = target.comments ?? {};
+    for (const id of this.commentsMap.keys()) {
+      if (!(id in comments)) writes.push(() => this.commentsMap.delete(id));
+    }
+    for (const [id, comment] of Object.entries(comments)) {
+      if (!jsonEqual(this.commentsMap.get(id), comment))
+        writes.push(() => this.commentsMap.set(id, cloneJson(comment)));
+    }
+
     if (writes.length > 0) {
       this.ydoc.transact(() => {
         for (const write of writes) write();
@@ -462,7 +713,15 @@ export class BoardDoc {
     const handler = (events: Array<Y.YEvent<Y.AbstractType<unknown>>>, tr: Y.Transaction) => {
       let touched = this.pending.get(tr);
       if (!touched) {
-        touched = { meta: false, actors: new Set(), nodes: new Set(), edges: new Set() };
+        touched = {
+          meta: false,
+          actors: new Set(),
+          nodes: new Set(),
+          edges: new Set(),
+          proposals: new Set(),
+          asks: new Set(),
+          comments: new Set(),
+        };
         this.pending.set(tr, touched);
       }
       for (const event of events) {
@@ -507,8 +766,18 @@ export class BoardDoc {
       this.refreshActor(id);
       if (!jsonEqual(previous, this.actorCache.get(id))) metaChanged = true;
     }
+    const oldComments = new Map<string, Comment | undefined>();
+    for (const id of touched.comments) oldComments.set(id, this.commentCache.get(id));
+    const oldProposals = new Map<string, Proposal | undefined>();
+    for (const id of touched.proposals) oldProposals.set(id, this.proposalCache.get(id));
+    const oldAsks = new Map<string, Ask | undefined>();
+    for (const id of touched.asks) oldAsks.set(id, this.askCache.get(id));
+
     for (const id of touched.nodes) this.refreshNode(id);
     for (const id of touched.edges) this.refreshEdge(id);
+    for (const id of touched.proposals) this.refreshPlain('proposals', id);
+    for (const id of touched.asks) this.refreshPlain('asks', id);
+    for (const id of touched.comments) this.refreshPlain('comments', id);
 
     const oldTitle = (id: string) =>
       (oldNodes.has(id) ? oldNodes.get(id) : this.nodeCache.get(id))?.title ?? id;
@@ -533,8 +802,43 @@ export class BoardDoc {
       changes.push(withFields({ kind: change, id, title }, before, after));
     }
 
-    if (changes.length === 0 && !metaChanged) return;
+    const states: DocStates = { nodes: {}, edges: {}, comments: {} };
+    for (const [id, before] of oldNodes) {
+      const after = this.nodeCache.get(id);
+      if (!jsonEqual(before, after))
+        states.nodes[id] = { before: before ?? null, after: after ?? null };
+    }
+    for (const [id, before] of oldEdges) {
+      const after = this.edgeCache.get(id);
+      if (!jsonEqual(before, after))
+        states.edges[id] = { before: before ?? null, after: after ?? null };
+    }
+    const comments = changedIds(oldComments, this.commentCache);
+    for (const id of comments) {
+      states.comments[id] = {
+        before: oldComments.get(id) ?? null,
+        after: this.commentCache.get(id) ?? null,
+      };
+    }
+    const proposals = changedIds(oldProposals, this.proposalCache);
+    const asks = changedIds(oldAsks, this.askCache);
+
+    const itemsChanged =
+      Object.keys(states.nodes).length + Object.keys(states.edges).length + comments.length > 0;
+    if (
+      changes.length === 0 &&
+      !metaChanged &&
+      !itemsChanged &&
+      proposals.length === 0 &&
+      asks.length === 0
+    ) {
+      return;
+    }
     const event: DocEvent = { changes, origin: this.originOf(tr), local: tr.local, metaChanged };
+    if (proposals.length > 0) event.proposals = proposals;
+    if (asks.length > 0) event.asks = asks;
+    if (comments.length > 0) event.comments = comments;
+    if (itemsChanged) event.states = states;
     for (const listener of [...this.listeners]) listener(event);
   }
 
@@ -593,6 +897,56 @@ export class BoardDoc {
   private refreshEdge(id: string): void {
     const raw = this.edgesMap.get(id);
     this.store(this.edgeCache, `edges/${id}`, raw === undefined ? null : parseEdge(id, raw));
+  }
+
+  private refreshPlain(collection: 'proposals' | 'asks' | 'comments', id: string): void {
+    const key = `${collection}/${id}`;
+    if (collection === 'proposals') {
+      const raw = this.proposalsMap.get(id);
+      this.store(
+        this.proposalCache,
+        key,
+        raw === undefined ? null : parsePlain(ProposalSchema, 'proposal', id, raw),
+      );
+    } else if (collection === 'asks') {
+      const raw = this.asksMap.get(id);
+      this.store(
+        this.askCache,
+        key,
+        raw === undefined ? null : parsePlain(AskSchema, 'question', id, raw),
+      );
+    } else {
+      const raw = this.commentsMap.get(id);
+      this.store(
+        this.commentCache,
+        key,
+        raw === undefined ? null : parsePlain(CommentSchema, 'comment', id, raw),
+      );
+    }
+  }
+
+  private putPlain<T extends { id: string }>(
+    map: Y.Map<unknown>,
+    schema: z.ZodType<T>,
+    value: T,
+    what: string,
+    origin: TxOrigin,
+  ): void {
+    const parsed = schema.safeParse(value);
+    if (!parsed.success) {
+      throw new OpenBoardError('invalid_request', `invalid ${what}: ${formatIssues(parsed.error)}`);
+    }
+    if (!IdSchema.safeParse(parsed.data.id).success) {
+      throw new OpenBoardError('invalid_request', `invalid ${what} id`);
+    }
+    if (jsonEqual(map.get(parsed.data.id), parsed.data)) return;
+    this.ydoc.transact(() => map.set(parsed.data.id, cloneJson(parsed.data)), origin);
+  }
+
+  private deletePlain(map: Y.Map<unknown>, id: string, origin: TxOrigin): boolean {
+    if (!map.has(id)) return false;
+    this.ydoc.transact(() => map.delete(id), origin);
+    return true;
   }
 
   private store<T>(cache: Map<string, T>, key: string, entry: Entry<T> | null): void {
@@ -687,6 +1041,13 @@ export class BoardDoc {
       nodes: Object.fromEntries(nodes),
       edges: Object.fromEntries(edges),
     };
+    if (this.commentCache.size > 0) {
+      const comments: Record<string, Comment> = {};
+      for (const id of [...this.commentCache.keys()].sort(compareStrings)) {
+        comments[id] = this.commentCache.get(id) as Comment;
+      }
+      board.comments = comments;
+    }
     this.boardCache = { board, issues };
     return this.boardCache;
   }
@@ -751,6 +1112,32 @@ function parseEdge(id: string, raw: unknown): Entry<BoardEdge> {
     return { issue: `edge "${id}" skipped: it connects "${parsed.data.source}" to itself` };
   }
   return { value: deepFreeze(normalizeEdge(parsed.data)) };
+}
+
+function parsePlain<T extends { id: string }>(
+  schema: z.ZodType<T>,
+  what: string,
+  id: string,
+  raw: unknown,
+): Entry<T> {
+  const value = raw instanceof Y.AbstractType ? (raw.toJSON() as unknown) : raw;
+  const parsed = schema.safeParse(value);
+  if (!parsed.success) return { issue: `${what} "${id}" skipped: ${formatIssues(parsed.error)}` };
+  if (parsed.data.id !== id)
+    return { issue: `${what} "${id}" skipped: its id field is "${parsed.data.id}"` };
+  return { value: deepFreeze(parsed.data) };
+}
+
+function changedIds<T>(before: Map<string, T | undefined>, now: Map<string, T>): string[] {
+  const out: string[] = [];
+  for (const [id, value] of before) if (!jsonEqual(value, now.get(id))) out.push(id);
+  return out.sort(compareStrings);
+}
+
+function sortByCreated<T extends { id: string; createdAt: string }>(items: T[]): T[] {
+  return items.sort(
+    (a, b) => compareStrings(a.createdAt, b.createdAt) || compareStrings(a.id, b.id),
+  );
 }
 
 function describe(

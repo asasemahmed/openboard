@@ -40,7 +40,7 @@ export {
   ensureServer,
   type Launch,
   mcpLaunch,
-  ReconnectingApi,
+  reconnectingApi,
   shellCommand,
 } from './lib/mcp.js';
 export { cliActor, cliBinPath, cliVersion, locateApp, resolveRoot } from './lib/project.js';

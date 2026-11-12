@@ -188,6 +188,35 @@ export const EdgeSchema = EdgeInputSchema.extend({
 });
 export type BoardEdge = z.infer<typeof EdgeSchema>;
 
+// ── Comments ─────────────────────────────────────────────────────────────────
+
+/**
+ * A comment in a thread. Defined here rather than in `collab.ts` because it is
+ * part of the saved board; see `collab.ts` for how comments are used.
+ */
+export const CommentSchema = z.object({
+  id: IdSchema,
+  /** Id of the first comment of the thread; the first comment's `thread` is its own id. */
+  thread: IdSchema,
+  /**
+   * The node the thread is attached to; replies carry the same value as the
+   * first comment. A thread without one belongs to the board. When the node is
+   * removed the comment keeps the id (so restoring the node re-attaches it) and
+   * readers treat the thread as detached.
+   */
+  nodeId: IdSchema.optional(),
+  author: IdSchema,
+  /** Markdown. */
+  body: z.string().min(1).max(4000),
+  createdAt: z.iso.datetime(),
+  /** Actor ids this comment addresses, or `MENTION_AGENTS` (`"agents"`). */
+  mentions: z.array(z.string().max(64)).max(20).optional(),
+  /** Set on the first comment of a thread when the thread is resolved. */
+  resolvedAt: z.iso.datetime().optional(),
+  resolvedBy: IdSchema.optional(),
+});
+export type Comment = z.infer<typeof CommentSchema>;
+
 // ── Board ────────────────────────────────────────────────────────────────────
 
 export const BoardMetaSchema = z.object({
@@ -209,6 +238,8 @@ export const BoardSchema = BoardMetaSchema.extend({
   actors: z.record(IdSchema, ActorSchema),
   nodes: z.record(IdSchema, NodeSchema),
   edges: z.record(IdSchema, EdgeSchema),
+  /** Comment threads, by comment id. Absent when the board has none. */
+  comments: z.record(IdSchema, CommentSchema).optional(),
 });
 export type Board = z.infer<typeof BoardSchema>;
 

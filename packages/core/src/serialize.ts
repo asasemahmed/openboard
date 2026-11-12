@@ -8,12 +8,14 @@
  * field changes one line.
  */
 import { OpenBoardError } from './api.js';
+import { type ProjectConfig, ProjectConfigSchema } from './collab.js';
 import {
   type Actor,
   type Board,
   type BoardEdge,
   type BoardNode,
   BoardSchema,
+  type Comment,
   IdSchema,
   type Json,
   type Link,
@@ -44,6 +46,17 @@ const BOOKKEEPING_KEYS = ['createdBy', 'createdAt', 'updatedBy', 'updatedAt'] as
 const EDGE_KEYS = ['id', 'type', 'source', 'target', 'label'] as const;
 const LINK_KEYS = ['kind', 'target', 'line', 'endLine', 'hash', 'stale'] as const;
 const VIEW_KEYS = ['x', 'y', 'w', 'h', 'pinned', 'collapsed', 'color'] as const;
+const COMMENT_KEYS = [
+  'id',
+  'thread',
+  'nodeId',
+  'author',
+  'createdAt',
+  'mentions',
+  'resolvedAt',
+  'resolvedBy',
+  'body',
+] as const;
 
 function pick<T extends object>(
   value: T,
@@ -78,6 +91,10 @@ function nodeValue(input: BoardNode): Ordered {
     ['view', node.view && viewValue(node.view)],
     ...pick(node, BOOKKEEPING_KEYS),
   ]);
+}
+
+function commentValue(comment: Comment): Ordered {
+  return new Ordered(pick(comment, COMMENT_KEYS));
 }
 
 function edgeValue(input: BoardEdge): Ordered {
@@ -130,6 +147,10 @@ export function serializeBoard(board: Board): string {
     ['nodes', sortedRecord(board.nodes, nodeValue)],
     ['edges', sortedRecord(board.edges, edgeValue)],
   ]);
+  // Comments are written only when there are some, so boards without any keep their old shape.
+  if (board.comments && Object.keys(board.comments).length > 0) {
+    root.entries.push(['comments', sortedRecord(board.comments, commentValue)]);
+  }
   return `${emit(root, '')}\n`;
 }
 
@@ -197,6 +218,10 @@ export function validateBoard(board: Board): BoardProblem[] {
   for (const key of Object.keys(board.nodes)) {
     if (board.edges[key]) add(['edges', key], `id "${key}" is also used by a node`);
   }
+  // A comment may point at a node that no longer exists: it is kept, detached.
+  for (const [key, comment] of Object.entries(board.comments ?? {})) {
+    if (comment.id !== key) add(['comments', key, 'id'], `does not match its key "${key}"`);
+  }
   return problems;
 }
 
@@ -233,6 +258,7 @@ export function parseBoard(text: string): Board {
   }
   for (const [id, node] of Object.entries(board.nodes)) board.nodes[id] = normalizeNode(node);
   for (const [id, edge] of Object.entries(board.edges)) board.edges[id] = normalizeEdge(edge);
+  if (board.comments && Object.keys(board.comments).length === 0) delete board.comments;
   return board;
 }
 
@@ -260,6 +286,51 @@ export function emptyBoard(
   const parsed = BoardSchema.safeParse(board);
   if (!parsed.success) {
     throw new OpenBoardError('invalid_request', `invalid board: ${formatIssues(parsed.error)}`);
+  }
+  return parsed.data;
+}
+
+// ── Project config ───────────────────────────────────────────────────────────
+
+/**
+ * `.openboard/config.json` as file text: fixed key order, agents sorted by id,
+ * two-space indentation, a final newline. The same config always produces
+ * byte-identical output.
+ */
+export function serializeConfig(config: ProjectConfig): string {
+  const parsed = ProjectConfigSchema.parse(config);
+  const agents = Object.keys(parsed.policy.agents)
+    .sort(compareStrings)
+    .map((id): [string, Value] => [id, parsed.policy.agents[id] as string]);
+  const root = new Ordered([
+    ['version', parsed.version],
+    [
+      'policy',
+      new Ordered([
+        ['default', parsed.policy.default],
+        ['agents', new Ordered(agents)],
+      ]),
+    ],
+  ]);
+  return `${emit(root, '')}\n`;
+}
+
+/** Parse and validate config file text. Throws an `invalid_request` `OpenBoardError` naming the problem. */
+export function parseConfig(text: string): ProjectConfig {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new OpenBoardError('invalid_request', `config file is not valid JSON: ${reason}`);
+  }
+  const parsed = ProjectConfigSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new OpenBoardError(
+      'invalid_request',
+      `config file is invalid: ${formatIssues(parsed.error)}`,
+      parsed.error.issues,
+    );
   }
   return parsed.data;
 }

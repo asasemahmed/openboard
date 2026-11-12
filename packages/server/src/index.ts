@@ -1,11 +1,13 @@
 export { ANONYMOUS_AGENT, ANONYMOUS_HUMAN, actorFromHeaders, actorFromQuery } from './actor.js';
 export type { BoardListing } from './boards.js';
+export { HISTORY_RETAIN, UI_COALESCE_MS } from './history.js';
 export { MAX_BODY_BYTES } from './http.js';
+export { INBOX_RETAIN } from './inbox.js';
 export * from './layout/index.js';
-export { findProjectRoot, findRunningServer, projectPaths } from './paths.js';
+export { CONFIG_FILE, findProjectRoot, findRunningServer, projectPaths } from './paths.js';
 export { ALLOW_DEV_ORIGINS } from './security.js';
 export { startServer, VERSION } from './server.js';
-export { LocalBoardApi } from './service.js';
+export { DECIDED_PROPOSALS_KEPT, LocalBoardApi } from './service.js';
 export type { FileStatus } from './store.js';
 export { CLOSE_BOARD_NOT_FOUND, CLOSE_UNAVAILABLE } from './sync.js';
 export * from './types.js';

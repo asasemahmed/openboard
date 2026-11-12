@@ -6,6 +6,8 @@ export * from './doc.js';
 export * from './geometry.js';
 export * from './ids.js';
 export * from './ops.js';
+export * from './policy.js';
+export * from './proposal.js';
 export * from './query.js';
 export * from './render.js';
 export * from './schema.js';

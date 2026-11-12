@@ -8,27 +8,45 @@
 import {
   type Actor,
   ActorSchema,
+  type AnswerInput,
   type ApplyRequest,
   type ApplyResult,
+  type Ask,
+  type AskInput,
   type Board,
   type BoardApi,
   type BoardSummary,
   type ChangesOptions,
   type ChangesResult,
+  type Comment,
+  type CommentInput,
   type CreateBoardInput,
+  type Decision,
+  type HistoryOptions,
+  type HistoryResult,
+  type InboxOptions,
+  type InboxResult,
   type LayoutRequest,
   type LayoutResult,
   OpenBoardError,
   type OpenBoardErrorCode,
   type Outline,
   type OutlineOptions,
+  type ProjectConfig,
+  type Proposal,
+  type ProposalsResult,
   type ReadQuery,
   type ReadResult,
   type SelectionResult,
+  type UndoRequest,
+  type UndoResult,
 } from '@openboard/core';
 
 /** Requests that take longer than this fail with an `unavailable` error. */
 export const DEFAULT_TIMEOUT_MS = 30_000;
+
+/** How much longer than `waitMs` an `askResult` long-poll may take before it counts as timed out. */
+export const LONG_POLL_GRACE_MS = 10_000;
 
 /** Header names that carry the caller's actor. */
 export const ACTOR_HEADERS = {
@@ -58,6 +76,7 @@ export interface HealthInfo {
 
 const ERROR_CODES: ReadonlySet<string> = new Set<OpenBoardErrorCode>([
   'board_not_found',
+  'not_found',
   'board_exists',
   'invalid_request',
   'forbidden',
@@ -77,13 +96,15 @@ const RESET_CODES: ReadonlySet<string> = new Set([
 const RETRY_DELAY_MS = 50;
 
 interface RequestSpec {
-  method: 'GET' | 'POST';
+  method: 'GET' | 'POST' | 'PUT';
   path: string;
   body?: unknown;
   /** Safe to send twice. Only idempotent reads are retried, and only once. */
   idempotent: boolean;
   /** The JSON shape a successful response must have. */
   expect: 'object' | 'array';
+  /** Overrides the client's timeout for this request (long-polls). */
+  timeoutMs?: number;
 }
 
 /**
@@ -231,6 +252,163 @@ export class OpenBoardClient implements BoardApi {
     });
   }
 
+  // ── Review ────────────────────────────────────────────────────────────────
+
+  proposals(
+    boardId: string,
+    options: { status?: 'pending' | 'all'; maxTokens?: number } = {},
+  ): Promise<ProposalsResult> {
+    const query = new URLSearchParams();
+    if (options.status !== undefined) query.set('status', options.status);
+    if (options.maxTokens !== undefined) query.set('maxTokens', String(options.maxTokens));
+    const qs = query.toString();
+    return this.#request({
+      method: 'GET',
+      path: `${boardPath(boardId, 'proposals')}${qs ? `?${qs}` : ''}`,
+      idempotent: true,
+      expect: 'object',
+    });
+  }
+
+  decideProposal(boardId: string, proposalId: string, decision: Decision): Promise<Proposal> {
+    return this.#request({
+      method: 'POST',
+      path: boardPath(boardId, `proposals/${segment(proposalId, 'proposal id')}/decide`),
+      body: decision,
+      idempotent: false,
+      expect: 'object',
+    });
+  }
+
+  withdrawProposal(boardId: string, proposalId: string): Promise<Proposal> {
+    return this.#request({
+      method: 'POST',
+      path: boardPath(boardId, `proposals/${segment(proposalId, 'proposal id')}/withdraw`),
+      body: {},
+      idempotent: false,
+      expect: 'object',
+    });
+  }
+
+  // ── History ───────────────────────────────────────────────────────────────
+
+  history(boardId: string, options: HistoryOptions = {}): Promise<HistoryResult> {
+    return this.#request({
+      method: 'POST',
+      path: boardPath(boardId, 'history'),
+      body: options,
+      idempotent: true,
+      expect: 'object',
+    });
+  }
+
+  undo(boardId: string, request: UndoRequest): Promise<UndoResult> {
+    return this.#request({
+      method: 'POST',
+      path: boardPath(boardId, 'undo'),
+      body: request,
+      idempotent: false,
+      expect: 'object',
+    });
+  }
+
+  // ── Conversation ──────────────────────────────────────────────────────────
+
+  comment(boardId: string, input: CommentInput): Promise<Comment> {
+    return this.#request({
+      method: 'POST',
+      path: boardPath(boardId, 'comments'),
+      body: input,
+      idempotent: false,
+      expect: 'object',
+    });
+  }
+
+  resolveThread(boardId: string, thread: string, resolved = true): Promise<Comment> {
+    return this.#request({
+      method: 'POST',
+      path: boardPath(boardId, `threads/${segment(thread, 'thread id')}/resolve`),
+      body: { resolved },
+      idempotent: false,
+      expect: 'object',
+    });
+  }
+
+  /** Marks the returned items seen unless `peek`, so only a peek is retried after a dropped connection. */
+  inbox(boardId: string, options: InboxOptions = {}): Promise<InboxResult> {
+    return this.#request({
+      method: 'POST',
+      path: boardPath(boardId, 'inbox'),
+      body: options,
+      idempotent: options.peek === true,
+      expect: 'object',
+    });
+  }
+
+  // ── Questions ─────────────────────────────────────────────────────────────
+
+  ask(boardId: string, input: AskInput): Promise<Ask> {
+    return this.#request({
+      method: 'POST',
+      path: boardPath(boardId, 'asks'),
+      body: input,
+      idempotent: false,
+      expect: 'object',
+    });
+  }
+
+  /** With `waitMs`, a long-poll; its timeout is `waitMs` plus `LONG_POLL_GRACE_MS` (at least the client's). */
+  askResult(boardId: string, askId: string, options: { waitMs?: number } = {}): Promise<Ask> {
+    const waitMs = options.waitMs;
+    const qs = waitMs !== undefined ? `?waitMs=${encodeURIComponent(String(waitMs))}` : '';
+    const spec: RequestSpec = {
+      method: 'GET',
+      path: `${boardPath(boardId, `asks/${segment(askId, 'question id')}`)}${qs}`,
+      idempotent: true,
+      expect: 'object',
+    };
+    if (waitMs !== undefined && waitMs > 0) {
+      spec.timeoutMs = Math.max(this.timeoutMs, waitMs + LONG_POLL_GRACE_MS);
+    }
+    return this.#request(spec);
+  }
+
+  answerAsk(boardId: string, askId: string, answer: AnswerInput): Promise<Ask> {
+    return this.#request({
+      method: 'POST',
+      path: boardPath(boardId, `asks/${segment(askId, 'question id')}/answer`),
+      body: answer,
+      idempotent: false,
+      expect: 'object',
+    });
+  }
+
+  cancelAsk(boardId: string, askId: string): Promise<Ask> {
+    return this.#request({
+      method: 'POST',
+      path: boardPath(boardId, `asks/${segment(askId, 'question id')}/cancel`),
+      body: {},
+      idempotent: false,
+      expect: 'object',
+    });
+  }
+
+  // ── Settings ──────────────────────────────────────────────────────────────
+
+  getConfig(): Promise<ProjectConfig> {
+    return this.#request({ method: 'GET', path: 'api/config', idempotent: true, expect: 'object' });
+  }
+
+  setConfig(config: ProjectConfig): Promise<ProjectConfig> {
+    return this.#request({
+      method: 'PUT',
+      path: 'api/config',
+      body: config,
+      idempotent: true,
+      expect: 'object',
+    });
+  }
+
   async #request<T>(spec: RequestSpec): Promise<T> {
     const target = new URL(spec.path, this.url).toString();
     try {
@@ -248,7 +426,8 @@ export class OpenBoardClient implements BoardApi {
 
   async #attempt<T>(spec: RequestSpec, target: string): Promise<T> {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    const timeoutMs = spec.timeoutMs ?? this.timeoutMs;
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     const headers = { ...this.#headers };
     if (spec.body !== undefined) headers['content-type'] = 'application/json';
     const where = `${spec.method} ${target}`;
@@ -262,7 +441,7 @@ export class OpenBoardClient implements BoardApi {
           signal: controller.signal,
         });
       } catch (error) {
-        if (controller.signal.aborted) throw this.#timeout(target);
+        if (controller.signal.aborted) throw this.#timeout(target, timeoutMs);
         const reason = describeCause(error);
         const message = `could not reach the OpenBoard server at ${this.url} (${reason})`;
         if (isConnectionReset(error)) throw new ConnectionReset(message);
@@ -273,7 +452,7 @@ export class OpenBoardClient implements BoardApi {
       try {
         text = await response.text();
       } catch (error) {
-        if (controller.signal.aborted) throw this.#timeout(target);
+        if (controller.signal.aborted) throw this.#timeout(target, timeoutMs);
         const message = `the connection to ${this.url} dropped while reading the response to ${where} (${describeCause(error)})`;
         if (isConnectionReset(error)) throw new ConnectionReset(message);
         throw new OpenBoardError('unavailable', message);
@@ -301,10 +480,10 @@ export class OpenBoardClient implements BoardApi {
     }
   }
 
-  #timeout(target: string): OpenBoardError {
+  #timeout(target: string, timeoutMs: number): OpenBoardError {
     return new OpenBoardError(
       'unavailable',
-      `the OpenBoard server at ${this.url} did not answer within ${this.timeoutMs} ms (${target})`,
+      `the OpenBoard server at ${this.url} did not answer within ${timeoutMs} ms (${target})`,
     );
   }
 }
@@ -330,6 +509,14 @@ function boardPath(boardId: string, action?: string): string {
   }
   const base = `api/boards/${encodeURIComponent(boardId)}`;
   return action ? `${base}/${action}` : base;
+}
+
+/** One path segment for an id; ids are checked by the server. */
+function segment(id: string, what: string): string {
+  if (typeof id !== 'string' || id.length === 0) {
+    throw new OpenBoardError('invalid_request', `a ${what} is required`);
+  }
+  return encodeURIComponent(id);
 }
 
 function parseJson(text: string): unknown {

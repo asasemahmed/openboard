@@ -292,6 +292,10 @@ importers:
       '@openboard/core':
         specifier: workspace:*
         version: link:../core
+    devDependencies:
+      '@openboard/server':
+        specifier: workspace:*
+        version: link:../server
 
   packages/server:
     dependencies:

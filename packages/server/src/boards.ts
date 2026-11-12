@@ -17,8 +17,10 @@ import {
   slugify,
 } from '@openboard/core';
 import { type FSWatcher, watch } from 'chokidar';
+import { ConfigStore } from './config.js';
 import { ensureLocalDir, errorMessage, isErrno } from './fsutil.js';
-import { assertBoardId, boardIdFromFile, localBoardFiles } from './paths.js';
+import { assertBoardId, boardIdFromFile, CONFIG_FILE, localBoardFiles } from './paths.js';
+import { refreshProposals } from './review.js';
 import { Room, type RoomFiles } from './room.js';
 import type { FileStatus } from './store.js';
 import type { ProjectPaths } from './types.js';
@@ -36,6 +38,8 @@ const POLL_INTERVAL_MS = 1000;
 export interface BoardsOptions {
   log?: (line: string) => void;
   debounceMs?: number;
+  /** Called (debounced, under the board's lock) when pending proposals may be stale. */
+  onProposalsStale?: (room: Room) => Promise<void>;
 }
 
 export class Boards {
@@ -45,28 +49,41 @@ export class Boards {
   private poller: NodeJS.Timeout | null = null;
   private closing = false;
   private readonly log: (line: string) => void;
+  /** `.openboard/config.json`, shared by every board of the project. */
+  readonly config: ConfigStore;
+  private readonly opts: BoardsOptions & { config: ConfigStore };
 
   constructor(
     readonly paths: ProjectPaths,
-    private readonly opts: BoardsOptions = {},
+    opts: BoardsOptions = {},
   ) {
     this.log = opts.log ?? (() => {});
+    this.config = new ConfigStore(paths.config, this.log);
+    this.opts = {
+      onProposalsStale: (room) => refreshProposals(room, this.log),
+      ...opts,
+      config: this.config,
+    };
   }
 
   /** Create the project directories and start watching board files. */
   async start(): Promise<void> {
     await ensureLocalDir(this.paths.local);
+    await this.config.load();
     const watcher = watch(this.paths.dir, {
       depth: 0,
       ignoreInitial: true,
       ignored: (file: string) =>
-        file !== this.paths.dir && boardIdFromFile(path.basename(file)) === null,
+        file !== this.paths.dir &&
+        file !== this.paths.config &&
+        boardIdFromFile(path.basename(file)) === null,
     });
     watcher.on('all', (_event, file) => this.onFileEvent(file));
     watcher.on('error', (error) => this.log(`watcher: ${errorMessage(error)}`));
     await new Promise<void>((resolve) => watcher.once('ready', () => resolve()));
     this.watcher = watcher;
     this.poller = setInterval(() => {
+      this.config.poll().catch((error: unknown) => this.log(`poll: ${errorMessage(error)}`));
       for (const room of this.open.values()) {
         room.store.poll().catch((error: unknown) => this.log(`poll: ${errorMessage(error)}`));
       }
@@ -79,6 +96,10 @@ export class Boards {
   }
 
   private onFileEvent(file: string): void {
+    if (path.basename(file) === CONFIG_FILE && path.dirname(file) === this.paths.dir) {
+      void this.config.fileChanged();
+      return;
+    }
     const id = boardIdFromFile(path.basename(file));
     if (id === null || path.dirname(file) !== this.paths.dir) return;
     const room = this.open.get(id);
