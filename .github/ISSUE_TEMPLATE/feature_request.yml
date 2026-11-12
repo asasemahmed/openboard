@@ -1,0 +1,22 @@
+name: Feature request
+description: Propose an improvement to working with people and agents on a board.
+body:
+  - type: markdown
+    attributes:
+      value: For vulnerabilities, follow [SECURITY.md](https://github.com/asasemahmed/openboard/blob/main/SECURITY.md) instead of opening a public issue.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered

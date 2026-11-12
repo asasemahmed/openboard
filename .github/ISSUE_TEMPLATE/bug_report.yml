@@ -1,0 +1,46 @@
+name: Bug report
+description: Report something that did not work as expected.
+body:
+  - type: markdown
+    attributes:
+      value: For vulnerabilities, follow [SECURITY.md](https://github.com/asasemahmed/openboard/blob/main/SECURITY.md) instead of opening a public issue.
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include the commands or actions and a minimal example without private board content.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+      description: Include relevant errors with secrets and personal data removed.
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system and version
+    validations:
+      required: true
+  - type: input
+    id: node
+    attributes:
+      label: Node.js version
+      description: Output of node --version.
+    validations:
+      required: true
+  - type: input
+    id: agent
+    attributes:
+      label: Agent and version
+      description: Enter none if no agent was involved.
+    validations:
+      required: true
