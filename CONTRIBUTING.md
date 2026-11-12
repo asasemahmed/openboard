@@ -2,7 +2,18 @@
 
 OpenBoard is developed in the open under the [PolyForm Noncommercial License 1.0.0](LICENSE): free to use, change and share for personal and other noncommercial purposes.
 
-By contributing you agree that your contribution is licensed under the same terms.
+Before you send a contribution, read [Licensing your contribution](#licensing-your-contribution): sending one means you agree to it.
+
+## Licensing your contribution
+
+Anyone may use OpenBoard under the PolyForm Noncommercial License, and its maintainer may also offer it under separate commercial licenses. So that your work can be part of both, by submitting a contribution (a pull request, a patch, or any other material you send to this repository) you agree that:
+
+1. **You keep your copyright.** You remain the owner of what you wrote.
+2. **You grant the maintainer a license to it.** You grant the maintainer of OpenBoard (the owner of [github.com/asasemahmed/openboard](https://github.com/asasemahmed/openboard)) and anyone the project is later transferred to a perpetual, worldwide, non-exclusive, royalty-free, irrevocable license to use, copy, change, distribute and sublicense your contribution, and to license it under any terms, including the PolyForm Noncommercial License and commercial licenses.
+3. **Patents are covered too.** If you hold patents that your contribution would infringe, you grant the same people a license under them to make, use, sell and distribute your contribution as part of OpenBoard.
+4. **You have the right to send it.** The contribution is your own work, or you have the right to submit it under these terms. If an employer or anyone else has rights to what you create, you have their permission.
+
+If you do not agree, do not submit the contribution. These terms do not change how you or anyone else may use OpenBoard.
 
 ## Ground rules
 
