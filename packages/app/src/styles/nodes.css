@@ -1,0 +1,303 @@
+/*
+ * Card anatomy. Heights add up exactly to `defaultNodeSize` in core:
+ *   12 + 16 + 12 (border, padding, label row)  = 40
+ *   title: 24 per line budget                  = 24 | 48
+ *   body preview                               = 48
+ *   meta row                                   = 32
+ */
+
+.card {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--card);
+  color: var(--ink);
+  transition: border-color var(--dur) var(--ease);
+}
+.react-flow__node:hover .card:not(.is-selected) {
+  border-color: var(--line-strong);
+}
+.card.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.card.is-ghost {
+  border: 1.5px dashed var(--accent);
+  background: transparent;
+  box-shadow: none;
+}
+.card-inner {
+  height: 100%;
+  padding: 11px 14px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 16px;
+  flex: none;
+}
+.type-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 16px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tone);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.type-label-custom {
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
+.card-head-end {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  margin-right: -6px;
+}
+
+.card-title {
+  flex: none;
+  margin: 0;
+  padding-top: 4px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 20px;
+  letter-spacing: -0.005em;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+}
+.card-title.lines-1 {
+  height: 24px;
+  -webkit-line-clamp: 1;
+}
+.card-title.lines-2 {
+  height: 48px;
+  -webkit-line-clamp: 2;
+}
+.card-body {
+  flex: none;
+  height: 48px;
+  margin: 0;
+  padding-top: 6px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--ink-2);
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.card-meta {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding-top: 8px;
+  overflow: hidden;
+}
+.link-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  flex: none;
+}
+.link-count.is-stale {
+  color: var(--accent-ink);
+}
+
+.title-editor {
+  display: block;
+  width: calc(100% + 8px);
+  margin-left: -4px;
+  padding: 4px 4px 0;
+  border: 0;
+  border-radius: 4px;
+  outline: 2px solid var(--focus);
+  outline-offset: -1px;
+  background: var(--card);
+  color: var(--ink);
+  resize: none;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 20px;
+}
+.frame .title-editor {
+  font-size: 13px;
+  line-height: 18px;
+  height: 26px;
+  padding: 3px 4px;
+}
+
+/* Connection handles: hidden until the card is hovered or selected. */
+.react-flow__handle.card-handle {
+  width: 10px;
+  height: 10px;
+  min-width: 0;
+  min-height: 0;
+  border: 1.5px solid var(--ink-2);
+  border-radius: 50%;
+  background: var(--card);
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease);
+}
+.react-flow__node:hover .card-handle,
+.card.is-selected .card-handle,
+.react-flow__handle.card-handle.connectingfrom,
+.react-flow__handle.card-handle.connectingto {
+  opacity: 1;
+}
+.react-flow__handle.card-handle:hover,
+.react-flow__handle.card-handle.connectingto {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+/* Decorations */
+.pin-badge {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ink-3);
+}
+.pin-badge:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+.peer-outline {
+  position: absolute;
+  inset: -5px;
+  border: 1.5px solid var(--peer);
+  border-radius: 16px;
+  pointer-events: none;
+}
+.peer-tag {
+  position: absolute;
+  bottom: calc(100% + 3px);
+  left: 8px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--peer);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 15px;
+  white-space: nowrap;
+}
+
+/* ── Frames ───────────────────────────────────────────────────────────────── */
+
+/* The frame body lets the pointer through to the canvas; only its title bar and handles take it. */
+.react-flow__node-frame {
+  pointer-events: none !important;
+}
+.react-flow__node-frame .frame-titlebar,
+.react-flow__node-frame .react-flow__resize-control,
+.react-flow__node-frame .pin-badge,
+.react-flow__node-frame .title-editor {
+  pointer-events: all;
+}
+
+.frame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--frame-bg);
+  transition:
+    border-color var(--dur) var(--ease),
+    background var(--dur) var(--ease);
+}
+.frame.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.frame.is-drop-target {
+  border: 1.5px dashed var(--accent);
+  background: var(--accent-soft);
+}
+.frame.is-ghost {
+  border: 1.5px dashed var(--accent);
+  background: transparent;
+}
+.frame-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 8px 0 16px;
+  cursor: grab;
+}
+.react-flow__node-frame.dragging .frame-titlebar {
+  cursor: grabbing;
+}
+.frame-title {
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.frame-count {
+  flex: none;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--sunken);
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 18px;
+  text-align: center;
+}
+.frame-head-end {
+  display: flex;
+  margin-left: auto;
+}
+.frame .peer-outline {
+  border-radius: 20px;
+}
+
+.react-flow__resize-control.handle.frame-resize-handle {
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid var(--accent);
+  border-radius: 2px;
+  background: var(--card);
+}
+.react-flow__resize-control.line.frame-resize-line {
+  border-color: transparent;
+}
+
+.react-flow__handle.frame-anchor {
+  opacity: 0;
+  pointer-events: none;
+}

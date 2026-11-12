@@ -1,0 +1,212 @@
+/* ── Canvas ───────────────────────────────────────────────────────────────── */
+
+.canvas-root {
+  position: absolute;
+  inset: 0;
+  background: var(--canvas);
+}
+.canvas-root .react-flow {
+  --xy-background-color: var(--canvas);
+  background: var(--canvas);
+}
+.edge-markers {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+/* Box selection */
+.react-flow__selection {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+}
+.react-flow__nodesselection-rect {
+  background: transparent;
+  border: 1px dashed var(--accent);
+  border-radius: 6px;
+}
+
+/* React Flow attribution, kept but quiet */
+.react-flow__attribution {
+  background: transparent;
+  font-size: 10px;
+  opacity: 0.6;
+}
+.react-flow__attribution a {
+  color: var(--ink-2);
+}
+
+/* ── Edges ────────────────────────────────────────────────────────────────── */
+
+.board-edge {
+  fill: none;
+  transition: stroke var(--dur) var(--ease);
+}
+.react-flow__edge:hover .board-edge:not(.is-selected) {
+  stroke: var(--edge-ink) !important;
+}
+.react-flow__connectionline path,
+.react-flow__connection-path {
+  stroke: var(--accent);
+  stroke-width: 1.75;
+  stroke-dasharray: 5 4;
+}
+
+.edge-label {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 200px;
+  padding: 1px 6px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: var(--canvas);
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 16px;
+  white-space: nowrap;
+  pointer-events: all;
+  cursor: pointer;
+}
+.edge-label:hover {
+  border-color: var(--line);
+  color: var(--ink);
+}
+.edge-label.is-selected {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  background: var(--card);
+}
+.edge-label.is-ghost {
+  color: var(--accent-ink);
+  border: 1px dashed var(--accent);
+}
+.edge-label-text {
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Remote cursors ───────────────────────────────────────────────────────── */
+
+.cursors {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+.cursor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  transition: transform 80ms linear;
+  will-change: transform;
+}
+.cursor-arrow {
+  display: block;
+  margin: -1.5px 0 0 -1.5px;
+}
+.cursor-tag {
+  position: absolute;
+  top: 19px;
+  left: 13px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+/* ── Zoom controls and minimap ────────────────────────────────────────────── */
+
+.zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+}
+.zoom-level {
+  min-width: 48px;
+  height: 26px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+.zoom-level:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+.zoom-sep {
+  width: 1px;
+  height: 16px;
+  margin: 0 3px;
+  background: var(--line);
+}
+
+.react-flow__minimap {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 28px;
+}
+.minimap-node {
+  fill: var(--tone, var(--ink-2));
+  fill-opacity: 0.55;
+  stroke: none;
+}
+.minimap-node.tone-frame {
+  fill: var(--line);
+  fill-opacity: 0.6;
+}
+
+/* ── Empty board ──────────────────────────────────────────────────────────── */
+
+.empty-board {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  z-index: 5;
+}
+.empty-board-card {
+  display: grid;
+  gap: 8px;
+  max-width: 380px;
+  padding: 24px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--card);
+  pointer-events: auto;
+}
+.empty-board-card h2 {
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.empty-board-card p {
+  font-size: 13.5px;
+}
+.empty-board-card .kbd {
+  vertical-align: 1px;
+}
+.empty-board-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}

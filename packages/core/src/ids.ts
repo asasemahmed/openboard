@@ -20,6 +20,8 @@ export function newId(prefix: 'n' | 'e' | 'b' | 'a' | 'p' | 'c' | string): strin
 export function slugify(name: string): string {
   const slug = name
     .normalize('NFKD')
+    // Drop combining marks so "é" becomes "e" instead of splitting the word.
+    .replace(/\p{M}+/gu, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
