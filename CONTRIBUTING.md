@@ -26,6 +26,7 @@ If you do not agree, do not submit the contribution. These terms do not change h
 - Pick an [open issue](https://github.com/asasemahmed/openboard/issues). `good first issue` marks small, well-scoped work; `help wanted` marks work nobody has taken.
 - Comment on the issue before you start, so two people do not build the same thing. For anything larger than the issue describes, say how you plan to do it first.
 - Found a bug or want something that has no issue? Open one. For a bug, include what you did, what you expected, and what happened.
+- Have an idea that is not a clear task yet, or a question? Start a [discussion](https://github.com/asasemahmed/openboard/discussions) first.
 - Report security problems privately, as [SECURITY.md](SECURITY.md) describes, not in a public issue.
 
 ## Working on the project

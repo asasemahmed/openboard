@@ -1,5 +1,8 @@
 blank_issues_enabled: true
 contact_links:
+  - name: Ask a question or share an idea
+    url: https://github.com/asasemahmed/openboard/discussions
+    about: Questions, ideas and boards you made go to Discussions.
   - name: Report a security vulnerability
     url: https://github.com/asasemahmed/openboard/blob/main/SECURITY.md
     about: Follow the private reporting instructions in the security policy.
