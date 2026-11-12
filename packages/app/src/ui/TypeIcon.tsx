@@ -151,3 +151,66 @@ export function TypeIcon({ name, size = 16 }: { name: TypeIconName; size?: numbe
     </svg>
   );
 }
+
+/** Glyphs for the built-in card types, drawn like the rest. Declared types pick from the set above. */
+const BUILTIN_TYPE_PATHS: Record<string, ReactNode> = {
+  note: (
+    <>
+      <path d="M2.75 2.75h10.5v6.5l-4 4h-6.5z" />
+      <path d="M13.25 9.25h-4v4" />
+    </>
+  ),
+  task: (
+    <>
+      <rect x="2.5" y="2.5" width="11" height="11" rx="3" />
+      <path d="M5.5 8.25l1.75 1.75 3.25-3.75" />
+    </>
+  ),
+  decision: (
+    <>
+      <path d="M8 1.75L14.25 8 8 14.25 1.75 8z" />
+      <path d="M6 8h4M8.5 6.5L10 8 8.5 9.5" />
+    </>
+  ),
+  question: (
+    <>
+      <circle cx="8" cy="8" r="5.75" />
+      <path d="M6.4 6.5a1.7 1.7 0 113 1.1c-.6.5-1.4.8-1.4 1.65M8 11.25v.01" />
+    </>
+  ),
+  risk: TYPE_ICON_PATHS.alert,
+  doc: TYPE_ICON_PATHS.file,
+  code: <path d="M5.5 4.5L2 8l3.5 3.5M10.5 4.5L14 8l-3.5 3.5" />,
+  agent: TYPE_ICON_PATHS.bot,
+  run: (
+    <>
+      <circle cx="8" cy="8" r="5.75" />
+      <path d="M6.75 5.75v4.5L10.5 8z" />
+    </>
+  ),
+};
+
+export function hasBuiltinTypeIcon(type: string): boolean {
+  return Object.hasOwn(BUILTIN_TYPE_PATHS, type);
+}
+
+export function BuiltinTypeIcon({ type, size = 16 }: { type: string; size?: number }) {
+  if (!hasBuiltinTypeIcon(type)) return null;
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+      className="type-icon"
+    >
+      {BUILTIN_TYPE_PATHS[type]}
+    </svg>
+  );
+}

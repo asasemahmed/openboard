@@ -12,7 +12,7 @@
 
   /* surfaces */
   --paper: #fbfaf7;
-  --canvas: #f4f1ea;
+  --canvas: #f8f7f4;
   --card: #ffffff;
   --raised: #ffffff;
   --sunken: #f1eee7;
@@ -20,8 +20,25 @@
   --press: rgba(21, 23, 26, 0.09);
   --line: #dedad1;
   --line-strong: #c9c4b9;
-  --dot: #dcd8ce;
-  --frame-bg: rgba(255, 255, 255, 0.42);
+  --grid: #ecebe6;
+  --frame-bg: rgba(21, 23, 26, 0.035);
+
+  /*
+   * Card colours. Every type is a hue (--tone-h, set by its tone class) and
+   * these say how light and how vivid the fill, its edge and the type label
+   * are in this theme, so a new colour is one number, not six.
+   */
+  --fill-l: 0.945;
+  --fill-c: 0.058;
+  --fill-line-l: 0.875;
+  --fill-line-c: 0.075;
+  --label-l: 0.43;
+  --label-c: 0.115;
+  /* chips that sit on a coloured card */
+  --chip: rgba(255, 255, 255, 0.66);
+  --chip-quiet: rgba(21, 23, 26, 0.07);
+  --shadow-card: 0 1px 2px rgba(21, 23, 26, 0.05);
+  --shadow-lift: 0 2px 4px rgba(21, 23, 26, 0.06), 0 12px 28px rgba(21, 23, 26, 0.12);
 
   /* text */
   --ink: #15171a;
@@ -81,13 +98,13 @@
   --edge-danger: #b42318;
   --edge-accent: #ff5a1f;
 
-  --minimap-mask: rgba(244, 241, 234, 0.72);
+  --minimap-mask: rgba(248, 247, 244, 0.72);
   --backdrop: rgba(21, 23, 26, 0.3);
   --shadow-pop: 0 1px 2px rgba(21, 23, 26, 0.06), 0 8px 24px rgba(21, 23, 26, 0.1);
 
   --radius-sm: 6px;
   --radius: 8px;
-  --radius-card: 12px;
+  --radius-card: 10px;
   --radius-lg: 14px;
 
   --topbar-h: 52px;
@@ -109,8 +126,18 @@
     --press: rgba(243, 241, 236, 0.1);
     --line: #2a2e35;
     --line-strong: #3a3f48;
-    --dot: #262a31;
-    --frame-bg: rgba(243, 241, 236, 0.025);
+    --grid: #181b20;
+    --frame-bg: rgba(243, 241, 236, 0.05);
+    --fill-l: 0.285;
+    --fill-c: 0.042;
+    --fill-line-l: 0.37;
+    --fill-line-c: 0.06;
+    --label-l: 0.85;
+    --label-c: 0.1;
+    --chip: rgba(0, 0, 0, 0.26);
+    --chip-quiet: rgba(243, 241, 236, 0.1);
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.25);
+    --shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.3), 0 12px 28px rgba(0, 0, 0, 0.45);
     --ink: #f3f1ec;
     --ink-2: #9a9fa8;
     --ink-3: #868b94;
@@ -170,8 +197,18 @@
   --press: rgba(243, 241, 236, 0.1);
   --line: #2a2e35;
   --line-strong: #3a3f48;
-  --dot: #262a31;
-  --frame-bg: rgba(243, 241, 236, 0.025);
+  --grid: #181b20;
+  --frame-bg: rgba(243, 241, 236, 0.05);
+  --fill-l: 0.285;
+  --fill-c: 0.042;
+  --fill-line-l: 0.37;
+  --fill-line-c: 0.06;
+  --label-l: 0.85;
+  --label-c: 0.1;
+  --chip: rgba(0, 0, 0, 0.26);
+  --chip-quiet: rgba(243, 241, 236, 0.1);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.3), 0 12px 28px rgba(0, 0, 0, 0.45);
   --ink: #f3f1ec;
   --ink-2: #9a9fa8;
   --ink-3: #868b94;
@@ -225,69 +262,98 @@
   }
 }
 
-/* Tone classes set --tone from the type palette. */
+/* Tone classes set --tone from the type palette, and the hue (and how vivid) a card of that type is. */
 .tone-note {
   --tone: var(--type-note);
+  --tone-h: 95;
+  --tone-cx: 1.55;
 }
 .tone-task {
   --tone: var(--type-task);
+  --tone-h: 158;
 }
 .tone-decision {
   --tone: var(--type-decision);
+  --tone-h: 278;
 }
 .tone-question {
   --tone: var(--type-question);
+  --tone-h: 238;
 }
 .tone-risk {
   --tone: var(--type-risk);
+  --tone-h: 38;
+  --tone-cx: 1.1;
 }
 .tone-doc {
   --tone: var(--type-doc);
+  --tone-h: 75;
+  --tone-cx: 0.4;
 }
 .tone-code {
   --tone: var(--type-code);
+  --tone-h: 200;
 }
 .tone-agent {
   --tone: var(--type-agent);
+  --tone-h: 355;
 }
 .tone-run {
   --tone: var(--type-run);
+  --tone-h: 312;
 }
 .tone-frame {
   --tone: var(--type-frame);
+  --tone-h: 80;
+  --tone-cx: 0.15;
 }
 .tone-custom {
   --tone: var(--type-custom);
+  --tone-h: 80;
+  --tone-cx: 0.15;
 }
 .tone-c-gray {
   --tone: var(--tc-gray);
+  --tone-h: 260;
+  --tone-cx: 0.12;
 }
 .tone-c-red {
   --tone: var(--tc-red);
+  --tone-h: 25;
 }
 .tone-c-orange {
   --tone: var(--tc-orange);
+  --tone-h: 58;
+  --tone-cx: 1.15;
 }
 .tone-c-yellow {
   --tone: var(--tc-yellow);
+  --tone-h: 95;
+  --tone-cx: 1.55;
 }
 .tone-c-green {
   --tone: var(--tc-green);
+  --tone-h: 145;
 }
 .tone-c-teal {
   --tone: var(--tc-teal);
+  --tone-h: 185;
 }
 .tone-c-blue {
   --tone: var(--tc-blue);
+  --tone-h: 250;
 }
 .tone-c-indigo {
   --tone: var(--tc-indigo);
+  --tone-h: 278;
 }
 .tone-c-purple {
   --tone: var(--tc-purple);
+  --tone-h: 305;
 }
 .tone-c-pink {
   --tone: var(--tc-pink);
+  --tone-h: 355;
 }
 
 .status-todo {

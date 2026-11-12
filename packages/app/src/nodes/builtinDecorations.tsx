@@ -1,8 +1,10 @@
 /** Decorations every board shows. Registered once at startup. */
 import type { CSSProperties } from 'react';
+import { quietCounts } from '../lib/connections.js';
+import type { FlowEdge } from '../lib/flow.js';
 import { actorName } from '../state/activity.js';
 import { useSession } from '../state/context.js';
-import { useStoreValue } from '../state/emitter.js';
+import { useStoreValue, useValue } from '../state/emitter.js';
 import { toasts } from '../state/toasts.js';
 import { Icon } from '../ui/Icon.js';
 import { type DecorationProps, registerNodeDecoration } from './decorations.js';
@@ -89,6 +91,38 @@ function RecentChange({ node }: DecorationProps) {
   );
 }
 
+/** Counts per edge list, so every card reads the same tally until an edge changes. */
+const quietCountCache = new WeakMap<readonly FlowEdge[], Map<string, number>>();
+
+/**
+ * In the quiet view: how many connections of this node are out of sight, so
+ * a card that looks alone still says it is not.
+ */
+function QuietConnections({ node }: DecorationProps) {
+  const { store, ui } = useSession();
+  const quiet = useValue(ui.connections) === 'quiet';
+  const count = useStoreValue(store, () => {
+    const edges = store.getEdges();
+    let counts = quietCountCache.get(edges);
+    if (!counts) {
+      counts = quietCounts(store.boardEdges().values(), store.meta.actors);
+      quietCountCache.set(edges, counts);
+    }
+    return counts.get(node.id) ?? 0;
+  });
+  if (!quiet || count === 0) return null;
+  const label =
+    count === 1
+      ? '1 connection made by an agent. Point here to see it'
+      : `${count} connections made by an agent. Point here to see them`;
+  return (
+    <span className="quiet-count" role="img" aria-label={label} title={label}>
+      <Icon name="connection" size={12} />
+      {count}
+    </span>
+  );
+}
+
 let registered = false;
 
 export function registerBuiltinDecorations(): void {
@@ -100,6 +134,13 @@ export function registerBuiltinDecorations(): void {
     order: 100,
     applies: (node, ghost) => !ghost && node.view?.pinned === true,
     Component: PinBadge,
+  });
+  registerNodeDecoration({
+    id: 'quiet-connections',
+    slot: 'header',
+    order: 20,
+    applies: (_node, ghost) => !ghost,
+    Component: QuietConnections,
   });
   registerNodeDecoration({
     id: 'agent-author',

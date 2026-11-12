@@ -8,6 +8,7 @@ export function ZoomControls({ actions }: { actions: BoardActions }) {
   const { ui } = useSession();
   const zoom = useStore((s) => s.transform[2]);
   const minimap = useValue(ui.minimap);
+  const allConnections = useValue(ui.connections) === 'all';
   return (
     <Panel position="bottom-left" className="zoom-controls" aria-label="Zoom">
       <IconButton icon="minus" label="Zoom out" size="sm" onClick={actions.zoomOut} />
@@ -28,6 +29,17 @@ export function ZoomControls({ actions }: { actions: BoardActions }) {
         shortcut="shift+1"
         size="sm"
         onClick={actions.fit}
+      />
+      <IconButton
+        icon="connection"
+        label={
+          allConnections
+            ? 'Show agent-made connections only for the card you point at'
+            : 'Show every connection'
+        }
+        size="sm"
+        pressed={allConnections}
+        onClick={() => ui.connections.set(allConnections ? 'quiet' : 'all')}
       />
       <IconButton
         icon="minimap"

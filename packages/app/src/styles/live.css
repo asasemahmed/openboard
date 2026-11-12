@@ -119,7 +119,7 @@
   pointer-events: none;
 }
 .frame .agent-focus {
-  border-radius: 18px;
+  border-radius: 22px;
 }
 
 /* ── Claims ───────────────────────────────────────────────────────────────── */
@@ -159,7 +159,7 @@
   pointer-events: none;
 }
 .frame .claim-tint {
-  border-radius: 16px;
+  border-radius: 20px;
 }
 .claim-box {
   display: flex;

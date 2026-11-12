@@ -54,6 +54,7 @@ and opens the board in your browser. The project root is the nearest directory u
 
 - Press <kbd>N</kbd> for a note or <kbd>T</kbd> for a task at the pointer, select cards and press <kbd>F</kbd> to put them in a frame, and press <kbd>Enter</kbd> to edit a title.
 - Drag from a card's edge handle to another card to connect them; the inspector sets the edge type, a node's status, body and links.
+- Cards are filled with the colour of their type. Connections an agent made stay out of sight until you point at or select one of their cards (the count in a card's corner says how many it has); the ones you draw always show. The connections button beside the zoom controls shows every connection at once.
 - Drag a card to place it yourself. It is then pinned, and automatic layout leaves it where you put it.
 - Select cards to show the agent what you mean by "this" or "these".
 - <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>K</kbd> opens search and commands, and <kbd>?</kbd> lists every shortcut.
