@@ -693,7 +693,9 @@ function cardSvg(
     const linkWidth = linkText ? measureText(linkText, FONT_NOTE) + 8 : 0;
     if (node.status) {
       const color = theme.status[node.status];
-      const words = STATUS_WORDS[node.status];
+      // Capitalise only the picture's label. Text formats keep STATUS_WORDS unchanged.
+      const statusWords = STATUS_WORDS[node.status];
+      const words = statusWords.charAt(0).toUpperCase() + statusWords.slice(1);
       const pillW = Math.min(measureText(words, FONT_PILL) + 24, limit - cursor);
       parts.push(
         `<rect x="${n(cursor)}" y="${n(top)}" width="${n(pillW)}" height="20" rx="10" fill="${theme.chip.color}" fill-opacity="${theme.chip.opacity}"/>`,
