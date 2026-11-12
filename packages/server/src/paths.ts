@@ -83,6 +83,7 @@ export function localBoardFiles(paths: ProjectPaths, boardId: string) {
     changes: path.join(paths.local, `${boardId}.changes.jsonl`),
     history: path.join(paths.local, `${boardId}.history.jsonl`),
     inbox: path.join(paths.local, `${boardId}.inbox.jsonl`),
+    lineage: path.join(paths.local, `${boardId}.lineage`),
   };
 }
 

@@ -223,6 +223,32 @@ describe('routes', () => {
       path: '/api/boards/main/asks/a_1/cancel',
       body: {},
     },
+    {
+      name: 'reportActivity',
+      call: (a) => a.reportActivity({ session: 's1', kind: 'tool_start', tool: 'Bash' }),
+      method: 'POST',
+      path: '/api/activity',
+      body: { session: 's1', kind: 'tool_start', tool: 'Bash' },
+    },
+    {
+      name: 'sessions',
+      call: (a) => a.sessions({ includeEnded: true }),
+      method: 'GET',
+      path: '/api/sessions?includeEnded=true',
+    },
+    {
+      name: 'claim',
+      call: (a) => a.claim('main', { nodeIds: ['n_1'], minutes: 5 }),
+      method: 'POST',
+      path: '/api/boards/main/claims',
+      body: { nodeIds: ['n_1'], minutes: 5 },
+    },
+    {
+      name: 'snapshotAt',
+      call: (a) => a.snapshotAt('main', 12),
+      method: 'GET',
+      path: '/api/boards/main/at/12',
+    },
     { name: 'getConfig', call: (a) => a.getConfig(), method: 'GET', path: '/api/config' },
     {
       name: 'setConfig',
@@ -257,6 +283,16 @@ describe('routes', () => {
     expect(name).toBe('Zo%C3%AB%20100%25');
     expect(decodeURIComponent(name ?? '')).toBe(actor.name);
     expect(/^[\x21-\x7e]*$/.test(name ?? '')).toBe(true);
+  });
+
+  it('sends the session header when connected with one', async () => {
+    const fake = fakeFetch();
+    const api = connect({ url: 'http://127.0.0.1:4747', actor, fetch: fake.fetch, session: 's1' });
+    await api.outline('main');
+    expect(fake.calls[0]?.headers['x-openboard-session']).toBe('s1');
+    const { api: plain, calls } = client();
+    await plain.outline('main');
+    expect(calls[0]?.headers['x-openboard-session']).toBeUndefined();
   });
 
   it('path-encodes board ids', async () => {

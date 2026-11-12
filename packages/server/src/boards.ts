@@ -19,6 +19,7 @@ import {
 import { type FSWatcher, watch } from 'chokidar';
 import { ConfigStore } from './config.js';
 import { ensureLocalDir, errorMessage, isErrno } from './fsutil.js';
+import { LiveHub } from './live.js';
 import { assertBoardId, boardIdFromFile, CONFIG_FILE, localBoardFiles } from './paths.js';
 import { refreshProposals } from './review.js';
 import { Room, type RoomFiles } from './room.js';
@@ -28,6 +29,8 @@ import type { ProjectPaths } from './types.js';
 /** A board as listed over HTTP: its summary plus the state of its file. */
 export interface BoardListing extends BoardSummary {
   fileStatus: FileStatus;
+  /** The live document's lineage; a browser passes it as `?lineage=` when it syncs. */
+  lineage: string;
   /** Why the file does not parse, when `fileStatus` is `conflict`. */
   fileError?: string;
 }
@@ -40,6 +43,8 @@ export interface BoardsOptions {
   debounceMs?: number;
   /** Called (debounced, under the board's lock) when pending proposals may be stale. */
   onProposalsStale?: (room: Room) => Promise<void>;
+  /** Milliseconds since the epoch for presence, sessions and claims. Injectable for tests. */
+  clock?: () => number;
 }
 
 export class Boards {
@@ -51,6 +56,10 @@ export class Boards {
   private readonly log: (line: string) => void;
   /** `.openboard/config.json`, shared by every board of the project. */
   readonly config: ConfigStore;
+  /** Presence, sessions and claim upkeep for every open board. */
+  readonly live: LiveHub;
+  /** The clock used for presence, sessions and claims. */
+  readonly clock: () => number;
   private readonly opts: BoardsOptions & { config: ConfigStore };
 
   constructor(
@@ -59,6 +68,12 @@ export class Boards {
   ) {
     this.log = opts.log ?? (() => {});
     this.config = new ConfigStore(paths.config, this.log);
+    this.clock = opts.clock ?? (() => Date.now());
+    this.live = new LiveHub({
+      clock: this.clock,
+      rooms: () => [...this.open.values()],
+      log: this.log,
+    });
     this.opts = {
       onProposalsStale: (room) => refreshProposals(room, this.log),
       ...opts,
@@ -137,7 +152,10 @@ export class Boards {
       this.rooms.set(id, pending);
       pending.then(
         (room) => {
-          if (room) this.open.set(id, room);
+          if (room) {
+            this.open.set(id, room);
+            this.live.roomOpened(room);
+          }
           // Not there (yet): forget the miss so a later call looks again.
           else this.rooms.delete(id);
         },
@@ -170,6 +188,7 @@ export class Boards {
     try {
       const room = await pending;
       this.open.set(id, room);
+      this.live.roomOpened(room);
       room.knownActors.set(actor.id, actor);
       return room;
     } catch (error) {
@@ -199,6 +218,7 @@ export class Boards {
 
   async close(): Promise<void> {
     this.closing = true;
+    this.live.close();
     if (this.poller) clearInterval(this.poller);
     this.poller = null;
     await this.watcher?.close();
@@ -209,7 +229,11 @@ export class Boards {
 }
 
 export function listing(room: Room): BoardListing {
-  const out: BoardListing = { ...room.doc.summary(), fileStatus: room.fileStatus };
+  const out: BoardListing = {
+    ...room.doc.summary(),
+    fileStatus: room.fileStatus,
+    lineage: room.lineage,
+  };
   const error = room.store.fileError;
   if (error !== undefined) out.fileError = error;
   return out;

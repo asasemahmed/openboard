@@ -118,3 +118,11 @@ export async function waitFor<T>(
 }
 
 export const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** The live document lineage of a board, which a sync client must present. */
+export async function lineageOf(server: OpenBoardServer, boardId: string): Promise<string> {
+  const res = await api(server, 'GET', `/api/boards/${boardId}`);
+  const lineage = res.headers['x-openboard-lineage'];
+  if (typeof lineage !== 'string') throw new Error(`no lineage for board "${boardId}"`);
+  return lineage;
+}

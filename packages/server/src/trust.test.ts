@@ -13,7 +13,7 @@ import WebSocket from 'ws';
 import { WebsocketProvider } from 'y-websocket';
 import * as Y from 'yjs';
 import { projectPaths } from './paths.js';
-import { removeRoot, sleep, startTestServer, tempRoot, waitFor } from './testing.js';
+import { lineageOf, removeRoot, sleep, startTestServer, tempRoot, waitFor } from './testing.js';
 import type { OpenBoardServer } from './types.js';
 
 const ADA: Actor = { id: 'ada', kind: 'human', name: 'Ada' };
@@ -23,6 +23,7 @@ const OTHER: Actor = { id: 'other', kind: 'agent', name: 'Other' };
 let root: string;
 let server: OpenBoardServer;
 const providers: WebsocketProvider[] = [];
+let lineage = '';
 
 const ada = () => server.api(ADA);
 const bot = () => server.api(BOT);
@@ -59,7 +60,7 @@ function connect(actor: Actor) {
   const ydoc = new Y.Doc();
   const provider = new WebsocketProvider(`${server.url.replace('http', 'ws')}/sync`, 'plan', ydoc, {
     WebSocketPolyfill: WebSocket as unknown as typeof globalThis.WebSocket,
-    params: { actorId: actor.id, actorName: actor.name, actorKind: actor.kind },
+    params: { lineage, actorId: actor.id, actorName: actor.name, actorKind: actor.kind },
     disableBc: true,
   });
   providers.push(provider);
@@ -74,6 +75,7 @@ beforeEach(async () => {
   root = await tempRoot();
   server = await startTestServer(root);
   await ada().createBoard({ name: 'Plan' });
+  lineage = await lineageOf(server, 'plan');
   await seed();
 });
 

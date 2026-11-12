@@ -272,6 +272,8 @@ export type HistoryOptions = z.infer<typeof HistoryOptionsSchema>;
 export interface HistoryResult {
   boardId: string;
   cursor: number;
+  /** The oldest cursor `snapshotAt` can still reconstruct. */
+  earliest: number;
   /** Newest first. */
   batches: Batch[];
   text: string;

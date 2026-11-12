@@ -72,10 +72,15 @@ The live board is a Yjs document, so that concurrent edits from browsers and fro
 | `proposals`   | `Y.Map<Proposal>` | Plain proposal objects by id (working state, not saved in the file)    |
 | `asks`        | `Y.Map<Ask>`      | Plain question objects by id (working state, not saved in the file)    |
 | `comments`    | `Y.Map<Comment>`  | Plain comment objects by id (saved in the file under `comments`)       |
+| `claims`      | `Y.Map<Claim>`    | Plain claim objects by node id (working state, not saved in the file)  |
 
 Inside a node or edge map, each schema field is one key holding a plain JSON value. That includes `body` (a string), `tags`, `props`, `links`, and `view` (replaced as a whole). Conflict resolution is therefore last-writer-wins per field, which is the right grain for a board: two people editing different fields of one node both win, and two people editing the same field get one consistent result.
 
-Code never touches these maps directly. `BoardDoc` in `core` wraps the Yjs document and is the only thing that reads or writes it; it also turns raw Yjs events into a normalized list of changes. Its `DocEvent` names the proposals, questions and comments a transaction changed, and carries the exact before and after state of every node, edge and comment it changed (`states`), which is what history and undo are built on. Entries of the three plain maps that fail their schema are skipped and listed by `issues()`.
+Code never touches these maps directly. `BoardDoc` in `core` wraps the Yjs document and is the only thing that reads or writes it; it also turns raw Yjs events into a normalized list of changes. Its `DocEvent` names the proposals, questions, comments and claims a transaction changed, and carries the exact before and after state of every node, edge, comment, actor and the metadata it changed (`states`), which is what history, undo and replay are built on. Entries of the plain maps that fail their schema are skipped and listed by `issues()`.
+
+### Lineage
+
+Every live document has a random **lineage** id, made when the document is created or rebuilt from the board file (for example after `.openboard/.local/` was deleted). It is stored next to the `.ydoc` snapshot, never in the board file, and is shown as `lineage` in the board listing and as the `x-openboard-lineage` header of `GET /api/boards/:id`. A browser must pass it when it syncs (`/sync/:id?lineage=...`); a socket without it, or with another one, is closed with code `4409` (`CLOSE_STALE_DOCUMENT`) before anything it sent is applied. This stops a tab left open from an earlier server, or from an earlier life of the board, from merging its stale document into a different board with the same id. On that close code a client should drop its document, fetch the board again and reconnect with the new lineage.
 
 A comment whose node was removed keeps its `nodeId`, so restoring the node re-attaches it; readers treat such a thread as detached.
 
@@ -109,6 +114,20 @@ Everyone who proposes, asks, answers, decides, comments or undoes is added to th
 **Comments, inbox and questions.** Comments live in the document (browsers write them directly) and in the board file. Mentions, replies, answers to questions, decisions on proposals and undone batches become inbox items for the actor concerned, never for the one who acted. Agents ask people questions through `ask`, and can long-poll `askResult` for the answer; an answer that `askResult` returned to its author is not delivered again by the inbox (a read with `since` still shows it). `asks` lists the open questions.
 
 **"People only" is a guard, not a boundary.** Deciding proposals, answering questions and changing settings require an actor of kind `human`. The kind is whatever the caller declares (the `x-openboard-actor-kind` header); the server has no authentication on loopback. The check stops an agent from approving its own work by mistake, not a program that lies about who it is.
+
+## Work in progress
+
+Defined in [`packages/core/src/live.ts`](../packages/core/src/live.ts). All of it is memory only on the server (claims excepted, see below), and none of it reaches the board file, the change feed or the history.
+
+**Agent presence.** Agents are not sync peers, so the server publishes their presence into each board's awareness: one entry per agent and session, `{ actor, agent: { status, detail?, focus?, session, parent?, at } }`. Every API call by an agent updates it: reads are `reading` with `focus` on the nodes returned (at most 20), writes are `writing` with `focus` on what they touched, a long-poll on a question is `waiting`. After 20 seconds without activity an agent is `idle`, or `waiting` when it has a pending proposal or an open question there; after 10 minutes it disappears. A call names its session with the `x-openboard-session` header (the SDK's `session` option); calls without one use the session `default`.
+
+**Activity sessions.** Agent tooling (editor or CLI hooks) reports what it does with `POST /api/activity` (`ActivityEvent`): sessions starting and ending, prompts, tools starting and ending, subagents. The server keeps the most recent 200 sessions, drops ended ones after 30 minutes, and shows a session as `working` (with `detail`, for example `Bash: pnpm test`) on every board its agent touched since the server started and on every board open in a browser. `GET /api/sessions` lists them. Browsers receive the list through the same awareness: one entry per open board, `{ actor: SYSTEM_ACTOR, live: { sessions, at } }`, holding sessions that have not ended (at most 50, each with its last 5 steps). Awareness was chosen over a separate event stream because each open board already has an awareness connection.
+
+Activity text is untrusted and may be sensitive: it can quote file paths and command lines. The server strips control characters, cuts summaries to 200 and labels to 80 characters, and keeps it in memory only; it is never written to disk.
+
+**Claims.** An agent can claim nodes it is working on (`POST /api/boards/:id/claims`), for 15 minutes by default and 120 at most. A claim is a soft lock kept in the document's `claims` map, so browsers see it; it is not a board edit, needs no review, and is not saved in the board file or the history. While a claim is in force, another agent's `apply` that changes, removes or re-parents the node (or removes the frame it sits in) is refused with the operation error `claimed`; moving it is still allowed, and people are never blocked. Claiming is all or nothing unless `partial`; releasing goes node by node, and people may release any claim. Any later call by the holder on that board renews its claims once half their length has passed. Expired claims are ignored at once and swept away within seconds; removing a node removes its claim. Reads mark claimed nodes (`claimed by <name> until <time>`).
+
+**Replay.** The history also keeps every transaction that changed the board JSON, with exact before and after states (the last 5000). `snapshotAt(cursor)` (`GET /api/boards/:id/at/:cursor`) rebuilds the board as it was right after that cursor by reverting later transactions, newest first. `HistoryResult.earliest` is the oldest cursor it can reach; an older one fails with `not_found`.
 
 ## Reading a board
 
@@ -164,7 +183,11 @@ One server process serves one project root.
 | `GET /api/boards/:id/asks/:aid?waitMs=`            | `BoardApi.askResult`; a long-poll of at most `MAX_ASK_WAIT_MS`      |
 | `POST /api/boards/:id/asks/:aid/answer`            | `BoardApi.answerAsk` (body: `AnswerInput`; people only)             |
 | `POST /api/boards/:id/asks/:aid/cancel`            | `BoardApi.cancelAsk` (the author or a person)                       |
-| `GET /sync/:id` (WebSocket)                        | Document sync and presence, using the standard y-websocket protocol |
+| `POST /api/activity`                               | `BoardApi.reportActivity` (body: `ActivityEvent`)                   |
+| `GET /api/sessions?includeEnded=&maxTokens=`       | `BoardApi.sessions`                                                 |
+| `POST /api/boards/:id/claims`                      | `BoardApi.claim` (body: `ClaimRequest`)                             |
+| `GET /api/boards/:id/at/:cursor`                   | `BoardApi.snapshotAt`: the `Board` right after that cursor          |
+| `GET /sync/:id?lineage=` (WebSocket)               | Document sync and presence, using the standard y-websocket protocol |
 | `ALL /mcp`                                         | MCP over Streamable HTTP, mounted with `OpenBoardServer.mount`      |
 | `GET /*`                                           | The web app                                                         |
 
@@ -172,7 +195,7 @@ Request and response bodies are the JSON forms of the `BoardApi` types. Errors a
 
 The long-poll is not cut by a server-side timeout (Node's request timeout only covers receiving the request), and a client that disconnects ends the wait at once. Missing proposals, batches and questions are `not_found` (404); acting on something already decided, answered or undone is `conflict` (409); a people-only or author-only call by someone else is `forbidden` (403).
 
-The caller's actor is taken from the headers `x-openboard-actor-id`, `x-openboard-actor-name`, and `x-openboard-actor-kind`. Over the WebSocket the same values arrive as query parameters `actorId`, `actorName`, `actorKind`.
+The caller's actor is taken from the headers `x-openboard-actor-id`, `x-openboard-actor-name`, and `x-openboard-actor-kind`, and its agent session from `x-openboard-session`. Over the WebSocket the actor arrives as query parameters `actorId`, `actorName`, `actorKind`, next to the required `lineage`.
 
 ### Presence and selection
 
@@ -199,8 +222,10 @@ The server reads awareness to answer `BoardApi.selection` with the most recent n
       server.json             { pid, port, url, root, version, startedAt } of the running server
       <board id>.ydoc         document state with history (and pending proposals and questions)
       <board id>.changes.jsonl  the change feed
-      <board id>.history.jsonl  batches with before/after states, for history and undo (last 2000)
+      <board id>.history.jsonl  batches (last 2000) and transactions (last 5000) with before/after
+                                states, for history, undo and replay; starts with its lineage
       <board id>.inbox.jsonl    inbox items and each actor's read position
+      <board id>.lineage        the lineage of the document in <board id>.ydoc
 ```
 
 The JSON file is the source of truth. It is written with sorted keys and one stable layout, so a small change to the board is a small diff. When the file changes on disk (a checkout, a merge, a manual edit), the server reconciles the live document to match it. `config.json` is watched the same way; while it does not parse, the last good settings stay in effect.

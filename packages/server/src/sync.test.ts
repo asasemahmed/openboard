@@ -4,7 +4,7 @@ import WebSocket from 'ws';
 import { WebsocketProvider } from 'y-websocket';
 import * as Y from 'yjs';
 import { CLOSE_BOARD_NOT_FOUND } from './sync.js';
-import { removeRoot, startTestServer, tempRoot, waitFor } from './testing.js';
+import { lineageOf, removeRoot, startTestServer, tempRoot, waitFor } from './testing.js';
 import type { OpenBoardServer } from './types.js';
 
 const ALICE: Actor = { id: 'alice', kind: 'human', name: 'Alice' };
@@ -14,6 +14,7 @@ const AGENT: Actor = { id: 'helper', kind: 'agent', name: 'Helper' };
 let root: string;
 let server: OpenBoardServer;
 const providers: WebsocketProvider[] = [];
+const lineages = new Map<string, string>();
 
 function connect(actor: Actor, boardId = 'plan') {
   const ydoc = new Y.Doc();
@@ -24,7 +25,12 @@ function connect(actor: Actor, boardId = 'plan') {
     {
       // `ws` implements the browser WebSocket interface the provider needs.
       WebSocketPolyfill: WebSocket as unknown as typeof globalThis.WebSocket,
-      params: { actorId: actor.id, actorName: actor.name, actorKind: actor.kind },
+      params: {
+        lineage: lineages.get(boardId) ?? '',
+        actorId: actor.id,
+        actorName: actor.name,
+        actorKind: actor.kind,
+      },
       // Same-process providers would otherwise sync with each other directly, bypassing the server.
       disableBc: true,
     },
@@ -41,6 +47,7 @@ beforeEach(async () => {
   root = await tempRoot();
   server = await startTestServer(root);
   await server.api(AGENT).createBoard({ name: 'Plan' });
+  lineages.set('plan', await lineageOf(server, 'plan'));
 });
 
 afterEach(async () => {
@@ -175,7 +182,9 @@ describe('sync', () => {
   });
 
   it('survives malformed frames', async () => {
-    const ws = new WebSocket(`${server.url.replace('http', 'ws')}/sync/plan`);
+    const ws = new WebSocket(
+      `${server.url.replace('http', 'ws')}/sync/plan?lineage=${lineages.get('plan')}`,
+    );
     await new Promise((resolve) => ws.on('open', resolve));
     const closed = new Promise<number>((resolve) => ws.on('close', (code) => resolve(code)));
     ws.send(Buffer.from([0, 2, 250, 250, 250, 250, 250]));

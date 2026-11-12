@@ -35,6 +35,8 @@ export interface LoadedBoard {
   fileError?: string;
   /** The parsed file, when it exists, parses, and differs from the document restored from `.ydoc`. */
   reconcileTo?: ReturnType<typeof parseBoard>;
+  /** True when the document came from the `.ydoc` snapshot, false when it was rebuilt from the file. */
+  restored: boolean;
 }
 
 /**
@@ -73,9 +75,9 @@ export async function loadBoard(files: StoreFiles): Promise<LoadedBoard | null> 
         `the board file ${files.board} does not parse, so the board cannot be opened: ${fileError}`,
       );
     }
-    return { doc: BoardDoc.fromJSON(parsed), fileText };
+    return { doc: BoardDoc.fromJSON(parsed), fileText, restored: false };
   }
-  const loaded: LoadedBoard = { doc, fileText };
+  const loaded: LoadedBoard = { doc, fileText, restored: true };
   if (fileError !== undefined) loaded.fileError = fileError;
   else if (parsed && serializeBoard(parsed) !== serializeBoard(doc.toJSON()))
     loaded.reconcileTo = parsed;

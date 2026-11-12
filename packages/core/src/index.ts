@@ -5,6 +5,7 @@ export * from './diff.js';
 export * from './doc.js';
 export * from './geometry.js';
 export * from './ids.js';
+export * from './live.js';
 export * from './ops.js';
 export * from './policy.js';
 export * from './proposal.js';

@@ -9,6 +9,8 @@
  * reach it on loopback can claim to be a person.
  */
 import {
+  type ActivityEvent,
+  ActivityEventSchema,
   type Actor,
   ActorSchema,
   type AnswerInput,
@@ -32,6 +34,11 @@ import {
   type ChangesOptions,
   ChangesOptionsSchema,
   type ChangesResult,
+  CLAIM_DEFAULT_MINUTES,
+  type Claim,
+  type ClaimRequest,
+  ClaimRequestSchema,
+  type ClaimResult,
   type Comment,
   type CommentInput,
   CommentInputSchema,
@@ -76,15 +83,21 @@ import {
   type RestoreItems,
   renderAsks,
   renderChanges,
+  renderClaims,
   renderHistory,
   renderInbox,
   renderOutline,
   renderProposals,
   renderRead,
   renderSelection,
+  renderSessions,
   renderUndo,
   rollupStatus,
   type SelectionResult,
+  type Session,
+  type SessionsOptions,
+  SessionsOptionsSchema,
+  type SessionsResult,
   SYSTEM_ACTOR,
   selectItems,
   selectNodes,
@@ -158,24 +171,92 @@ function plural(n: number, word: string): string {
 
 type Conflict = UndoResult['conflicts'][number];
 
+/** Which agent session a `LocalBoardApi` acts in. */
+export interface SessionOptions {
+  /** Session id (as in `ActivityEvent.session`); `DEFAULT_SESSION` when omitted. */
+  session?: string;
+}
+
 export class LocalBoardApi implements BoardApi {
   readonly actor: Actor;
+  readonly session: string | undefined;
 
   constructor(
     private readonly boards: Boards,
     actor: Actor,
     private readonly log: (line: string) => void = () => {},
+    options: SessionOptions = {},
   ) {
     this.actor = parseInput(ActorSchema, actor, 'actor');
+    this.session =
+      options.session === undefined ? undefined : parseInput(IdSchema, options.session, 'session');
   }
 
-  private async room(boardId: unknown): Promise<Room> {
+  /**
+   * The live board. For an agent this also updates its presence there
+   * (`status`) and renews its claims.
+   */
+  private async room(boardId: unknown, status: 'reading' | 'writing' = 'reading'): Promise<Room> {
     if (typeof boardId !== 'string') {
       throw new OpenBoardError('invalid_request', 'board id must be a string');
     }
     const room = await this.boards.get(boardId);
     room.knownActors.set(this.actor.id, this.actor);
+    this.mark(room, status);
     return room;
+  }
+
+  private mark(room: Room, status: 'reading' | 'writing' | 'waiting', focus?: string[]): void {
+    this.boards.live.mark(room, this.actor, this.session, status, focus);
+  }
+
+  private now(): number {
+    return this.boards.clock();
+  }
+
+  /**
+   * Operations an agent may not run because another agent claimed their node:
+   * changing, removing or re-parenting it (a removed frame's children count
+   * too). Moving a node is presentation and stays allowed.
+   */
+  private claimErrors(room: Room, board: Board, ops: readonly Op[]): OpError[] {
+    if (this.actor.kind !== 'agent') return [];
+    const claims = this.boards.live.activeClaims(room);
+    if (claims.size === 0) return [];
+    const children = new Map<string, string[]>();
+    for (const node of Object.values(board.nodes)) {
+      if (node.parent === undefined) continue;
+      const list = children.get(node.parent);
+      if (list) list.push(node.id);
+      else children.set(node.parent, [node.id]);
+    }
+    const errors: OpError[] = [];
+    ops.forEach((op, index) => {
+      const ids: string[] = [];
+      if (op.op === 'update_node' && !op.id.startsWith('$')) ids.push(op.id);
+      if (op.op === 'remove_node') {
+        ids.push(op.id);
+        const queue = [...(children.get(op.id) ?? [])];
+        for (let i = 0; i < queue.length; i++) {
+          const id = queue[i] as string;
+          ids.push(id);
+          if (op.children === 'cascade') queue.push(...(children.get(id) ?? []));
+        }
+      }
+      for (const id of ids) {
+        const claim = claims.get(id);
+        if (!claim || claim.by === this.actor.id) continue;
+        const holder = room.actors()[claim.by]?.name ?? claim.by;
+        const title = board.nodes[id]?.title;
+        const note = claim.note ? ` (${JSON.stringify(claim.note)})` : '';
+        errors.push({
+          index,
+          code: 'claimed',
+          message: `node "${id}"${title !== undefined ? ` (${JSON.stringify(title)})` : ''} is claimed by ${holder} until ${claim.until}${note}; leave it to them, ask them, or try again after that`,
+        });
+      }
+    });
+    return errors;
   }
 
   /** See the note at the top of this file: the kind comes from the caller and is not verified. */
@@ -220,10 +301,18 @@ export class LocalBoardApi implements BoardApi {
     const board = room.doc.toJSON();
     const selection = q.selection ? room.humanSelection() : null;
     const nodes = selectNodes(board, q, { selection: { nodeIds: selection?.nodeIds ?? [] } });
-    const opts: { detail?: ReadQuery['detail']; maxTokens?: number } = {};
+    const opts: Parameters<typeof renderRead>[3] = {
+      claims: Object.fromEntries(this.boards.live.activeClaims(room)),
+    };
     if (q.detail !== undefined) opts.detail = q.detail;
     if (q.maxTokens !== undefined) opts.maxTokens = q.maxTokens;
-    return renderRead(board, nodes, room.cursor, opts);
+    const result = renderRead(board, nodes, room.cursor, opts);
+    this.mark(
+      room,
+      'reading',
+      result.nodes.map((node) => node.id),
+    );
+    return result;
   }
 
   async changes(boardId: string, options: ChangesOptions): Promise<ChangesResult> {
@@ -247,7 +336,7 @@ export class LocalBoardApi implements BoardApi {
   async selection(boardId: string): Promise<SelectionResult> {
     const room = await this.room(boardId);
     const selection = room.humanSelection();
-    return renderSelection(
+    const result = renderSelection(
       room.doc.toJSON(),
       {
         by: selection?.by ?? null,
@@ -255,7 +344,14 @@ export class LocalBoardApi implements BoardApi {
         edgeIds: selection?.edgeIds ?? [],
       },
       room.cursor,
+      { claims: Object.fromEntries(this.boards.live.activeClaims(room)) },
     );
+    this.mark(
+      room,
+      'reading',
+      result.nodes.map((node) => node.id),
+    );
+    return result;
   }
 
   // ── Writing ────────────────────────────────────────────────────────────────
@@ -264,12 +360,16 @@ export class LocalBoardApi implements BoardApi {
     const req = parseInput(ApplyEnvelopeSchema, request, 'apply request');
     // Core validates each operation and reports problems by index.
     const ops = req.ops as Op[];
-    const room = await this.room(boardId);
+    const room = await this.room(boardId, req.dryRun ? 'reading' : 'writing');
 
     const run = async (): Promise<ApplyResult> => {
       const board = room.doc.toJSON();
       const dry = applyOps(board, ops, { actor: this.actor });
       if (!dry.ok) return { status: 'invalid', cursor: room.cursor, refs: {}, errors: dry.errors };
+      const claimed = this.claimErrors(room, board, ops);
+      if (claimed.length > 0) {
+        return { status: 'invalid', cursor: room.cursor, refs: {}, errors: claimed };
+      }
 
       const verdicts = classifyOps(board, ops, { actor: this.actor, config: room.config.config });
       const denied = verdicts.filter((v) => v.verdict === 'denied');
@@ -318,6 +418,11 @@ export class LocalBoardApi implements BoardApi {
           proposal.preview = await placePreview(after.board, proposal.preview, this.log);
         room.doc.registerActor(this.actor, this.origin(room));
         room.doc.putProposal(proposal, this.origin(room));
+        this.mark(room, 'writing', [
+          ...Object.keys(proposal.preview.nodes),
+          ...Object.keys(proposal.preview.updated),
+          ...proposal.preview.removedNodes,
+        ]);
         return {
           status: 'proposed',
           cursor: room.cursor,
@@ -343,6 +448,12 @@ export class LocalBoardApi implements BoardApi {
       };
       // A batch that changed nothing is not in the history.
       if (room.history.get(batchId)) result.batchId = batchId;
+      const applied = outcome.applied;
+      this.mark(room, 'writing', [
+        ...applied.addedNodes,
+        ...applied.updatedNodes,
+        ...applied.removedNodes,
+      ]);
       return result;
     };
     return req.dryRun ? run() : room.lock.run(run);
@@ -350,7 +461,7 @@ export class LocalBoardApi implements BoardApi {
 
   async layout(boardId: string, request?: LayoutRequest): Promise<LayoutResult> {
     const req = parseInput(LayoutRequestSchema, request ?? {}, 'layout request');
-    const room = await this.room(boardId);
+    const room = await this.room(boardId, 'writing');
     return room.lock.run(async () => {
       const board = room.doc.toJSON();
       const scope = req.scope ?? 'unpinned';
@@ -440,7 +551,7 @@ export class LocalBoardApi implements BoardApi {
   async decideProposal(boardId: string, proposalId: string, decision: Decision): Promise<Proposal> {
     this.requirePerson('deciding on a proposal');
     const input = parseInput(DecisionSchema, decision, 'decision');
-    const room = await this.room(boardId);
+    const room = await this.room(boardId, 'writing');
     return room.lock.run(async () => {
       const proposal = this.proposalOf(room, proposalId);
       if (proposal.status !== 'pending') {
@@ -541,7 +652,7 @@ export class LocalBoardApi implements BoardApi {
   }
 
   async withdrawProposal(boardId: string, proposalId: string): Promise<Proposal> {
-    const room = await this.room(boardId);
+    const room = await this.room(boardId, 'writing');
     return room.lock.run(async () => {
       const proposal = this.proposalOf(room, proposalId);
       if (proposal.author !== this.actor.id) {
@@ -621,6 +732,7 @@ export class LocalBoardApi implements BoardApi {
     const room = await this.room(boardId);
     const { batches, more } = room.history.list(opts);
     return renderHistory(room.id, batches, room.cursor, {
+      earliest: room.history.earliest(room.cursor),
       actors: { [SYSTEM_ACTOR.id]: SYSTEM_ACTOR, ...room.actors() },
       more,
       ...(opts.maxTokens !== undefined ? { maxTokens: opts.maxTokens } : {}),
@@ -629,7 +741,7 @@ export class LocalBoardApi implements BoardApi {
 
   async undo(boardId: string, request: UndoRequest): Promise<UndoResult> {
     const req = parseInput(UndoRequestSchema, request, 'undo request');
-    const room = await this.room(boardId);
+    const room = await this.room(boardId, 'writing');
     return room.lock.run(async () => {
       const agent = this.actor.kind === 'agent';
       if (agent && policyModeFor(this.actor, room.config.config) === 'locked') {
@@ -897,7 +1009,7 @@ export class LocalBoardApi implements BoardApi {
 
   async comment(boardId: string, input: CommentInput): Promise<Comment> {
     const parsed = parseInput(CommentInputSchema, input, 'comment');
-    const room = await this.room(boardId);
+    const room = await this.room(boardId, 'writing');
     const id = newId('c');
     const comment: Comment = {
       id,
@@ -931,7 +1043,7 @@ export class LocalBoardApi implements BoardApi {
   }
 
   async resolveThread(boardId: string, thread: string, resolved = true): Promise<Comment> {
-    const room = await this.room(boardId);
+    const room = await this.room(boardId, 'writing');
     if (typeof resolved !== 'boolean') {
       throw new OpenBoardError('invalid_request', '"resolved" must be true or false');
     }
@@ -980,7 +1092,7 @@ export class LocalBoardApi implements BoardApi {
 
   async ask(boardId: string, input: AskInput): Promise<Ask> {
     const parsed = parseInput(AskInputSchema, input, 'question');
-    const room = await this.room(boardId);
+    const room = await this.room(boardId, 'writing');
     const missing = (parsed.nodeIds ?? []).filter((id) => !room.doc.getNode(id));
     if (missing.length > 0) {
       throw new OpenBoardError(
@@ -1030,8 +1142,10 @@ export class LocalBoardApi implements BoardApi {
     const ask = this.askOf(room, askId);
     let result = ask;
     if (waitMs && ask.status === 'open') {
+      this.mark(room, 'waiting', ask.nodeIds ?? []);
       await room.waitForAsk(ask.id, Math.min(waitMs, MAX_ASK_WAIT_MS), options?.signal);
       result = room.doc.getAsk(ask.id) ?? ask;
+      this.mark(room, 'reading');
     }
     // The author now has the answer; its inbox should not deliver it again.
     if (result.status === 'answered' && result.author === this.actor.id) {
@@ -1050,7 +1164,7 @@ export class LocalBoardApi implements BoardApi {
   async answerAsk(boardId: string, askId: string, answer: AnswerInput): Promise<Ask> {
     this.requirePerson('answering a question');
     const parsed = parseInput(AnswerInputSchema, answer, 'answer');
-    const room = await this.room(boardId);
+    const room = await this.room(boardId, 'writing');
     const ask = this.askOf(room, askId);
     if (ask.status !== 'open') {
       const by = ask.answer ? ` by ${room.actors()[ask.answer.by]?.name ?? ask.answer.by}` : '';
@@ -1078,7 +1192,7 @@ export class LocalBoardApi implements BoardApi {
   }
 
   async cancelAsk(boardId: string, askId: string): Promise<Ask> {
-    const room = await this.room(boardId);
+    const room = await this.room(boardId, 'writing');
     const ask = this.askOf(room, askId);
     if (ask.author !== this.actor.id && this.actor.kind !== 'human') {
       throw new OpenBoardError(
@@ -1092,6 +1206,106 @@ export class LocalBoardApi implements BoardApi {
     const next: Ask = { ...ask, status: 'cancelled' };
     room.doc.putAsk(next, this.origin(room));
     return next;
+  }
+
+  // ── Live work ──────────────────────────────────────────────────────────────
+
+  async reportActivity(event: ActivityEvent): Promise<Session> {
+    const parsed = parseInput(ActivityEventSchema, event, 'activity event');
+    return this.boards.live.report(this.actor, parsed);
+  }
+
+  async sessions(options?: SessionsOptions): Promise<SessionsResult> {
+    const opts = parseInput(SessionsOptionsSchema, options ?? {}, 'sessions options');
+    return renderSessions(this.boards.live.list(opts.includeEnded ?? false), {
+      actors: this.boards.live.actors(),
+      ...(opts.includeEnded !== undefined ? { includeEnded: opts.includeEnded } : {}),
+      ...(opts.maxTokens !== undefined ? { maxTokens: opts.maxTokens } : {}),
+    });
+  }
+
+  async claim(boardId: string, request: ClaimRequest): Promise<ClaimResult> {
+    const req = parseInput(ClaimRequestSchema, request, 'claim request');
+    const room = await this.room(boardId, 'writing');
+    return room.lock.run(async () => {
+      const doc = room.doc;
+      const ids = [...new Set(req.nodeIds)];
+      const active = this.boards.live.activeClaims(room);
+      const conflicts: ClaimResult['conflicts'] = [];
+      const released: string[] = [];
+      if (req.release) {
+        // Releasing goes node by node: what may be released is.
+        for (const id of ids) {
+          const claim = doc.getClaim(id);
+          if (!claim) continue;
+          if (claim.by === this.actor.id || this.actor.kind === 'human' || !active.has(id)) {
+            released.push(id);
+          } else conflicts.push({ nodeId: id, by: claim.by, until: claim.until });
+        }
+        doc.deleteClaims(released, this.origin(room));
+      } else {
+        if (this.actor.kind !== 'agent') {
+          throw new OpenBoardError(
+            'forbidden',
+            'only agents claim nodes; people can release any claim with release: true',
+          );
+        }
+        const missing = ids.filter((id) => !doc.getNode(id));
+        if (missing.length > 0) {
+          throw new OpenBoardError(
+            'not_found',
+            `no node ${missing.map((id) => `"${id}"`).join(', ')} on board "${room.id}"`,
+          );
+        }
+        for (const id of ids) {
+          const claim = active.get(id);
+          if (claim && claim.by !== this.actor.id) {
+            conflicts.push({ nodeId: id, by: claim.by, until: claim.until });
+          }
+        }
+        if (conflicts.length === 0 || req.partial) {
+          const now = this.now();
+          const minutes = req.minutes ?? CLAIM_DEFAULT_MINUTES;
+          const taken = new Set(conflicts.map((c) => c.nodeId));
+          const claims: Claim[] = ids
+            .filter((id) => !taken.has(id))
+            .map((nodeId) => {
+              const claim: Claim = {
+                nodeId,
+                by: this.actor.id,
+                minutes,
+                at: new Date(now).toISOString(),
+                until: new Date(now + minutes * 60_000).toISOString(),
+              };
+              if (this.session) claim.session = this.session;
+              if (req.note) claim.note = req.note;
+              return claim;
+            });
+          doc.registerActor(this.actor, this.origin(room));
+          doc.putClaims(claims, this.origin(room));
+        }
+      }
+      const mine = [...this.boards.live.activeClaims(room).values()].filter(
+        (claim) => claim.by === this.actor.id,
+      );
+      const titles: Record<string, string> = {};
+      for (const id of [...ids, ...mine.map((c) => c.nodeId)]) {
+        const title = doc.getNode(id)?.title;
+        if (title !== undefined) titles[id] = title;
+      }
+      const result = { claims: mine, conflicts, released };
+      return {
+        boardId: room.id,
+        ...result,
+        text: renderClaims(room.id, result, { actors: room.actors(), titles }),
+      };
+    });
+  }
+
+  async snapshotAt(boardId: string, cursor: number): Promise<Board> {
+    const at = parseInput(z.number().int().min(0), cursor, 'cursor');
+    const room = await this.room(boardId);
+    return room.history.snapshot(room.doc.raw(), at, room.cursor);
   }
 
   // ── Settings ───────────────────────────────────────────────────────────────
