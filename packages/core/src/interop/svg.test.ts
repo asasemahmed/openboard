@@ -101,6 +101,21 @@ describe('checkXml', () => {
 });
 
 describe('toSvg', () => {
+  it.each([
+    ['todo', 'To do'],
+    ['in_progress', 'In progress'],
+    ['blocked', 'Blocked'],
+    ['done', 'Done'],
+    ['cancelled', 'Cancelled'],
+  ] as const)('capitalises the %s status in both themes', (status, label) => {
+    const board = build([{ op: 'add_node', node: { type: 'task', title: 'Example', status } }]);
+    for (const theme of ['light', 'dark'] as const) {
+      const svg = toSvg(board, { theme });
+      expect(svg).toContain(`>${label}</text>`);
+      expect(svg).not.toContain(`>${label.toLowerCase()}</text>`);
+    }
+  });
+
   it('produces a well-formed, self-contained document', () => {
     for (const theme of ['light', 'dark'] as const) {
       const svg = toSvg(richBoard(), { theme });
@@ -142,7 +157,7 @@ describe('toSvg', () => {
     for (const id of Object.keys(board.nodes)) expect(svg).toContain(`data-id="${id}"`);
     expect(svg.match(/marker-end=/g)).toHaveLength(Object.keys(board.edges).length);
     expect(svg).toContain('>Task</text>');
-    expect(svg).toContain('>in progress</text>');
+    expect(svg).toContain('>In progress</text>');
     // Long titles wrap to two lines and are cut with an ellipsis when even that is too long.
     expect(svg).toContain('>Do we need 3-D Secure for</text>');
     const long = build([{ op: 'add_node', node: { type: 'note', title: 'word '.repeat(40) } }]);
