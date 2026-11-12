@@ -1,10 +1,12 @@
 /**
  * A static picture of a board: one self-contained SVG with no fonts, images,
- * scripts or CSS, drawn in the canvas's visual language (see assets/banner-*).
- * Frames are rounded containers with a title; cards have the coloured type
- * label and dot, a title of at most two lines, a one-line body preview and a
- * status pill; edges run between the facing sides of their cards with an
- * arrowhead and a small type label.
+ * scripts or CSS, drawn in the canvas's visual language. Frames are soft
+ * regions with a title; cards are filled with a tint of their type's colour
+ * and carry the type's glyph and name, a title of at most two lines, a
+ * one-line body preview and a status chip; edges run between the facing sides
+ * of their cards with an arrowhead and, unless they are plain, a small label.
+ * Unlike the canvas, which can hold connections back until asked, a picture
+ * draws every one.
  *
  * With `diff` the picture becomes a review aid: added items are outlined green
  * with a `+` badge, removed ones are drawn from the board before the change,
@@ -53,13 +55,13 @@ export interface SvgOptions {
   idPrefix?: string;
 }
 
-const FONT_TYPE: FontSpec = { size: 11, mono: true, letterSpacing: 0.9 };
+const FONT_TYPE: FontSpec = { size: 12, bold: true };
 const FONT_TITLE: FontSpec = { size: 15, bold: true };
 const FONT_BODY: FontSpec = { size: 13 };
 const FONT_PILL: FontSpec = { size: 11.5, bold: true };
 const FONT_TAG: FontSpec = { size: 11.5 };
-const FONT_FRAME: FontSpec = { size: 13, bold: true };
-const FONT_EDGE: FontSpec = { size: 10, mono: true, letterSpacing: 0.2 };
+const FONT_FRAME: FontSpec = { size: 14, bold: true };
+const FONT_EDGE: FontSpec = { size: 10.5, bold: true };
 const FONT_NOTE: FontSpec = { size: 10, mono: true };
 const FONT_BOARD: FontSpec = { size: 18, bold: true };
 const FONT_LEGEND: FontSpec = { size: 12 };
@@ -92,8 +94,35 @@ function hash(text: string): string {
   return (h >>> 0).toString(36);
 }
 
+/** The type's name as the canvas shows it: "Task", "Design review". */
 function typeLabel(type: string): string {
-  return type.startsWith('x:') ? typeWords(type) : type.toUpperCase();
+  const words = typeWords(type);
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/**
+ * Glyphs for the built-in card types on a 16px grid, the same drawings the
+ * canvas uses (`BUILTIN_TYPE_PATHS` in the app's TypeIcon). Other types get a dot.
+ */
+const TYPE_GLYPHS: Record<string, string> = {
+  note: '<path d="M2.75 2.75h10.5v6.5l-4 4h-6.5z"/><path d="M13.25 9.25h-4v4"/>',
+  task: '<rect x="2.5" y="2.5" width="11" height="11" rx="3"/><path d="M5.5 8.25l1.75 1.75 3.25-3.75"/>',
+  decision: '<path d="M8 1.75L14.25 8 8 14.25 1.75 8z"/><path d="M6 8h4M8.5 6.5L10 8 8.5 9.5"/>',
+  question:
+    '<circle cx="8" cy="8" r="5.75"/><path d="M6.4 6.5a1.7 1.7 0 113 1.1c-.6.5-1.4.8-1.4 1.65M8 11.25v.01"/>',
+  risk: '<path d="M8 2.25l6 10.5H2z"/><path d="M8 6.5v2.75M8 11.25v.01"/>',
+  doc: '<path d="M4 1.75h5l3.5 3.5v9H4z"/><path d="M9 1.75v3.5h3.5M6 8.5h4M6 11h4"/>',
+  code: '<path d="M5.5 4.5L2 8l3.5 3.5M10.5 4.5L14 8l-3.5 3.5"/>',
+  agent:
+    '<rect x="2.75" y="5" width="10.5" height="8" rx="2"/><path d="M8 2.5V5M6 9h.01M10 9h.01M6.5 11.25h3"/>',
+  run: '<circle cx="8" cy="8" r="5.75"/><path d="M6.75 5.75v4.5L10.5 8z"/>',
+};
+
+/** The type's glyph, 14px, with its top-left corner at (x, y). */
+function typeGlyph(type: string, x: number, y: number, color: string): string {
+  const glyph = Object.hasOwn(TYPE_GLYPHS, type) ? TYPE_GLYPHS[type] : undefined;
+  if (!glyph) return `<circle cx="${n(x + 7)}" cy="${n(y + 7)}" r="3.5" fill="${color}"/>`;
+  return `<g transform="translate(${n(x)} ${n(y)}) scale(0.875)" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${glyph}</g>`;
 }
 
 function text(
@@ -312,7 +341,7 @@ export function toSvg(board: Board, options: SvgOptions = {}): string {
     `<title id="${prefix}-title">${xmlEscape(board.name)}</title>`,
     defs(prefix, theme),
     `<rect x="${n(vx)}" y="${n(vy)}" width="${n(vw)}" height="${n(vh)}" fill="${theme.canvas}"/>`,
-    `<rect x="${n(vx)}" y="${n(vy)}" width="${n(vw)}" height="${n(vh)}" fill="url(#${prefix}-dots)"/>`,
+    `<rect x="${n(vx)}" y="${n(vy)}" width="${n(vw)}" height="${n(vh)}" fill="url(#${prefix}-grid)"/>`,
   );
 
   // ── Header: board name and legend ──
@@ -391,12 +420,11 @@ export function toSvg(board: Board, options: SvgOptions = {}): string {
     out.push(
       `<path d="${pathData(trimEnd(points, 1.5))}" fill="none" stroke="${style.color}" stroke-width="${style.width}"${dash} stroke-linecap="round" stroke-linejoin="round" marker-end="url(#${prefix}-${style.marker})"/>`,
     );
-    const label = truncateToWidth(
-      edge.label?.trim() ? edge.label.trim() : typeWords(edge.type),
-      180,
-      FONT_EDGE,
-    );
-    const w = measureText(label, FONT_EDGE) + 10;
+    // A plain line says "these belong together" on its own, as on the canvas.
+    const named = edge.label?.trim();
+    if (!named && edge.type === 'relates_to' && !mark) return;
+    const label = truncateToWidth(named ? named : typeWords(edge.type), 180, FONT_EDGE);
+    const w = measureText(label, FONT_EDGE) + 14;
     const h = 16;
     for (const t of [0.5, 0.35, 0.65, 0.2, 0.8]) {
       const at = pointAt(points, t);
@@ -406,15 +434,8 @@ export function toSvg(board: Board, options: SvgOptions = {}): string {
       placedLabels.push(box);
       const color = mark ? style.color : theme.ink2;
       labels.push(
-        `<rect x="${n(box.x)}" y="${n(box.y)}" width="${n(w)}" height="${h}" rx="4" fill="${theme.canvas}" fill-opacity="0.92"/>`,
-        text(
-          at.x,
-          at.y + 3.5,
-          label,
-          `text-anchor="middle" fill="${color}"`,
-          FONT_EDGE,
-          SVG_FONT_MONO,
-        ),
+        `<rect x="${n(box.x)}" y="${n(box.y)}" width="${n(w)}" height="${h}" rx="8" fill="${theme.canvas}" fill-opacity="0.92"/>`,
+        text(at.x, at.y + 3.5, label, `text-anchor="middle" fill="${color}"`, FONT_EDGE),
       );
       break;
     }
@@ -451,7 +472,7 @@ function defs(prefix: string, theme: SvgTheme): string {
     `<marker id="${prefix}-${name}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M1.5 1.5L9 5L1.5 8.5" fill="none" stroke="${color}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></marker>`;
   return [
     '<defs>',
-    `<pattern id="${prefix}-dots" width="24" height="24" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.1" fill="${theme.dot}"/></pattern>`,
+    `<pattern id="${prefix}-grid" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M32 0.5H0.5V32" fill="none" stroke="${theme.grid}" stroke-width="1"/></pattern>`,
     marker('m-muted', theme.edge.muted),
     marker('m-ink', theme.edge.ink),
     marker('m-danger', theme.edge.danger),
@@ -498,12 +519,13 @@ function edgeStyle(type: string, theme: SvgTheme, mark: Mark): EdgeStyle {
 
 const BUILTIN_SOLID = new Set(['depends_on', 'implements', 'evidence_for', 'flows_to']);
 
-function markStroke(theme: SvgTheme, mark: Mark): string {
+/** The outline: the diff mark's when there is one, else `line` (none when `line` is not given). */
+function markStroke(theme: SvgTheme, mark: Mark, line?: string): string {
   if (mark === 'added') return `stroke="${theme.diff.added}" stroke-width="2"`;
   if (mark === 'updated') return `stroke="${theme.diff.updated}" stroke-width="2"`;
   if (mark === 'removed')
     return `stroke="${theme.diff.removed}" stroke-width="1.75" stroke-dasharray="6 4"`;
-  return `stroke="${theme.line}" stroke-width="1"`;
+  return line ? `stroke="${line}" stroke-width="1"` : 'stroke="none"';
 }
 
 /** A small round badge on the top-right corner: `+` added, `−` removed. */
@@ -538,7 +560,7 @@ function frameSvg(
   const parts: string[] = [`<g data-id="${xmlEscape(node.id)}">`];
   const fillOpacity = mark === 'removed' ? 0 : theme.frameFillOpacity;
   parts.push(
-    `<rect x="${n(rect.x)}" y="${n(rect.y)}" width="${n(rect.w)}" height="${n(rect.h)}" rx="16" fill="${theme.frameFill}" fill-opacity="${fillOpacity}" ${markStroke(theme, mark)}/>`,
+    `<rect x="${n(rect.x)}" y="${n(rect.y)}" width="${n(rect.w)}" height="${n(rect.h)}" rx="20" fill="${theme.frameFill}" fill-opacity="${fillOpacity}" ${markStroke(theme, mark)}/>`,
   );
   const note = changeNote(node, marks, mark);
   const noteText = note.join(' · ');
@@ -586,30 +608,32 @@ function cardSvg(
   marks: DiffMarks | undefined,
 ): string {
   const { x, y, w, h } = rect;
-  const tone = theme.types[node.type] ?? theme.types.custom ?? theme.ink2;
+  const known = Object.hasOwn(theme.types, node.type) ? node.type : 'custom';
+  const tone = theme.types[known] ?? theme.ink2;
+  const fill = theme.fills[known] ?? theme.card;
   const inner = w - CARD_PAD_X * 2;
   const removed = mark === 'removed';
   const parts: string[] = [
     `<g data-id="${xmlEscape(node.id)}"${removed ? ' opacity="0.7"' : ''}>`,
     `<title>${xmlEscape(node.title)}</title>`,
-    `<rect x="${n(x)}" y="${n(y)}" width="${n(w)}" height="${n(h)}" rx="12" fill="${theme.card}" ${markStroke(theme, mark)}/>`,
+    `<rect x="${n(x)}" y="${n(y)}" width="${n(w)}" height="${n(h)}" rx="10" fill="${removed ? 'none' : fill}" ${markStroke(theme, mark, theme.fillLines[known])}/>`,
   ];
 
-  // Type row: dot, label and, in a diff, what changed.
+  // Type row: glyph, name and, in a diff, what changed.
   const note = changeNote(node, marks, mark).join(' · ');
   const label = typeLabel(node.type);
-  const labelRoom = Math.max(24, inner - 14);
+  const labelRoom = Math.max(24, inner - 20);
   const labelText = truncateToWidth(
     label,
     note ? Math.min(labelRoom, measureText(label, FONT_TYPE)) : labelRoom,
     FONT_TYPE,
   );
   parts.push(
-    `<circle cx="${n(x + CARD_PAD_X + 4)}" cy="${n(y + 19)}" r="3.5" fill="${tone}"/>`,
-    text(x + CARD_PAD_X + 14, y + 23, labelText, `fill="${tone}"`, FONT_TYPE, SVG_FONT_MONO),
+    typeGlyph(node.type, x + CARD_PAD_X - 1, y + 12, tone),
+    text(x + CARD_PAD_X + 19, y + 23.5, labelText, `fill="${tone}"`, FONT_TYPE),
   );
   if (note) {
-    const room = inner - 14 - measureText(labelText, FONT_TYPE) - 12;
+    const room = inner - 20 - measureText(labelText, FONT_TYPE) - 12;
     if (room > 30) {
       const color = mark === 'updated' ? theme.diff.updated : theme.diff.moved;
       parts.push(
@@ -655,7 +679,7 @@ function cardSvg(
         x + CARD_PAD_X,
         titleEnd + 20,
         truncateToWidth(body, inner, FONT_BODY),
-        `fill="${theme.ink2}"`,
+        `fill="${theme.ink}" fill-opacity="0.7"`,
         FONT_BODY,
       ),
     );
@@ -672,7 +696,7 @@ function cardSvg(
       const words = STATUS_WORDS[node.status];
       const pillW = Math.min(measureText(words, FONT_PILL) + 24, limit - cursor);
       parts.push(
-        `<rect x="${n(cursor)}" y="${n(top)}" width="${n(pillW)}" height="20" rx="10" fill="none" stroke="${theme.line}"/>`,
+        `<rect x="${n(cursor)}" y="${n(top)}" width="${n(pillW)}" height="20" rx="10" fill="${theme.chip.color}" fill-opacity="${theme.chip.opacity}"/>`,
         statusGlyph(node.status, cursor + 10, top + 10, color),
         text(
           cursor + 18,
@@ -693,8 +717,8 @@ function cardSvg(
       const tagText = truncateToWidth(tag, Math.min(room, 120) - 14, FONT_TAG);
       const tagW = measureText(tagText, FONT_TAG) + 14;
       parts.push(
-        `<rect x="${n(cursor)}" y="${n(top)}" width="${n(tagW)}" height="20" rx="10" fill="${theme.sunken}"/>`,
-        text(cursor + 7, top + 14, tagText, `fill="${theme.ink2}"`, FONT_TAG),
+        `<rect x="${n(cursor)}" y="${n(top)}" width="${n(tagW)}" height="20" rx="10" fill="${theme.chipQuiet.color}" fill-opacity="${theme.chipQuiet.opacity}"/>`,
+        text(cursor + 7, top + 14, tagText, `fill="${theme.ink}" fill-opacity="0.7"`, FONT_TAG),
       );
       cursor += tagW + 5;
     }
@@ -702,8 +726,8 @@ function cardSvg(
       const moreText = `+${extra}`;
       const moreW = measureText(moreText, FONT_TAG) + 14;
       parts.push(
-        `<rect x="${n(cursor)}" y="${n(top)}" width="${n(moreW)}" height="20" rx="10" fill="${theme.sunken}"/>`,
-        text(cursor + 7, top + 14, moreText, `fill="${theme.ink2}"`, FONT_TAG),
+        `<rect x="${n(cursor)}" y="${n(top)}" width="${n(moreW)}" height="20" rx="10" fill="${theme.chipQuiet.color}" fill-opacity="${theme.chipQuiet.opacity}"/>`,
+        text(cursor + 7, top + 14, moreText, `fill="${theme.ink}" fill-opacity="0.7"`, FONT_TAG),
       );
       cursor += moreW + 5;
     }
@@ -713,7 +737,7 @@ function cardSvg(
           limit,
           top + 14,
           linkText,
-          `text-anchor="end" fill="${theme.ink2}"`,
+          `text-anchor="end" fill="${theme.ink}" fill-opacity="0.7"`,
           FONT_NOTE,
           SVG_FONT_MONO,
         ),
