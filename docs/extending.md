@@ -73,6 +73,32 @@ Colours: `gray`, `red`, `orange`, `yellow`, `green`, `teal`, `blue`, `indigo`, `
 
 A running server picks up changes to `config.json` at once. Commit the file.
 
+## Card colours
+
+Each card type has one OKLCH hue, `--tone-h`, in its `.tone-*` class in
+[`tokens.css`](../packages/app/src/styles/tokens.css). Theme tokens turn that hue into
+the card fill (`--fill-l`, `--fill-c`), its edge (`--fill-line-l`, `--fill-line-c`),
+and the type label (`--label-l`, `--label-c`). `l` controls lightness and `c` controls
+chroma. `--tone-cx` scales the chroma for a particular type and defaults to 1.
+The light theme uses pale fills and dark labels; the dark theme reverses their
+lightness. Both the system dark-theme block and the explicit dark-theme block
+define the same tokens.
+
+When adding a card colour, update both renderers:
+
+1. In `tokens.css`, add or adjust the `.tone-*` hue and its `--tone` palette token.
+   Define any new palette token in the light theme and both dark-theme blocks.
+2. In [`svg-theme.ts`](../packages/core/src/interop/svg-theme.ts), add the matching
+   hex colours to `types`, `fills`, and `fillLines` in `LIGHT_THEME` and `DARK_THEME`.
+   SVG exports embed these values so they work without the app's CSS.
+
+Type labels must have at least **4.5:1** contrast against their card fill in both
+themes. Palette tokens used on neutral surfaces must also meet **4.5:1** against
+`--card` (and, for declared-type colours, `--sunken`). Check the rendered colours,
+including any chroma scaling, rather than assuming the shared lightness guarantees
+contrast. Adding a new name to the declared-type colour vocabulary also requires
+updating `TYPE_COLORS` in core and the declared-colour export mapping.
+
 ## Project templates
 
 A template is a ready-made structure applied to a board as one batch. Eight are built in ([templates.md](templates.md)). Any board file in `.openboard/templates/<name>.board.json` is a project template with the id `<name>`; it replaces a built-in template of that id. Make one from an existing board:
