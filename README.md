@@ -313,7 +313,7 @@ OpenBoard is pre-release software.
 
 Contributions are welcome. The [open issues](https://github.com/asasemahmed/openboard/issues) range from an afternoon's work to a new subsystem: [`good first issue`](https://github.com/asasemahmed/openboard/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) marks the small, well-scoped ones and [`help wanted`](https://github.com/asasemahmed/openboard/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22) the ones nobody is working on. Comment on an issue before you start so two people do not build the same thing.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup, commands, and ground rules.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup, commands, ground rules, and the terms your contribution is made under.
 
 ```bash
 pnpm test        # every package
