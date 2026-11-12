@@ -127,7 +127,8 @@ export interface OpError {
     | 'not_a_frame'
     | 'cycle'
     | 'self_edge'
-    | 'duplicate_edge';
+    | 'duplicate_edge'
+    | 'forbidden';
   message: string;
 }
 

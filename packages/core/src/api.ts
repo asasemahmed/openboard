@@ -12,6 +12,23 @@
  *    structured data meant for code.
  */
 import { z } from 'zod';
+import type {
+  AnswerInput,
+  Ask,
+  AskInput,
+  Comment,
+  CommentInput,
+  Decision,
+  HistoryOptions,
+  HistoryResult,
+  InboxOptions,
+  InboxResult,
+  ProjectConfig,
+  Proposal,
+  ProposalsResult,
+  UndoRequest,
+  UndoResult,
+} from './collab.js';
 import { type AppliedOps, OpBatchSchema, type OpError } from './ops.js';
 import {
   type Actor,
@@ -201,6 +218,11 @@ export interface ApplyResult {
   applied?: AppliedOps;
   errors?: OpError[];
   proposalId?: string;
+  /**
+   * When `proposed`: the indexes of the operations that needed review, and a
+   * sentence on why, so an agent can split its work or explain it to the user.
+   */
+  review?: { indexes: number[]; why: string };
 }
 
 // ── Selection ────────────────────────────────────────────────────────────────
@@ -257,12 +279,49 @@ export interface BoardApi {
   apply(boardId: string, request: ApplyRequest): Promise<ApplyResult>;
   selection(boardId: string): Promise<SelectionResult>;
   layout(boardId: string, request?: LayoutRequest): Promise<LayoutResult>;
+
+  // Review. See collab.ts for the policy that decides what needs it.
+  proposals(
+    boardId: string,
+    options?: { status?: 'pending' | 'all'; maxTokens?: number },
+  ): Promise<ProposalsResult>;
+  /** People only. Accepting applies the accepted items as one batch by the proposal's author. */
+  decideProposal(boardId: string, proposalId: string, decision: Decision): Promise<Proposal>;
+  /** The author takes a pending proposal back. */
+  withdrawProposal(boardId: string, proposalId: string): Promise<Proposal>;
+
+  // History and undo.
+  history(boardId: string, options?: HistoryOptions): Promise<HistoryResult>;
+  undo(boardId: string, request: UndoRequest): Promise<UndoResult>;
+
+  // Conversation.
+  comment(boardId: string, input: CommentInput): Promise<Comment>;
+  resolveThread(boardId: string, thread: string, resolved?: boolean): Promise<Comment>;
+  inbox(boardId: string, options?: InboxOptions): Promise<InboxResult>;
+
+  // Questions for a human.
+  ask(boardId: string, input: AskInput): Promise<Ask>;
+  /**
+   * The current state of a question. With `waitMs`, the call returns as soon as
+   * the question is answered or cancelled, or when the time is up.
+   */
+  askResult(boardId: string, askId: string, options?: { waitMs?: number }): Promise<Ask>;
+  /** People only. */
+  answerAsk(boardId: string, askId: string, answer: AnswerInput): Promise<Ask>;
+  /** The author withdraws an open question. */
+  cancelAsk(boardId: string, askId: string): Promise<Ask>;
+
+  // Project settings.
+  getConfig(): Promise<ProjectConfig>;
+  /** People only. */
+  setConfig(config: ProjectConfig): Promise<ProjectConfig>;
 }
 
 // ── Errors ───────────────────────────────────────────────────────────────────
 
 export type OpenBoardErrorCode =
   | 'board_not_found'
+  | 'not_found'
   | 'board_exists'
   | 'invalid_request'
   | 'forbidden'
@@ -286,6 +345,7 @@ export class OpenBoardError extends Error {
   get status(): number {
     switch (this.code) {
       case 'board_not_found':
+      case 'not_found':
         return 404;
       case 'board_exists':
       case 'conflict':
