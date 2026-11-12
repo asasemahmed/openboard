@@ -171,51 +171,51 @@ One server process serves one project root.
 
 ### HTTP surface
 
-| Method and path                                       | Purpose                                                             |
-| ----------------------------------------------------- | ------------------------------------------------------------------- |
-| `GET /api/health`                                     | `{ ok, version, pid, root }` (shared mode: see below)               |
-| `GET /api/info`                                       | `{ version, root, projectName, url, ...ServerOptions.info }`        |
+| Method and path                                       | Purpose                                                                 |
+| ----------------------------------------------------- | ----------------------------------------------------------------------- |
+| `GET /api/health`                                     | `{ ok, version, pid, root }` (shared mode: see below)                   |
+| `GET /api/info`                                       | `{ version, root, projectName, url, ...ServerOptions.info }`            |
 | `GET /api/whoami`                                     | `BoardApi.whoami`: `{ actor, role, shared, via, grantId?, expiresAt? }` |
-| `GET /api/access` · `POST /api/access`                | `BoardApi.listAccess` · `grantAccess` (201; people with `owner`)    |
-| `DELETE /api/access/:grant`                           | `BoardApi.revokeAccess` (people with `owner`)                       |
-| `POST /api/auth/session` · `POST /api/auth/logout`    | Trade an invite token for a session cookie · end it (shared mode)   |
-| `POST /api/auth/ticket`                               | A single-use ticket for one sync socket (201; shared mode)          |
-| `GET /api/boards` · `POST /api/boards`                | List and create boards                                              |
-| `GET /api/boards/:id`                                 | Full board JSON                                                     |
-| `POST /api/boards/:id/outline`                        | `BoardApi.outline`                                                  |
-| `POST /api/boards/:id/read`                           | `BoardApi.read`                                                     |
-| `POST /api/boards/:id/changes`                        | `BoardApi.changes`                                                  |
-| `POST /api/boards/:id/apply`                          | `BoardApi.apply`                                                    |
-| `GET /api/boards/:id/selection`                       | `BoardApi.selection`                                                |
-| `POST /api/boards/:id/layout`                         | `BoardApi.layout`                                                   |
-| `GET /api/config` · `PUT /api/config`                 | `BoardApi.getConfig` · `setConfig` (people only)                    |
-| `GET /api/boards/:id/proposals?status=&maxTokens=`    | `BoardApi.proposals` (`status` is `pending` or `all`)               |
-| `POST /api/boards/:id/proposals/:pid/decide`          | `BoardApi.decideProposal` (body: `Decision`; people only)           |
-| `POST /api/boards/:id/proposals/:pid/withdraw`        | `BoardApi.withdrawProposal` (author only)                           |
-| `POST /api/boards/:id/history`                        | `BoardApi.history` (body: `HistoryOptions`)                         |
-| `POST /api/boards/:id/undo`                           | `BoardApi.undo` (body: `UndoRequest`)                               |
-| `POST /api/boards/:id/comments`                       | `BoardApi.comment` (body: `CommentInput`; 201 with the `Comment`)   |
-| `POST /api/boards/:id/threads/:thread/resolve`        | `BoardApi.resolveThread` (body: `{ resolved }`, default true)       |
-| `POST /api/boards/:id/inbox`                          | `BoardApi.inbox` (body: `InboxOptions`)                             |
-| `POST /api/boards/:id/asks`                           | `BoardApi.ask` (body: `AskInput`; 201 with the `Ask`)               |
-| `GET /api/boards/:id/asks?status=&maxTokens=`         | `BoardApi.asks` (`status` is `open`, the default, or `all`)         |
-| `GET /api/boards/:id/asks/:aid?waitMs=`               | `BoardApi.askResult`; a long-poll of at most `MAX_ASK_WAIT_MS`      |
-| `POST /api/boards/:id/asks/:aid/answer`               | `BoardApi.answerAsk` (body: `AnswerInput`; people only)             |
-| `POST /api/boards/:id/asks/:aid/cancel`               | `BoardApi.cancelAsk` (the author or a person)                       |
-| `POST /api/activity`                                  | `BoardApi.reportActivity` (body: `ActivityEvent`)                   |
-| `GET /api/sessions?includeEnded=&maxTokens=`          | `BoardApi.sessions`                                                 |
-| `POST /api/boards/:id/claims`                         | `BoardApi.claim` (body: `ClaimRequest`)                             |
-| `GET /api/boards/:id/at/:cursor`                      | `BoardApi.snapshotAt`: the `Board` right after that cursor          |
-| `POST /api/boards/:id/links`                          | `BoardApi.links` (body: `LinksOptions`)                             |
-| `POST /api/boards/:id/links/refresh`                  | `BoardApi.refreshLinks` (body: `RefreshLinksRequest`)               |
-| `GET /api/boards/:id/revisions?limit=`                | `BoardApi.revisions`                                                |
-| `GET /api/boards/:id/revisions/:rev`                  | `BoardApi.boardAtRevision`                                          |
-| `POST /api/boards/:id/diff`                           | `BoardApi.diffRevisions` (body: `DiffRequest`)                      |
-| `POST /api/boards/:id/import`                         | `BoardApi.importInto` (body: `ImportRequest`)                       |
-| `GET /api/boards/:id/export?format=&theme=&diffFrom=` | The exporter's output as a download (its own content type)          |
-| `GET /sync/:id?lineage=` (WebSocket)                  | Document sync and presence, using the standard y-websocket protocol |
-| `ALL /mcp`                                            | MCP over Streamable HTTP, mounted with `OpenBoardServer.mount`      |
-| `GET /*`                                              | The web app                                                         |
+| `GET /api/access` · `POST /api/access`                | `BoardApi.listAccess` · `grantAccess` (201; people with `owner`)        |
+| `DELETE /api/access/:grant`                           | `BoardApi.revokeAccess` (people with `owner`)                           |
+| `POST /api/auth/session` · `POST /api/auth/logout`    | Trade an invite token for a session cookie · end it (shared mode)       |
+| `POST /api/auth/ticket`                               | A single-use ticket for one sync socket (201; shared mode)              |
+| `GET /api/boards` · `POST /api/boards`                | List and create boards                                                  |
+| `GET /api/boards/:id`                                 | Full board JSON                                                         |
+| `POST /api/boards/:id/outline`                        | `BoardApi.outline`                                                      |
+| `POST /api/boards/:id/read`                           | `BoardApi.read`                                                         |
+| `POST /api/boards/:id/changes`                        | `BoardApi.changes`                                                      |
+| `POST /api/boards/:id/apply`                          | `BoardApi.apply`                                                        |
+| `GET /api/boards/:id/selection`                       | `BoardApi.selection`                                                    |
+| `POST /api/boards/:id/layout`                         | `BoardApi.layout`                                                       |
+| `GET /api/config` · `PUT /api/config`                 | `BoardApi.getConfig` · `setConfig` (people only)                        |
+| `GET /api/boards/:id/proposals?status=&maxTokens=`    | `BoardApi.proposals` (`status` is `pending` or `all`)                   |
+| `POST /api/boards/:id/proposals/:pid/decide`          | `BoardApi.decideProposal` (body: `Decision`; people only)               |
+| `POST /api/boards/:id/proposals/:pid/withdraw`        | `BoardApi.withdrawProposal` (author only)                               |
+| `POST /api/boards/:id/history`                        | `BoardApi.history` (body: `HistoryOptions`)                             |
+| `POST /api/boards/:id/undo`                           | `BoardApi.undo` (body: `UndoRequest`)                                   |
+| `POST /api/boards/:id/comments`                       | `BoardApi.comment` (body: `CommentInput`; 201 with the `Comment`)       |
+| `POST /api/boards/:id/threads/:thread/resolve`        | `BoardApi.resolveThread` (body: `{ resolved }`, default true)           |
+| `POST /api/boards/:id/inbox`                          | `BoardApi.inbox` (body: `InboxOptions`)                                 |
+| `POST /api/boards/:id/asks`                           | `BoardApi.ask` (body: `AskInput`; 201 with the `Ask`)                   |
+| `GET /api/boards/:id/asks?status=&maxTokens=`         | `BoardApi.asks` (`status` is `open`, the default, or `all`)             |
+| `GET /api/boards/:id/asks/:aid?waitMs=`               | `BoardApi.askResult`; a long-poll of at most `MAX_ASK_WAIT_MS`          |
+| `POST /api/boards/:id/asks/:aid/answer`               | `BoardApi.answerAsk` (body: `AnswerInput`; people only)                 |
+| `POST /api/boards/:id/asks/:aid/cancel`               | `BoardApi.cancelAsk` (the author or a person)                           |
+| `POST /api/activity`                                  | `BoardApi.reportActivity` (body: `ActivityEvent`)                       |
+| `GET /api/sessions?includeEnded=&maxTokens=`          | `BoardApi.sessions`                                                     |
+| `POST /api/boards/:id/claims`                         | `BoardApi.claim` (body: `ClaimRequest`)                                 |
+| `GET /api/boards/:id/at/:cursor`                      | `BoardApi.snapshotAt`: the `Board` right after that cursor              |
+| `POST /api/boards/:id/links`                          | `BoardApi.links` (body: `LinksOptions`)                                 |
+| `POST /api/boards/:id/links/refresh`                  | `BoardApi.refreshLinks` (body: `RefreshLinksRequest`)                   |
+| `GET /api/boards/:id/revisions?limit=`                | `BoardApi.revisions`                                                    |
+| `GET /api/boards/:id/revisions/:rev`                  | `BoardApi.boardAtRevision`                                              |
+| `POST /api/boards/:id/diff`                           | `BoardApi.diffRevisions` (body: `DiffRequest`)                          |
+| `POST /api/boards/:id/import`                         | `BoardApi.importInto` (body: `ImportRequest`)                           |
+| `GET /api/boards/:id/export?format=&theme=&diffFrom=` | The exporter's output as a download (its own content type)              |
+| `GET /sync/:id?lineage=` (WebSocket)                  | Document sync and presence, using the standard y-websocket protocol     |
+| `ALL /mcp`                                            | MCP over Streamable HTTP, mounted with `OpenBoardServer.mount`          |
+| `GET /*`                                              | The web app                                                             |
 
 Request and response bodies are the JSON forms of the `BoardApi` types. Errors are `{ "error": { "code", "message", "details" } }` with the HTTP status from `OpenBoardError.status`.
 
@@ -300,12 +300,12 @@ Failed credentials (a wrong token, ticket or cookie) are counted per client, the
 
 ### Roles
 
-| Action (`AccessAction`) | owner | editor | commenter | viewer |
-| ----------------------- | :---: | :----: | :-------: | :----: |
-| `board.read`, `presence`, `config.read` | yes | yes | yes | yes |
-| `comment`, `ask.create`, `ask.answer`   | yes | yes | yes | no  |
-| `board.create`, `board.edit`, `board.undo`, `proposal.decide` | yes | yes | no | no |
-| `config.write`, `access.manage`         | yes | no  | no  | no  |
+| Action (`AccessAction`)                                       | owner | editor | commenter | viewer |
+| ------------------------------------------------------------- | :---: | :----: | :-------: | :----: |
+| `board.read`, `presence`, `config.read`                       |  yes  |  yes   |    yes    |  yes   |
+| `comment`, `ask.create`, `ask.answer`                         |  yes  |  yes   |    yes    |   no   |
+| `board.create`, `board.edit`, `board.undo`, `proposal.decide` |  yes  |  yes   |    no     |   no   |
+| `config.write`, `access.manage`                               |  yes  |   no   |    no     |   no   |
 
 `can(role, action)` is the whole table; `API_ACTIONS` maps every `BoardApi` method to one action (`null` for `whoami`). Agent grants may be `editor`, `commenter` or `viewer`. A missing permission is `403 forbidden` with a message that names it (`your access (viewer) does not include "board.edit" ...`); missing or invalid credentials are `401 unauthorized`. In local mode every caller is the owner.
 
