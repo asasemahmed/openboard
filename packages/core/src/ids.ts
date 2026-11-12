@@ -1,12 +1,18 @@
-import { randomBytes } from 'node:crypto';
-
 const ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyz';
+/** Largest multiple of the alphabet size below 256; bytes above it are rejected to avoid bias. */
+const UNBIASED_LIMIT = 256 - (256 % ALPHABET.length);
 
 /** A short, URL-safe, lowercase id such as `n_k3x9a0bq2m`. */
 export function newId(prefix: 'n' | 'e' | 'b' | 'a' | 'p' | 'c' | string): string {
-  const bytes = randomBytes(10);
   let out = '';
-  for (const byte of bytes) out += ALPHABET[byte % ALPHABET.length];
+  while (out.length < 10) {
+    const bytes = globalThis.crypto.getRandomValues(new Uint8Array(16));
+    for (const byte of bytes) {
+      if (byte >= UNBIASED_LIMIT) continue;
+      out += ALPHABET[byte % ALPHABET.length];
+      if (out.length === 10) break;
+    }
+  }
   return `${prefix}_${out}`;
 }
 
