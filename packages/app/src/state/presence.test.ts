@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Awareness } from 'y-protocols/awareness';
 import * as Y from 'yjs';
-import { AGENT, ME, sampleDoc } from '../test/fixtures.js';
+import { AGENT, fakeApi, ME, sampleDoc } from '../test/fixtures.js';
 import { PresenceStore, parsePeer, presenceState, selectionPayload } from './presence.js';
 import { createSession } from './session.js';
 import { createLocalTransport } from './transport.js';
@@ -89,7 +89,7 @@ describe('session wiring', () => {
     const session = createSession({
       boardId: 'test-board',
       actor: ME,
-      api: { listBoards: vi.fn(), createBoard: vi.fn(), layout: vi.fn() },
+      api: fakeApi(),
       transport: (ydoc) => createLocalTransport(ydoc),
       doc: sampleDoc(),
     });
@@ -111,7 +111,7 @@ describe('session wiring', () => {
     const session = createSession({
       boardId: 'test-board',
       actor: ME,
-      api: { listBoards: vi.fn(), createBoard: vi.fn(), layout: vi.fn() },
+      api: fakeApi(),
       transport: (ydoc) => createLocalTransport(ydoc),
       doc: sampleDoc(),
     });

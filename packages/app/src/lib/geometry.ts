@@ -4,7 +4,7 @@
  * Everything here is pure and works on a `PlacementMap`, a flat snapshot of
  * where each node is drawn.
  */
-import { FRAME_PADDING } from '@openboard/core';
+import { FRAME_PADDING, GRID } from '@openboard/core';
 
 export interface XY {
   x: number;
@@ -207,6 +207,69 @@ export function clampIntoFrame(position: XY): XY {
     x: Math.max(FRAME_PADDING.left, position.x),
     y: Math.max(FRAME_PADDING.top, position.y),
   };
+}
+
+/** Space kept between a nudged node and its neighbours. */
+export const CLEAR_GAP = GRID;
+/** How far (in grid steps) `clearSpot` looks before giving up. */
+const CLEAR_SEARCH_STEPS = 64;
+
+function overlaps(a: Rect, b: Rect, gap: number): boolean {
+  return (
+    a.x < b.x + b.w + gap && a.x + a.w + gap > b.x && a.y < b.y + b.h + gap && a.y + a.h + gap > b.y
+  );
+}
+
+/**
+ * The free spot nearest to `rect` inside a frame's padded content box, on
+ * the grid, that keeps `CLEAR_GAP` from every rect in `others` (all in the
+ * frame's coordinates). Returns the position unchanged when it is already
+ * free, and the clamped position when nothing free is near.
+ */
+export function clearSpot(rect: Rect, others: readonly Rect[]): XY {
+  const start = clampIntoFrame(rect);
+  const free = (x: number, y: number) =>
+    others.every((o) => !overlaps({ x, y, w: rect.w, h: rect.h }, o, CLEAR_GAP));
+  if (free(start.x, start.y)) return start;
+  let best: XY | null = null;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (let ring = 1; ring <= CLEAR_SEARCH_STEPS; ring++) {
+    // Every spot in a later ring is at least this far away.
+    if (best && bestDistance <= ring * GRID) break;
+    for (let dx = -ring; dx <= ring; dx++) {
+      for (let dy = -ring; dy <= ring; dy++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== ring) continue;
+        const x = start.x + dx * GRID;
+        const y = start.y + dy * GRID;
+        if (x < FRAME_PADDING.left || y < FRAME_PADDING.top) continue;
+        const distance = Math.hypot(dx * GRID, dy * GRID);
+        if (distance >= bestDistance || !free(x, y)) continue;
+        best = { x, y };
+        bestDistance = distance;
+      }
+    }
+  }
+  return best ?? start;
+}
+
+/**
+ * Where a node dropped into `frame` at `rect` (frame coordinates) lands:
+ * clamped into the padded content box, and, when the clamp pushed it onto a
+ * sibling, nudged to the nearest free spot. A drop that was fully inside is
+ * left exactly where the person put it, overlap or not.
+ */
+export function landingInFrame(
+  rect: Rect,
+  frame: string,
+  map: PlacementMap,
+  ignore: ReadonlySet<string> = new Set(),
+): XY {
+  const clamped = clampIntoFrame(rect);
+  if (clamped.x === rect.x && clamped.y === rect.y) return clamped;
+  const siblings: Rect[] = [];
+  for (const item of map.values())
+    if (item.parent === frame && !ignore.has(item.id)) siblings.push(item);
+  return clearSpot({ ...rect, ...clamped }, siblings);
 }
 
 /**

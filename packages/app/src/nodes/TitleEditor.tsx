@@ -1,5 +1,6 @@
 import { LIMITS } from '@openboard/core';
 import { useEffect, useRef, useState } from 'react';
+import { focusNodeElement } from '../canvas/nodeFocus.js';
 import { useSession } from '../state/context.js';
 import { useStoreValue } from '../state/emitter.js';
 
@@ -35,7 +36,8 @@ export function TitleEditor({
     el.select();
   }, []);
 
-  const finish = (save: boolean) => {
+  /** `refocus`: the person finished with the keyboard, so focus goes back to the node. */
+  const finish = (save: boolean, refocus: boolean) => {
     if (done.current) return;
     done.current = true;
     const next = value.replace(/\s+/g, ' ').trim().slice(0, LIMITS.title);
@@ -47,8 +49,9 @@ export function TitleEditor({
       if (!outcome.ok) done.current = false;
     }
     if (session.ui.editing.get() === id) session.ui.editing.set(null);
-    // Hand focus back to the canvas so keyboard shortcuts keep working.
-    (document.querySelector('.react-flow__pane') as HTMLElement | null)?.focus?.();
+    // Hand focus back to the node so keyboard shortcuts and navigation keep working.
+    // After a blur, focus already went where the person clicked; leave it there.
+    if (refocus) focusNodeElement(id);
   };
 
   return (
@@ -60,17 +63,17 @@ export function TitleEditor({
       rows={lines}
       maxLength={LIMITS.title}
       onChange={(event) => setValue(event.target.value)}
-      onBlur={() => finish(true)}
+      onBlur={() => finish(true, false)}
       onPointerDown={(event) => event.stopPropagation()}
       onDoubleClick={(event) => event.stopPropagation()}
       onKeyDown={(event) => {
         event.stopPropagation();
         if (event.key === 'Enter' && !event.shiftKey) {
           event.preventDefault();
-          finish(true);
+          finish(true, true);
         } else if (event.key === 'Escape') {
           event.preventDefault();
-          finish(false);
+          finish(false, true);
         }
       }}
     />

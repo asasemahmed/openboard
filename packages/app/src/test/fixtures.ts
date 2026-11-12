@@ -1,4 +1,6 @@
 import { type Actor, BoardDoc, type Op } from '@openboard/core';
+import { vi } from 'vitest';
+import type { ApiClient } from '../lib/api.js';
 
 export const ME: Actor = { id: 'a_me0000001', kind: 'human', name: 'Ada', color: '#1D5FBF' };
 export const AGENT: Actor = { id: 'a_agent00001', kind: 'agent', name: 'planner' };
@@ -56,4 +58,25 @@ export function sampleDoc(): BoardDoc {
   const outcome = doc.apply(ops, { actor: AGENT });
   if (!outcome.ok) throw new Error(JSON.stringify(outcome.errors));
   return doc;
+}
+
+/** An API client whose every call is a mock; pass overrides for the calls a test uses. */
+export function fakeApi(overrides: Partial<ApiClient> = {}): ApiClient {
+  return {
+    listBoards: vi.fn(async () => []),
+    createBoard: vi.fn(),
+    layout: vi.fn(),
+    changes: vi.fn(async (boardId: string) => ({
+      boardId,
+      since: 0,
+      cursor: 0,
+      changes: [],
+      resync: false,
+      text: '',
+      tokens: 0,
+      truncated: false,
+    })),
+    info: vi.fn(async () => null),
+    ...overrides,
+  };
 }

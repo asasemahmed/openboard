@@ -141,6 +141,26 @@ const PATHS = {
     </>
   ),
   code: <path d="M5.5 4.5L2 8l3.5 3.5M10.5 4.5L14 8l-3.5 3.5" />,
+  /** A small robot head: marks agents and agent-made things. */
+  agent: (
+    <>
+      <rect x="2.5" y="5.25" width="11" height="8.25" rx="2.5" />
+      <path d="M8 5.25V2.75" />
+      <path d="M6 9v.75M10 9v.75" />
+    </>
+  ),
+  /** A target: keep the view on what others change. */
+  follow: (
+    <>
+      <circle cx="8" cy="8" r="4.25" />
+      <circle cx="8" cy="8" r="1.25" fill="currentColor" stroke="none" />
+      <path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2" />
+    </>
+  ),
+  arrowUp: <path d="M8 13V3M4 7l4-4 4 4" />,
+  arrowDown: <path d="M8 3v10M4 9l4 4 4-4" />,
+  arrowLeft: <path d="M13 8H3M7 4L3 8l4 4" />,
+  arrowRight: <path d="M3 8h10M9 4l4 4-4 4" />,
   edit: <path d="M10.5 2.5l3 3L6 13H3v-3z" />,
   // status shapes; filled parts use a nested element with fill
   statusTodo: <circle cx="8" cy="8" r="5" />,

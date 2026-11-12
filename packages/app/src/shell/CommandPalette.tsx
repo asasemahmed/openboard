@@ -149,6 +149,24 @@ export function CommandPalette() {
         }),
       ),
       {
+        id: 'connect-agent',
+        group: 'Commands',
+        label: 'Connect an agent…',
+        detail: 'Claude Code, Cursor, Codex or any MCP client',
+        lead: icon('agent'),
+        keywords: 'mcp agent setup claude cursor codex install',
+        run: () => ui.connectAgent.set(true),
+      },
+      {
+        id: 'follow',
+        group: 'Commands',
+        label: ui.follow.get() === 'on' ? 'Stop following changes' : 'Follow changes',
+        detail: 'Move the view to what others change',
+        lead: icon('follow'),
+        keywords: 'follow agent watch activity',
+        run: () => ui.follow.set(ui.follow.get() === 'on' ? 'off' : 'on'),
+      },
+      {
         id: 'shortcuts',
         group: 'Commands',
         label: 'Keyboard shortcuts',
@@ -189,7 +207,7 @@ export function CommandPalette() {
     if (!q)
       return [
         ...commands.slice(0, 2),
-        ...commands.filter((c) => ['tidy', 'fit', 'shortcuts'].includes(c.id)),
+        ...commands.filter((c) => ['tidy', 'fit', 'connect-agent', 'shortcuts'].includes(c.id)),
         ...boardItems.slice(0, 3),
       ];
 

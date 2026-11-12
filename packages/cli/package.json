@@ -25,5 +25,8 @@
     "@openboard/server": "workspace:*",
     "commander": "^15.1.0",
     "open": "^10.2.0"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2"
   }
 }

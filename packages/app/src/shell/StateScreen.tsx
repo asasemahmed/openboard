@@ -38,7 +38,7 @@ export function ServerUnreachable({ onRetry }: { onRetry: () => void }) {
     >
       <p>Start it from your project folder, then try again:</p>
       <pre className="command">
-        <span className="command-prompt">$</span> npx openboard
+        <span className="command-prompt">$</span> openboard start
       </pre>
     </StateScreen>
   );

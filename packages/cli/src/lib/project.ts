@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { Actor } from '@openboard/core';
 import { CliError } from './errors.js';
 import type { CliIo } from './io.js';
@@ -32,6 +33,14 @@ export function cliActor(env: CliIo['env'] = {}): Actor {
 /** A board name for a project directory: its base name. */
 export function projectName(root: string): string {
   return path.basename(path.resolve(root)).slice(0, 120) || 'OpenBoard';
+}
+
+/**
+ * Absolute path of this install's `bin.js`. Same relative location from
+ * `src/lib` (tests) and `dist/lib` (built); it is the built file either way.
+ */
+export function cliBinPath(): string {
+  return fileURLToPath(new URL('../../dist/bin.js', import.meta.url));
 }
 
 let cachedVersion: string | undefined;

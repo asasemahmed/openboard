@@ -6,6 +6,7 @@
  * handler, so a route added later (for example `ALL /mcp`) takes precedence
  * over the app without reordering anything.
  */
+import path from 'node:path';
 import { type Actor, OpenBoardError } from '@openboard/core';
 import { type Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
@@ -16,6 +17,7 @@ import { errorMessage } from './fsutil.js';
 import { checkRequest, type SecurityConfig } from './security.js';
 import { LocalBoardApi } from './service.js';
 import { resolveStatic } from './static.js';
+import type { MountHandler } from './types.js';
 
 /** Request bodies above this size are refused with 413. */
 export const MAX_BODY_BYTES = 2 * 1024 * 1024;
@@ -27,13 +29,57 @@ export interface HttpContext {
   appDir?: string;
   security: () => SecurityConfig;
   log: (line: string) => void;
+  /** The URL clients use, known once the server listens. */
+  url: () => string;
+  /** Extra fields for `GET /api/info`. */
+  info?: () => Record<string, unknown>;
+  /** Mounted handlers by path prefix; see `mountHandler`. */
+  mounts: Map<string, MountHandler>;
 }
 
 const API_PREFIXES = ['/api/', '/sync/'];
 const RESERVED = ['/api', '/sync', '/mcp'];
 
-const isReserved = (pathname: string) =>
-  RESERVED.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+const under = (pathname: string, prefix: string) =>
+  pathname === prefix || pathname.startsWith(`${prefix}/`);
+
+const isReserved = (pathname: string) => RESERVED.some((prefix) => under(pathname, prefix));
+
+const MOUNT_PATH = /^(\/[A-Za-z0-9._~-]+)+$/;
+
+/** Add `handler` for `mountPath` and everything below it. Throws `invalid_request` or `conflict`. */
+export function mountHandler(
+  mounts: Map<string, MountHandler>,
+  mountPath: string,
+  handler: MountHandler,
+): void {
+  if (!MOUNT_PATH.test(mountPath)) {
+    throw new OpenBoardError(
+      'invalid_request',
+      `cannot mount at ${JSON.stringify(mountPath)}: use a path such as "/mcp", without a trailing slash`,
+    );
+  }
+  if (under(mountPath, '/api') || under(mountPath, '/sync')) {
+    throw new OpenBoardError(
+      'invalid_request',
+      `cannot mount at ${mountPath}: it is a built-in route`,
+    );
+  }
+  for (const existing of mounts.keys()) {
+    if (under(mountPath, existing) || under(existing, mountPath)) {
+      throw new OpenBoardError(
+        'conflict',
+        `cannot mount at ${mountPath}: ${existing} is already mounted`,
+      );
+    }
+  }
+  mounts.set(mountPath, handler);
+}
+
+function mountFor(mounts: Map<string, MountHandler>, pathname: string): MountHandler | undefined {
+  for (const [prefix, handler] of mounts) if (under(pathname, prefix)) return handler;
+  return undefined;
+}
 
 function errorResponse(c: Context, status: number, error: OpenBoardError): Response {
   return c.json(error.toJSON(), status as ContentfulStatusCode);
@@ -78,6 +124,14 @@ export function createHttpApp(ctx: HttpContext): Hono<{ Variables: { actor: Acto
     await next();
   });
 
+  // Mounted handlers come before every route and the web app. Routes cannot
+  // be added to a running Hono app, so mounts are looked up per request.
+  app.use('*', async (c, next) => {
+    const handler = mountFor(ctx.mounts, c.req.path);
+    if (handler) return handler(c.req.raw);
+    await next();
+  });
+
   app.use(
     '/api/*',
     bodyLimit({
@@ -106,6 +160,16 @@ export function createHttpApp(ctx: HttpContext): Hono<{ Variables: { actor: Acto
 
   app.get('/api/health', (c) =>
     c.json({ ok: true, version: ctx.version, pid: process.pid, root: ctx.root }),
+  );
+
+  app.get('/api/info', (c) =>
+    c.json({
+      version: ctx.version,
+      root: ctx.root,
+      projectName: path.basename(ctx.root),
+      url: ctx.url(),
+      ...ctx.info?.(),
+    }),
   );
 
   app.get('/api/boards', async (c) => c.json(await ctx.boards.list()));

@@ -26,6 +26,25 @@ export interface DoctorOptions {
 
 const MIN_NODE_MAJOR = 22;
 
+/** The MCP entry point loads and builds a server with its tools. */
+async function mcpCheck(): Promise<Check> {
+  try {
+    const mcp = await import('@openboard/mcp');
+    mcp.createMcpServer({
+      resolveApi: () => {
+        throw new Error('not connected');
+      },
+    });
+    return { status: 'ok', label: `MCP server loads (${mcp.TOOL_NAMES.length} tools)` };
+  } catch (error) {
+    return {
+      status: 'fail',
+      label: `MCP server does not load: ${error instanceof Error ? error.message : String(error)}`,
+      hint: 'reinstall openboard, or run `pnpm build` in a checkout',
+    };
+  }
+}
+
 function run(command: string, args: string[], cwd: string): Promise<{ code: number; out: string }> {
   return new Promise((resolve) => {
     execFile(command, args, { cwd, timeout: 5000 }, (error, stdout) => {
@@ -122,6 +141,8 @@ export async function runChecks(io: CliIo, options: DoctorOptions = {}): Promise
           hint: 'run `pnpm build`',
         },
   );
+
+  checks.push(await mcpCheck());
 
   const server = await findRunningServer(root);
   if (!server) {

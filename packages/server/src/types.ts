@@ -13,7 +13,18 @@ export interface ServerOptions {
   appDir?: string;
   /** Called for each log line. Defaults to no logging. */
   log?: (line: string) => void;
+  /**
+   * Extra fields for `GET /api/info`, merged over the built-in ones. A function
+   * is called per request with the server's URL and root, for values that
+   * depend on the port.
+   */
+  info?:
+    | Record<string, unknown>
+    | ((server: { url: string; root: string }) => Record<string, unknown>);
 }
+
+/** Handles every request under a mounted path. */
+export type MountHandler = (request: Request) => Response | Promise<Response>;
 
 /** What `.openboard/.local/server.json` holds while a server is running. */
 export interface ServerInfo {
@@ -31,6 +42,12 @@ export interface OpenBoardServer {
   readonly root: string;
   /** An in-process session on this server, bound to `actor`. */
   api(actor: Actor): BoardApi;
+  /**
+   * Route `path` and everything below it (all methods) to `handler`, ahead of
+   * the web app. The Host and Origin checks still apply. `path` is a fixed
+   * prefix such as `/mcp`; `/api` and `/sync` cannot be mounted over.
+   */
+  mount(path: string, handler: MountHandler): void;
   /** Flush pending writes, close every connection, and remove `server.json`. */
   close(): Promise<void>;
 }

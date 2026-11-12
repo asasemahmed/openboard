@@ -2,7 +2,14 @@
  * The REST surface the app uses (same origin). Every request carries the
  * actor headers; errors arrive as `{ error: { code, message } }`.
  */
-import type { Actor, BoardSummary, LayoutRequest, LayoutResult } from '@openboard/core';
+import type {
+  Actor,
+  BoardSummary,
+  ChangesOptions,
+  ChangesResult,
+  LayoutRequest,
+  LayoutResult,
+} from '@openboard/core';
 
 export class ApiError extends Error {
   /** Server error code, or `unreachable` when the request never got an answer. */
@@ -25,6 +32,52 @@ export interface ApiClient {
   listBoards(): Promise<BoardSummary[]>;
   createBoard(input: { name: string; description?: string }): Promise<BoardSummary>;
   layout(boardId: string, request: LayoutRequest): Promise<LayoutResult>;
+  changes(boardId: string, options: ChangesOptions): Promise<ChangesResult>;
+  /** What this server is and how agents reach it; null when the server does not say. */
+  info(): Promise<ServerInfo | null>;
+}
+
+/** How an agent reaches this project's board server over MCP. */
+export interface McpInfo {
+  httpUrl: string;
+  stdio: { command: string; args: string[] };
+}
+
+/** `GET /api/info`. Older servers do not have it. */
+export interface ServerInfo {
+  version: string;
+  root: string;
+  projectName: string;
+  url: string;
+  mcp?: McpInfo;
+}
+
+const isString = (value: unknown): value is string => typeof value === 'string';
+
+/** Read `GET /api/info` defensively: anything malformed is left out rather than trusted. */
+export function parseServerInfo(raw: unknown): ServerInfo | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const r = raw as Record<string, unknown>;
+  const info: ServerInfo = {
+    version: isString(r.version) ? r.version : '',
+    root: isString(r.root) ? r.root : '',
+    projectName: isString(r.projectName) ? r.projectName : '',
+    url: isString(r.url) ? r.url : '',
+  };
+  const mcp = r.mcp as Record<string, unknown> | undefined;
+  const stdio = mcp?.stdio as Record<string, unknown> | undefined;
+  if (
+    mcp &&
+    isString(mcp.httpUrl) &&
+    stdio &&
+    isString(stdio.command) &&
+    stdio.command.length > 0 &&
+    Array.isArray(stdio.args) &&
+    stdio.args.every(isString)
+  ) {
+    info.mcp = { httpUrl: mcp.httpUrl, stdio: { command: stdio.command, args: [...stdio.args] } };
+  }
+  return info;
 }
 
 export function actorHeaders(actor: Actor): Record<string, string> {
@@ -93,5 +146,18 @@ export function createApiClient(getActor: () => Actor, base = ''): ApiClient {
         `/api/boards/${encodeURIComponent(boardId)}/layout`,
         layoutRequest,
       ),
+    changes: (boardId, options) =>
+      request<ChangesResult>('POST', `/api/boards/${encodeURIComponent(boardId)}/changes`, options),
+    info: async () => {
+      try {
+        return parseServerInfo(await request<unknown>('GET', '/api/info'));
+      } catch (error) {
+        // A server without the route answers 404 (or something that is not JSON):
+        // that is "no info", not a failure.
+        if (error instanceof ApiError && (error.status === 404 || error.code === 'bad_response'))
+          return null;
+        throw error;
+      }
+    },
   };
 }

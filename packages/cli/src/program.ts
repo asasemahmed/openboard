@@ -4,6 +4,7 @@
  */
 import { Command, CommanderError, InvalidArgumentError, Option } from 'commander';
 import { boardsCommand, newBoardCommand } from './commands/boards.js';
+import { AGENTS, connectCommand } from './commands/connect.js';
 import { doctorCommand } from './commands/doctor.js';
 import { exportCommand } from './commands/export.js';
 import { initCommand } from './commands/init.js';
@@ -19,6 +20,8 @@ import { cliVersion } from './lib/project.js';
 const EXAMPLES = `
 Examples:
   $ openboard                          start the server and open the board
+  $ openboard connect claude-code      show how to add the boards to Claude Code
+  $ openboard mcp                      serve the boards to an agent over stdio
   $ openboard export --format outline  print the shape of the main board
   $ openboard status --json            machine-readable status for scripts
 `;
@@ -83,7 +86,12 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
   program
     .command('init')
     .description('create .openboard/ with an empty board in the current directory')
-    .addOption(rootOption().default(undefined, 'the current directory'))
+    .addOption(
+      new Option('--root <dir>', 'directory to initialize').default(
+        undefined,
+        'the current directory',
+      ),
+    )
     .action(action((opts: { root?: string }) => initCommand(io, opts)));
 
   program
@@ -149,9 +157,22 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
 
   program
     .command('mcp')
-    .description('serve the boards to an MCP client over stdio')
+    .description('serve the boards to an MCP client over stdio (starts the server if needed)')
     .addOption(rootOption())
-    .action(action((opts: { root?: string }) => mcpCommand(io, opts)));
+    .option('--board <id>', 'board used when a tool call names none')
+    .action(action((opts: { root?: string; board?: string }) => mcpCommand(io, opts)));
+
+  program
+    .command('connect')
+    .description('show how to connect an agent to this project (writes nothing)')
+    .argument('[agent]', `one of: ${AGENTS.join(', ')} (default: all, briefly)`)
+    .addOption(rootOption())
+    .option('--json', 'print JSON')
+    .action(
+      action((agent: string | undefined, opts: { root?: string; json?: boolean }) =>
+        connectCommand(io, agent, opts),
+      ),
+    );
 
   return program;
 }

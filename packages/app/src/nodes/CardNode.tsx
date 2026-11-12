@@ -9,6 +9,7 @@
  */
 import { Handle, type NodeProps, Position } from '@xyflow/react';
 import { memo, useMemo } from 'react';
+import { useNodeFocus } from '../canvas/nodeFocus.js';
 import type { FlowNode } from '../lib/flow.js';
 import { typeMeta } from '../lib/nodeTypes.js';
 import { markdownToPlainText } from '../lib/plainText.js';
@@ -38,11 +39,13 @@ function CardNodeView({ id, data, selected }: NodeProps<FlowNode>) {
   const staleLinks = links.filter((l) => l.stale).length;
   const hasMeta = node.status !== undefined || tags.length > 0 || links.length > 0;
   const custom = meta.tone === 'custom';
+  const focus = useNodeFocus(id, ghost);
 
   return (
     <article
       className={`card tone-${meta.tone}${selected ? ' is-selected' : ''}${ghost ? ' is-ghost' : ''}`}
       aria-label={`${meta.name}: ${node.title}`}
+      {...focus}
     >
       {!ghost &&
         HANDLES.map((position) => (
