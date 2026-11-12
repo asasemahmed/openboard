@@ -11,6 +11,7 @@ import {
   type Actor,
   ActorSchema,
   type Ask,
+  type Batch,
   BoardDoc,
   type Comment,
   type DocEvent,
@@ -46,7 +47,17 @@ export interface RoomOptions {
   onProposalsStale?: (room: Room) => Promise<void>;
   /** Milliseconds since the epoch; injectable for tests. */
   clock?: () => number;
+  /**
+   * Called after a batch that changed nodes or edges, once the write that made
+   * it (an apply with its layout, an undo, a decision) has finished. Browser
+   * edits are reported once they pause; a batch that keeps growing (coalesced
+   * edits by one person) is reported again each time.
+   */
+  onBatch?: (room: Room, batch: Batch) => void;
 }
+
+/** Quiet time after a batch's last transaction before it is reported to `onBatch`. */
+const BATCH_REPORT_MS = 30;
 
 /** A human's current selection, as published over awareness. */
 export interface HumanSelection {
@@ -70,6 +81,7 @@ export class Room {
   private readonly askStatus = new Map<string, Ask['status']>();
   private readonly askWaiters = new Map<string, Set<() => void>>();
   private refreshTimer: NodeJS.Timeout | null = null;
+  private readonly batchTimers = new Map<string, NodeJS.Timeout>();
   /** Browser connections currently syncing this board. */
   viewers = 0;
   private closed = false;
@@ -248,6 +260,8 @@ export class Room {
     this.closed = true;
     if (this.refreshTimer) clearTimeout(this.refreshTimer);
     this.refreshTimer = null;
+    for (const timer of this.batchTimers.values()) clearTimeout(timer);
+    this.batchTimers.clear();
     for (const set of [...this.askWaiters.values()]) for (const done of [...set]) done();
     await this.store.close();
     await this.feed.flush();
@@ -269,7 +283,10 @@ export class Room {
     const from = this.feed.cursor;
     this.feed.record(event, tag);
     if (event.states) this.history.step(event.states, from, this.feed.cursor);
-    if (pending) this.history.commit(pending, event, ctx, this.feed.cursor);
+    if (pending) {
+      this.history.commit(pending, event, ctx, this.feed.cursor);
+      this.scheduleBatchReport(pending.id);
+    }
 
     // A removed node takes its claim with it. Written after this transaction.
     const gone = Object.entries(event.states?.nodes ?? {})
@@ -293,6 +310,31 @@ export class Room {
     } catch (error) {
       this.log(`board "${this.id}": ${errorMessage(error)}`);
     }
+  }
+
+  /**
+   * Report a batch to `onBatch` once it has been quiet for a moment and the
+   * board's write lock is free, so an apply is reported with its layout.
+   */
+  private scheduleBatchReport(id: string): void {
+    const onBatch = this.opts.onBatch;
+    if (!onBatch || this.closed) return;
+    const previous = this.batchTimers.get(id);
+    if (previous) clearTimeout(previous);
+    const timer = setTimeout(() => {
+      this.batchTimers.delete(id);
+      void this.lock
+        .run(() => undefined)
+        .then(() => {
+          if (this.closed) return;
+          const record = this.history.get(id);
+          if (!record || record.batch.nodeIds.length + record.batch.edgeIds.length === 0) return;
+          onBatch(this, { ...record.batch });
+        })
+        .catch((error: unknown) => this.log(`board "${this.id}": ${errorMessage(error)}`));
+    }, BATCH_REPORT_MS);
+    timer.unref();
+    this.batchTimers.set(id, timer);
   }
 
   private name(id: string): string {

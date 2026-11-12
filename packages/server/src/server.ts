@@ -14,6 +14,7 @@ import { Boards } from './boards.js';
 import { errorMessage, isErrno, writeFileAtomic } from './fsutil.js';
 import { createHttpApp, mountHandler } from './http.js';
 import { canonicalRoot, findProjectRoot, findRunningServer, projectPaths } from './paths.js';
+import { PluginHost } from './plugins.js';
 import { isLoopbackBind, type SecurityConfig } from './security.js';
 import { LocalBoardApi } from './service.js';
 import { SyncServer } from './sync.js';
@@ -149,6 +150,9 @@ export async function startServer(options: ServerOptions = {}): Promise<OpenBoar
     );
   }
 
+  // Plugins are checked before anything starts: a clash stops the start.
+  const plugins = new PluginHost(options.plugins ?? [], log);
+
   if (activeRoots.has(root)) {
     const url = activeRoots.get(root);
     throw new OpenBoardError(
@@ -160,7 +164,7 @@ export async function startServer(options: ServerOptions = {}): Promise<OpenBoar
   }
   activeRoots.set(root, null);
   try {
-    return await start(root, host, options, log);
+    return await start(root, host, options, log, plugins);
   } catch (error) {
     activeRoots.delete(root);
     throw error;
@@ -172,6 +176,7 @@ async function start(
   host: string,
   options: ServerOptions,
   log: (line: string) => void,
+  plugins: PluginHost,
 ): Promise<OpenBoardServer> {
   const paths = projectPaths(root);
   const loopback = isLoopbackBind(host);
@@ -189,9 +194,20 @@ async function start(
   const boards = new Boards(paths, {
     log,
     shared,
+    plugins,
     ...(options.clock ? { clock: options.clock } : {}),
   });
   await boards.start();
+  try {
+    await plugins.setup((plugin) => ({
+      root,
+      log: (line: string) => log(`plugin ${plugin.name}: ${line}`),
+      api: (actor: Actor) => new LocalBoardApi(boards, actor, log),
+    }));
+  } catch (error) {
+    await boards.close();
+    throw error;
+  }
 
   const security: SecurityConfig = { port: 0, checkHost: loopback };
   const mounts = new Map<string, MountHandler>();

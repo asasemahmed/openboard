@@ -14,6 +14,7 @@ import {
   type AnswerInput,
   type ApplyRequest,
   type ApplyResult,
+  type ApplyTemplateRequest,
   type Ask,
   type AskInput,
   type AsksOptions,
@@ -57,10 +58,13 @@ import {
   type RefreshLinksRequest,
   type RevisionsOptions,
   type RevisionsResult,
+  type SchemaOptions,
+  type SchemaResult,
   type SelectionResult,
   type Session,
   type SessionsOptions,
   type SessionsResult,
+  type TemplatesResult,
   type UndoRequest,
   type UndoResult,
   type WhoAmI,
@@ -667,6 +671,40 @@ export class OpenBoardClient implements BoardApi {
     const filename =
       /filename="([^"]+)"/.exec(raw.disposition)?.[1] ?? `${boardId}.${options.format}`;
     return { text: raw.text, mime: raw.contentType.split(';')[0]?.trim() ?? '', filename };
+  }
+
+  // ── Types and templates ───────────────────────────────────────────────────
+
+  schema(options: SchemaOptions = {}): Promise<SchemaResult> {
+    const query = new URLSearchParams();
+    if (options.board !== undefined) query.set('board', options.board);
+    if (options.maxTokens !== undefined) query.set('maxTokens', String(options.maxTokens));
+    const qs = query.toString();
+    return this.#request({
+      method: 'GET',
+      path: `api/schema${qs ? `?${qs}` : ''}`,
+      idempotent: true,
+      expect: 'object',
+    });
+  }
+
+  templates(): Promise<TemplatesResult> {
+    return this.#request({
+      method: 'GET',
+      path: 'api/templates',
+      idempotent: true,
+      expect: 'object',
+    });
+  }
+
+  applyTemplate(boardId: string, request: ApplyTemplateRequest): Promise<ApplyResult> {
+    return this.#request({
+      method: 'POST',
+      path: boardPath(boardId, 'template'),
+      body: request,
+      idempotent: request.dryRun === true,
+      expect: 'object',
+    });
   }
 
   // ── Settings ──────────────────────────────────────────────────────────────

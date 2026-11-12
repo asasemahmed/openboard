@@ -26,6 +26,8 @@ import {
   type ApplyRequest,
   ApplyRequestSchema,
   type ApplyResult,
+  type ApplyTemplateRequest,
+  ApplyTemplateRequestSchema,
   type Ask,
   type AskInput,
   AskInputSchema,
@@ -53,7 +55,9 @@ import {
   type CreateBoardInput,
   CreateBoardInputSchema,
   can,
+  checkBoardAgainstTypes,
   checkItems,
+  checkOpsAgainstTypes,
   classifyOps,
   type Decision,
   DecisionSchema,
@@ -62,13 +66,11 @@ import {
   type DiffResult,
   detectFormat,
   diffBoards,
-  EXPORTERS,
   type ExportOptions,
   ExportOptionsSchema,
   type ExportResult,
+  emptyBoard,
   explainVerdicts,
-  findExporter,
-  findImporter,
   forbiddenMessage,
   type GrantAccessInput,
   type GrantAccessResult,
@@ -76,7 +78,6 @@ import {
   HistoryOptionsSchema,
   type HistoryResult,
   IdSchema,
-  IMPORTERS,
   type ImportIntoResult,
   type ImportRequest,
   ImportRequestSchema,
@@ -130,10 +131,15 @@ import {
   renderProposals,
   renderRead,
   renderRevisions,
+  renderSchema,
   renderSelection,
   renderSessions,
+  renderTemplates,
   renderUndo,
   rollupStatus,
+  type SchemaOptions,
+  SchemaOptionsSchema,
+  type SchemaResult,
   type SelectionResult,
   type Session,
   type SessionsOptions,
@@ -142,6 +148,8 @@ import {
   SYSTEM_ACTOR,
   selectItems,
   selectNodes,
+  type TemplatesResult,
+  type TypeRegistry,
   type UndoRequest,
   UndoRequestSchema,
   type UndoResult,
@@ -355,6 +363,11 @@ export class LocalBoardApi implements BoardApi {
     return room.doc.origin(this.actor.id, source);
   }
 
+  /** The declared types in effect: the project config's, then the plugins'. */
+  private types(): TypeRegistry {
+    return this.boards.plugins.types(this.boards.config.config).types;
+  }
+
   // ── Boards and reading ─────────────────────────────────────────────────────
 
   async listBoards(): Promise<BoardSummary[]> {
@@ -365,7 +378,38 @@ export class LocalBoardApi implements BoardApi {
   async createBoard(input: CreateBoardInput): Promise<BoardSummary> {
     this.authorize('createBoard');
     const parsed = parseInput(CreateBoardInputSchema, input, 'board');
-    const room = await this.boards.create(parsed, this.actor);
+    const { template: templateId, ...meta } = parsed;
+    if (templateId === undefined) return (await this.boards.create(meta, this.actor)).doc.summary();
+
+    // Starting from a template: check it on an empty board before creating anything.
+    this.authorize('applyTemplate');
+    const template = await this.boards.templates.get(templateId);
+    const ops = template.build({ title: meta.name, emptyTarget: true });
+    const empty = emptyBoard({ id: 'template-check', name: meta.name });
+    const probe = applyOps(empty, ops, { actor: this.actor });
+    const errors = probe.ok
+      ? checkOpsAgainstTypes(empty, ops, probe.applied.refs, this.types())
+      : probe.errors;
+    if (errors.length > 0) {
+      throw new OpenBoardError(
+        'invalid_request',
+        `template "${templateId}" does not apply: ${errors
+          .slice(0, 3)
+          .map((e) => `ops[${e.index}]: ${e.message}`)
+          .join('; ')}`,
+        { errors },
+      );
+    }
+    const room = await this.boards.create(meta, this.actor);
+    const result = await this.apply(room.id, {
+      ops,
+      reason: `Template: ${template.summary.name}`,
+    });
+    if (result.status === 'invalid') {
+      this.log(
+        `template "${templateId}" on new board "${room.id}": ${result.errors?.[0]?.message ?? 'refused'}`,
+      );
+    }
     return room.doc.summary();
   }
 
@@ -378,7 +422,14 @@ export class LocalBoardApi implements BoardApi {
     this.authorize('outline');
     const opts = parseInput(OutlineOptionsSchema, options ?? {}, 'outline options');
     const room = await this.room(boardId);
-    return renderOutline(room.doc.toJSON(), room.cursor, opts);
+    const board = room.doc.toJSON();
+    const types = this.types();
+    if (Object.keys(types.nodeTypes).length === 0) return renderOutline(board, room.cursor, opts);
+    return renderOutline(board, room.cursor, {
+      ...opts,
+      types,
+      typeProblems: checkBoardAgainstTypes(board, types).length,
+    });
   }
 
   async read(boardId: string, query?: ReadQuery): Promise<ReadResult> {
@@ -390,6 +441,7 @@ export class LocalBoardApi implements BoardApi {
     const nodes = selectNodes(board, q, { selection: { nodeIds: selection?.nodeIds ?? [] } });
     const opts: Parameters<typeof renderRead>[3] = {
       claims: Object.fromEntries(this.boards.live.activeClaims(room)),
+      types: this.types(),
     };
     if (q.detail !== undefined) opts.detail = q.detail;
     if (q.maxTokens !== undefined) opts.maxTokens = q.maxTokens;
@@ -435,7 +487,7 @@ export class LocalBoardApi implements BoardApi {
         edgeIds: selection?.edgeIds ?? [],
       },
       room.cursor,
-      { claims: Object.fromEntries(this.boards.live.activeClaims(room)) },
+      { claims: Object.fromEntries(this.boards.live.activeClaims(room)), types: this.types() },
     );
     this.mark(
       room,
@@ -459,6 +511,10 @@ export class LocalBoardApi implements BoardApi {
       const board = room.doc.toJSON();
       const dry = applyOps(board, ops, { actor: this.actor });
       if (!dry.ok) return { status: 'invalid', cursor: room.cursor, refs: {}, errors: dry.errors };
+      const typed = checkOpsAgainstTypes(board, ops, dry.applied.refs, this.types());
+      if (typed.length > 0) {
+        return { status: 'invalid', cursor: room.cursor, refs: {}, errors: typed };
+      }
       const claimed = this.claimErrors(room, board, ops);
       if (claimed.length > 0) {
         return { status: 'invalid', cursor: room.cursor, refs: {}, errors: claimed };
@@ -1538,10 +1594,17 @@ export class LocalBoardApi implements BoardApi {
     this.authorize('importInto');
     const req = parseInput(ImportRequestSchema, request, 'import request');
     const room = await this.room(boardId, req.dryRun ? 'reading' : 'writing');
-    const format = req.format ?? detectFormat(req.filename ?? '', req.text);
-    const importer = format ? findImporter(format) : undefined;
+    const plugins = this.boards.plugins;
+    const format =
+      req.format ??
+      detectFormat(req.filename ?? '', req.text) ??
+      (req.filename ? plugins.importerForFile(req.filename)?.name : undefined);
+    const importer = format ? plugins.findImporter(format) : undefined;
     if (!importer) {
-      const names = IMPORTERS.map((i) => i.name).join(', ');
+      const names = plugins
+        .importers()
+        .map((i) => i.name)
+        .join(', ');
       throw new OpenBoardError(
         'invalid_request',
         format
@@ -1549,7 +1612,16 @@ export class LocalBoardApi implements BoardApi {
           : `the format could not be detected; pass format (one of: ${names})`,
       );
     }
-    const parsed = importer.parse(req.text);
+    let parsed: ReturnType<typeof importer.parse>;
+    try {
+      parsed = importer.parse(req.text);
+    } catch (error) {
+      // Built-in importers never throw; a plugin's might.
+      throw new OpenBoardError(
+        'invalid_request',
+        `the ${importer.name} importer${importer.plugin ? ` of plugin "${importer.plugin}"` : ''} could not read this text: ${errorMessage(error)}`,
+      );
+    }
     let ops = parsed.ops;
     if (req.frame !== undefined) {
       const frame = room.doc.getNode(req.frame);
@@ -1589,11 +1661,15 @@ export class LocalBoardApi implements BoardApi {
     this.authorize('exportBoard');
     const opts = parseInput(ExportOptionsSchema, options, 'export options');
     const room = await this.room(boardId);
-    const exporter = findExporter(opts.format);
+    const plugins = this.boards.plugins;
+    const exporter = plugins.findExporter(opts.format);
     if (!exporter) {
       throw new OpenBoardError(
         'invalid_request',
-        `unknown export format "${opts.format}"; one of: ${EXPORTERS.map((e) => e.name).join(', ')}`,
+        `unknown export format "${opts.format}"; one of: ${plugins
+          .exporters()
+          .map((e) => e.name)
+          .join(', ')}`,
       );
     }
     const board = room.doc.toJSON();
@@ -1607,11 +1683,79 @@ export class LocalBoardApi implements BoardApi {
       render.before = before;
       render.diff = diffBoards(before, board);
     }
+    let text: unknown;
+    try {
+      text = exporter.render(board, render);
+    } catch (error) {
+      throw new OpenBoardError(
+        'internal',
+        `the ${exporter.name} exporter${exporter.plugin ? ` of plugin "${exporter.plugin}"` : ''} failed: ${errorMessage(error)}`,
+      );
+    }
+    if (typeof text !== 'string') {
+      throw new OpenBoardError('internal', `the ${exporter.name} exporter returned no text`);
+    }
     return {
-      text: exporter.render(board, render),
+      text,
       mime: exporter.mime,
       filename: `${room.id}${opts.diffFrom !== undefined ? '.diff' : ''}${exporter.extension}`,
     };
+  }
+
+  // ── Types and templates ────────────────────────────────────────────────────
+
+  async schema(options?: SchemaOptions): Promise<SchemaResult> {
+    this.authorize('schema');
+    const opts = parseInput(SchemaOptionsSchema, options ?? {}, 'schema options');
+    const types = this.types();
+    const render: Parameters<typeof renderSchema>[1] = {};
+    if (opts.maxTokens !== undefined) render.maxTokens = opts.maxTokens;
+    if (opts.board !== undefined) {
+      const room = await this.room(opts.board);
+      render.boardId = room.id;
+      render.warnings = checkBoardAgainstTypes(room.doc.toJSON(), types);
+    }
+    return renderSchema(types, render);
+  }
+
+  async templates(): Promise<TemplatesResult> {
+    this.authorize('templates');
+    return renderTemplates(await this.boards.templates.list());
+  }
+
+  async applyTemplate(boardId: string, request: ApplyTemplateRequest): Promise<ApplyResult> {
+    this.authorize('applyTemplate');
+    const req = parseInput(ApplyTemplateRequestSchema, request, 'template request');
+    const room = await this.room(boardId, req.dryRun ? 'reading' : 'writing');
+    const template = await this.boards.templates.get(req.template);
+    if (req.frame !== undefined) {
+      const frame = room.doc.getNode(req.frame);
+      if (!frame)
+        throw new OpenBoardError('not_found', `no node "${req.frame}" on board "${room.id}"`);
+      if (frame.type !== 'frame') {
+        throw new OpenBoardError(
+          'invalid_request',
+          `"${req.frame}" is a ${frame.type}, not a frame`,
+        );
+      }
+    }
+    let ops = template.build({
+      ...(req.title !== undefined ? { title: req.title } : {}),
+      emptyTarget: req.frame === undefined && room.doc.nodes().length === 0,
+    });
+    if (req.frame !== undefined) {
+      const into = req.frame;
+      ops = ops.map((op) =>
+        op.op === 'add_node' && op.node.parent === undefined
+          ? { ...op, node: { ...op.node, parent: into } }
+          : op,
+      );
+    }
+    return this.apply(room.id, {
+      ops,
+      reason: `Template: ${template.summary.name}`.slice(0, 300),
+      ...(req.dryRun ? { dryRun: true } : {}),
+    });
   }
 
   // ── Settings ───────────────────────────────────────────────────────────────

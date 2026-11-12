@@ -12,6 +12,8 @@ import type { ProjectPaths, ServerInfo } from './types.js';
 export const BOARD_SUFFIX = '.board.json';
 /** Project settings, next to the board files. */
 export const CONFIG_FILE = 'config.json';
+/** Project templates: any `<name>.board.json` in this directory is one. */
+export const TEMPLATES_DIR = 'templates';
 
 /** Throws `invalid_request` unless `id` is a valid board id. Run before any path is built from it. */
 export function assertBoardId(id: string): string {
@@ -73,6 +75,7 @@ export function projectPaths(root: string): ProjectPaths {
     local,
     serverInfo: path.join(local, 'server.json'),
     config: path.join(dir, CONFIG_FILE),
+    templates: path.join(dir, TEMPLATES_DIR),
     boardFile: (boardId: string) => path.join(dir, `${assertBoardId(boardId)}${BOARD_SUFFIX}`),
   };
 }

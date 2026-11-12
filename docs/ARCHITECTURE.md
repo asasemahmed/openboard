@@ -35,7 +35,7 @@ Dependencies point one way: `core` knows nothing about the others, and nothing i
 
 Defined in [`packages/core/src/schema.ts`](../packages/core/src/schema.ts).
 
-- A **node** has a `type` (`note`, `task`, `decision`, `question`, `risk`, `doc`, `code`, `agent`, `run`, `frame`, or a custom `x:name`), a `title`, and optionally a markdown `body`, a `status`, `tags`, free-form `props`, `links` to code or URLs, and a `parent` frame.
+- A **node** has a `type` (`note`, `task`, `decision`, `question`, `risk`, `doc`, `code`, `agent`, `run`, `frame`, or a custom `x:name`, which a project may [declare](#types-templates-and-plugins)), a `title`, and optionally a markdown `body`, a `status`, `tags`, free-form `props`, `links` to code or URLs, and a `parent` frame.
 - An **edge** has a `type` (`relates_to`, `depends_on`, `blocks`, `implements`, `evidence_for`, `flows_to`, or custom), a `source`, a `target`, and an optional `label`.
 - A node's **view** (`x`, `y`, `w`, `h`, `pinned`, `color`, `collapsed`) is presentation. It is kept apart from meaning on purpose: agents do not place nodes, the layout engine does, and a node a human dragged is `pinned` and left alone.
 - View coordinates are relative to the parent frame's top-left corner (or to the canvas origin for a node with no parent), so moving a frame moves its children without rewriting them. Default node sizes come from `defaultNodeSize` in `core`, which the layout engine and the canvas share so a server-side layout does not overlap in the browser.
@@ -143,6 +143,56 @@ These writes are made as the system actor with the transaction source `code`. Th
 
 **Import and export.** `importInto` reads Mermaid or JSON Canvas through the importers in `core/src/interop` and applies the result as one normal batch by the caller (policy, layout, history with the reason "Import from <format>"), optionally inside a frame; `GET /api/boards/:id/export?format=` returns any exporter's output as a download, and `format=svg&diffFrom=<rev>` draws the changes since that revision.
 
+## Types, templates and plugins
+
+Defined in [`packages/core/src/typedefs.ts`](../packages/core/src/typedefs.ts), [`templates/`](../packages/core/src/templates/) and [`plugin.ts`](../packages/core/src/plugin.ts); the server side is `packages/server/src/{plugins,templates}.ts`.
+
+**Declared types.** Any `x:name` type is accepted on a board. `.openboard/config.json` may also declare types, under two optional keys:
+
+```ts
+nodeTypes?: Record<`x:${string}`, {
+  label: string;            // at most 60 characters
+  description?: string;     // what it is for, for people and agents; at most 500
+  color?: TypeColor;        // gray red orange yellow green teal blue indigo purple pink
+  icon?: TypeIcon;          // box circle star flag bookmark tag user users bot bug bolt beaker
+                            // chart clock calendar check alert lightbulb link file code database server target
+  hasStatus?: boolean;      // false: nodes of this type never carry a status
+  fields?: Array<{          // at most 30; the value of field `key` is props[key]
+    key: string;            // an identifier: [a-z][A-Za-z0-9_]{0,39}
+    label: string;
+    kind: 'text' | 'longtext' | 'number' | 'boolean' | 'select' | 'date' | 'url';
+    options?: string[];     // select only, and required for it
+    required?: boolean;
+    description?: string;
+  }>;
+}>;                         // at most 50 types
+edgeTypes?: Record<`x:${string}`, {
+  label: string; description?: string; style?: 'solid' | 'dashed' | 'thick'; directed?: boolean;
+}>;                         // at most 30 types
+```
+
+They are set like the rest of the settings (`setConfig`, `PUT /api/config`: people only, `config.write`). `serializeConfig` writes them sorted by type name, with fields in their given order; a config without them is written exactly as before. Plugins can declare types too; the project wins a clash, and the plugin gets a warning (see below). Undeclared `x:` types and built-in types are never checked.
+
+**Checks.** `checkOpsAgainstTypes` runs in `apply` right after core validation, so imports, templates, proposals (when proposed) and link refreshes are checked the same way. Problems are operation errors with code `invalid`, such as `props.severity must be one of low, medium, high (got "urgent") for x:bug nodes`. A value fits its kind when it is a string of at most 1000 characters on one line (`text`) or 20000 (`longtext`), a finite number, a boolean, one of the options, an ISO date (`2026-11-12`, a real day), or an http(s) URL. `null`, `""` and a missing key all mean no value, which only `required` refuses. Props that are not fields are always allowed. A status on a type with `hasStatus: false` is refused.
+
+For nodes that already exist, an operation is checked on what it touches. A new node, and a node whose type changes to a declared one, is checked whole. An `update_node` is checked on the prop keys whose values it changes (so clearing a required field is refused) and on `status` when it sets one; what it leaves alone is not held against it. So tightening a definition never makes old nodes uneditable, and `checkBoardAgainstTypes` lists the nodes that do not fit (`schema({ board })`, and a count in the outline). Browser edits arrive over sync, which the server does not check; they show up in that list too, so the canvas should check its forms with the same core functions (`checkNodeAgainstType`, `fieldProblem`).
+
+**Reading types.** `schema()` describes every type: the built-in ones from one table in core (`BUILTIN_NODE_TYPE_INFO`, `BUILTIN_EDGE_TYPE_INFO`, `STATUS_INFO`) and the declared ones with their fields. Its text drops declared types from the end to fit `maxTokens`; its lists are always complete. Reads at `summary` and `full` detail print declared field values with their labels (`fields: Severity "high", Points 3`; at `full` the remaining props follow as `other props`), and the outline ends with `Custom types: x:bug, x:persona - see the schema.` when types are declared.
+
+**Templates.** A template is `{ id, name, description, tags, build(options?: { title? }) => Op[] }`: a batch with `ref`s, so it fits any board. The built-in ones (`feature-plan`, `architecture-map`, `release-plan`, `incident-review`, `decision-record`, `research-map`, `kanban`, `agent-team`) each make one outer frame (titled `title`, else the template's name) and carry no positions. Any board file `.openboard/templates/<name>.board.json` is a project template with the id `<name>` and the board's name and description; it replaces a built-in or plugin template with that id, and is read from disk each time. Applying it copies its nodes, edges and views with fresh ids. Nodes inside frames keep their positions; top-level nodes keep theirs only when the board is empty and no frame was given (otherwise layout finds them room). Code links lose their hash so they are checked afresh; comments and bookkeeping are not copied.
+
+`applyTemplate(board, { template, frame?, title?, dryRun? })` turns the template into operations (top-level nodes go into `frame` when given) and sends them through `apply` as the caller, with the reason `Template: <name>`: validation, types, the review policy, layout and history work as for any batch. `createBoard({ ..., template })` checks the template against an empty board first (nothing is created when it does not apply), creates the board, and applies the template as the creator's first batch.
+
+**Plugins.** An `OpenBoardPlugin` (types in core, so a plugin depends on core alone) has a `name` and optionally `version`, `nodeTypes`, `edgeTypes`, `templates`, `exporters`, `importers`, `onBatch` and `setup`. Plugins are passed to `startServer({ plugins })` and nowhere else: a server never loads code from the project directory. At startup every plugin is checked, and the start is refused, with an error naming both plugins, when two share a name, a node or edge type, a template id or a format name; a plugin may not reuse a built-in template id or format name either. Everything a plugin adds lives on the server instance (`PluginHost`), so two servers in one process never see each other's plugins.
+
+- Types are merged with the project's whenever the config changes; a clash is listed in the plugin's `warnings`.
+- Templates are listed with `source: 'plugin'` and `plugin`.
+- Exporters and importers join the built-in ones for `exportBoard`, `importInto` and `GET /api/boards/:id/export?format=<name>`, which serves the exporter's `mime` as a download. A plugin importer is also picked by its extensions when `filename` is given. A plugin exporter or importer that throws fails that call only.
+- `onBatch({ boardId, batch, board })` is called after each history batch that changed nodes or edges, once the write that made it has finished (an apply is reported with its layout). Browser edits are reported once they pause for 30 ms, so a batch that keeps growing is reported again. Calls are queued per plugin and run one at a time, in order (at most 1000 waiting; beyond that a batch is dropped and logged), and the write never waits for them, so a slow or failing handler never delays or changes a batch. A plugin's own writes come back to it as batches too.
+- `setup({ root, log, api })` runs after the boards start and before the server listens, in the order given; `api(actor)` is an owner session (a `system` actor is not held to the review policy). It may return a teardown. When a setup throws, the teardowns of the plugins already set up run and the start fails. On close, running handlers get up to 2 seconds, then teardowns run in reverse order, before the boards close.
+
+`GET /api/info`, on a server with plugins, adds `plugins: [{ name, version?, warnings }]`, `exporters: [{ name, extension, mime, description, source, plugin? }]` and `importers: [{ name, extensions, description, source, plugin? }]` for every caller (they hold no local paths). Without plugins the response is unchanged and the formats are the built-in ones. [`examples/plugin-estimates`](../examples/plugin-estimates/) is a complete plugin.
+
 ## Reading a board
 
 Agents never receive a whole board by default. The read path, in the order an agent normally uses it:
@@ -174,13 +224,13 @@ One server process serves one project root.
 | Method and path                                       | Purpose                                                                 |
 | ----------------------------------------------------- | ----------------------------------------------------------------------- |
 | `GET /api/health`                                     | `{ ok, version, pid, root }` (shared mode: see below)                   |
-| `GET /api/info`                                       | `{ version, root, projectName, url, ...ServerOptions.info }`            |
+| `GET /api/info`                                       | `{ version, root, projectName, url, ...ServerOptions.info }`, plugins   |
 | `GET /api/whoami`                                     | `BoardApi.whoami`: `{ actor, role, shared, via, grantId?, expiresAt? }` |
 | `GET /api/access` · `POST /api/access`                | `BoardApi.listAccess` · `grantAccess` (201; people with `owner`)        |
 | `DELETE /api/access/:grant`                           | `BoardApi.revokeAccess` (people with `owner`)                           |
 | `POST /api/auth/session` · `POST /api/auth/logout`    | Trade an invite token for a session cookie · end it (shared mode)       |
 | `POST /api/auth/ticket`                               | A single-use ticket for one sync socket (201; shared mode)              |
-| `GET /api/boards` · `POST /api/boards`                | List and create boards                                                  |
+| `GET /api/boards` · `POST /api/boards`                | List and create boards (optionally from a `template`)                   |
 | `GET /api/boards/:id`                                 | Full board JSON                                                         |
 | `POST /api/boards/:id/outline`                        | `BoardApi.outline`                                                      |
 | `POST /api/boards/:id/read`                           | `BoardApi.read`                                                         |
@@ -189,6 +239,9 @@ One server process serves one project root.
 | `GET /api/boards/:id/selection`                       | `BoardApi.selection`                                                    |
 | `POST /api/boards/:id/layout`                         | `BoardApi.layout`                                                       |
 | `GET /api/config` · `PUT /api/config`                 | `BoardApi.getConfig` · `setConfig` (people only)                        |
+| `GET /api/schema?board=&maxTokens=`                   | `BoardApi.schema`                                                       |
+| `GET /api/templates`                                  | `BoardApi.templates`                                                    |
+| `POST /api/boards/:id/template`                       | `BoardApi.applyTemplate` (body: `ApplyTemplateRequest`)                 |
 | `GET /api/boards/:id/proposals?status=&maxTokens=`    | `BoardApi.proposals` (`status` is `pending` or `all`)                   |
 | `POST /api/boards/:id/proposals/:pid/decide`          | `BoardApi.decideProposal` (body: `Decision`; people only)               |
 | `POST /api/boards/:id/proposals/:pid/withdraw`        | `BoardApi.withdrawProposal` (author only)                               |
@@ -247,7 +300,8 @@ The server reads awareness to answer `BoardApi.selection` with the most recent n
 <project root>/
   .openboard/
     <board id>.board.json     the board; deterministic, meant for git
-    config.json               project settings (review policy); deterministic, meant for git
+    config.json               project settings (review policy, declared types); deterministic, meant for git
+    templates/<name>.board.json  project templates (board files); not boards themselves
     .local/                   runtime state; ignored by git
       server.json             { pid, port, url, root, version, startedAt, shared?, publicUrl? } of the running server;
                               the CLI and `openboard hook` only contact a `url` of this machine (plain http to a

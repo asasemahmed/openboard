@@ -389,6 +389,35 @@ export function createHttpApp(ctx: HttpContext): Hono<Env> {
     return c.json({ ok: true, version: ctx.version, shared: true });
   });
 
+  /**
+   * Plugins and every format, on a server that has plugins (without any, the
+   * formats are the built-in ones). No local paths, so everyone may see them.
+   */
+  const extensions = () => {
+    const plugins = ctx.boards.plugins;
+    if (plugins.count === 0) return {};
+    const source = (entry: { plugin?: string }) =>
+      entry.plugin === undefined
+        ? { source: 'builtin' }
+        : { source: 'plugin', plugin: entry.plugin };
+    return {
+      plugins: plugins.info(ctx.boards.config.config),
+      exporters: plugins.exporters().map((e) => ({
+        name: e.name,
+        extension: e.extension,
+        mime: e.mime,
+        description: e.description,
+        ...source(e),
+      })),
+      importers: plugins.importers().map((i) => ({
+        name: i.name,
+        extensions: i.extensions,
+        description: i.description,
+        ...source(i),
+      })),
+    };
+  };
+
   get('/api/info', 'authenticated', (c) => {
     const caller = c.get('caller');
     if (auth.shared && caller.role !== 'owner') {
@@ -398,6 +427,7 @@ export function createHttpApp(ctx: HttpContext): Hono<Env> {
         projectName: path.basename(ctx.root),
         url: publicUrl(),
         shared: true,
+        ...extensions(),
       });
     }
     return c.json({
@@ -405,6 +435,7 @@ export function createHttpApp(ctx: HttpContext): Hono<Env> {
       root: ctx.root,
       projectName: path.basename(ctx.root),
       url: ctx.url(),
+      ...extensions(),
       ...ctx.info?.(),
       ...(auth.shared ? { shared: true, publicUrl: publicUrl() } : {}),
     });
@@ -672,6 +703,28 @@ export function createHttpApp(ctx: HttpContext): Hono<Env> {
       'x-content-type-options': 'nosniff',
     });
   });
+
+  // ── Types and templates ────────────────────────────────────────────────────
+
+  get('/api/schema', 'schema', async (c) => {
+    const board = c.req.query('board');
+    const maxTokens = c.req.query('maxTokens');
+    const options: Record<string, unknown> = {};
+    if (board !== undefined) options.board = board;
+    if (maxTokens !== undefined) options.maxTokens = Number(maxTokens);
+    return c.json(await api(c).schema(options as Parameters<LocalBoardApi['schema']>[0]));
+  });
+
+  get('/api/templates', 'templates', async (c) => c.json(await api(c).templates()));
+
+  post('/api/boards/:id/template', 'applyTemplate', async (c) =>
+    c.json(
+      await api(c).applyTemplate(
+        param(c, 'id'),
+        (await jsonBody(c)) as unknown as Parameters<LocalBoardApi['applyTemplate']>[1],
+      ),
+    ),
+  );
 
   // ── Settings ───────────────────────────────────────────────────────────────
   // "People only" routes check the actor kind; see the note in service.ts.

@@ -166,4 +166,40 @@ describe('against a real server', () => {
     expect(exported.text).toContain('One');
     expect(await code(ada.exportBoard('plan', { format: 'pdf' }))).toBe('invalid_request');
   });
+
+  it('round-trips the schema, templates and boards started from a template', async () => {
+    await ada.setConfig({
+      version: 1,
+      policy: { default: 'review_destructive', agents: {} },
+      nodeTypes: {
+        'x:bug': {
+          label: 'Bug',
+          fields: [
+            { key: 'severity', label: 'Severity', kind: 'select', options: ['low', 'high'] },
+          ],
+        },
+      },
+    });
+    const schema = await bot.schema({ board: 'plan', maxTokens: 3000 });
+    expect(schema.nodeTypes.find((t) => t.type === 'x:bug')?.fields[0]?.key).toBe('severity');
+    expect(schema.warnings).toEqual([]);
+    expect(schema.text).toContain('x:bug "Bug"');
+
+    const templates = await bot.templates();
+    expect(templates.templates.map((t) => t.id)).toContain('feature-plan');
+
+    const dry = await bot.applyTemplate('plan', { template: 'feature-plan', dryRun: true });
+    expect(dry.status).toBe('valid');
+    const applied = await bot.applyTemplate('plan', {
+      template: 'decision-record',
+      title: 'Cache',
+    });
+    expect(applied.status).toBe('applied');
+    expect((await bot.getBoard('plan')).nodes[applied.refs.record as string]?.title).toBe('Cache');
+    expect(await code(bot.applyTemplate('plan', { template: 'nope' }))).toBe('not_found');
+
+    const summary = await bot.createBoard({ name: 'Ship it', template: 'release-plan' });
+    expect(summary.id).toBe('ship-it');
+    expect(summary.nodeCount).toBeGreaterThan(10);
+  });
 });

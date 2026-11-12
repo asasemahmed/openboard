@@ -38,8 +38,9 @@ import type {
 import type { BoardDiff } from './diff.js';
 import type { Claim, ClaimResult, Session, SessionsResult } from './live.js';
 import { nearestAncestorIn, orderNodes } from './query.js';
-import type { Actor, Board, BoardEdge, BoardNode, Link } from './schema.js';
+import type { Actor, Board, BoardEdge, BoardNode, Json, Link } from './schema.js';
 import { estimateTokens } from './text.js';
+import { declaredFieldValues, type FieldDef, type TypeRegistry } from './typedefs.js';
 import { BOOKKEEPING_FIELDS, compareStrings } from './util.js';
 
 /** Characters of body shown on the one-line preview at `summary` detail. */
@@ -179,6 +180,25 @@ interface BlockContext {
   inSet: ReadonlySet<string>;
   edges: Map<string, BoardEdge[]>;
   claims?: ClaimMarks;
+  types?: TypeRegistry;
+}
+
+/** Characters of a declared field's value shown at `summary` detail. */
+const FIELD_PREVIEW_CHARS = 120;
+
+/** `Severity "high", Points 3`: declared fields with a value, labelled, values quoted. */
+function fieldsText(values: Array<{ field: FieldDef; value: Json }>, detail: Detail): string {
+  return values
+    .map(({ field, value }) => {
+      let text = typeof value === 'string' ? value : JSON.stringify(value);
+      if (typeof value === 'string' && detail !== 'full') {
+        text = text.replace(/\s+/g, ' ').trim();
+        if (text.length > FIELD_PREVIEW_CHARS) text = `${text.slice(0, FIELD_PREVIEW_CHARS)}...`;
+      }
+      const shown = typeof value === 'string' ? quote(text) : text;
+      return `${bare(field.label)} ${shown}`;
+    })
+    .join(', ');
 }
 
 function nodeBlock(node: BoardNode, depth: number, ctx: BlockContext): string[] {
@@ -210,9 +230,15 @@ function nodeBlock(node: BoardNode, depth: number, ctx: BlockContext): string[] 
     }
   }
 
+  const fields = declaredFieldValues(node, ctx.types);
+  if (fields.length > 0) lines.push(`${inner}fields: ${fieldsText(fields, detail)}`);
+
   if (detail === 'full') {
-    if (node.props && Object.keys(node.props).length > 0) {
-      lines.push(`${inner}props ${JSON.stringify(node.props)}`);
+    const shownKeys = new Set(fields.map(({ field }) => field.key));
+    const rest = Object.entries(node.props ?? {}).filter(([key]) => !shownKeys.has(key));
+    if (rest.length > 0) {
+      const label = shownKeys.size > 0 ? 'other props' : 'props';
+      lines.push(`${inner}${label} ${JSON.stringify(Object.fromEntries(rest))}`);
     }
     if (node.links?.length) {
       lines.push(`${inner}links:`);
@@ -271,6 +297,7 @@ function fitNodes(
   budget: number,
   frame: (body: string[], kept: number, edges: BoardEdge[]) => string,
   claims?: ClaimMarks,
+  types?: TypeRegistry,
 ): Slice {
   const edges = edgeIndex(board);
   const render = (count: number) => {
@@ -278,6 +305,7 @@ function fitNodes(
     const inSet = new Set(kept.map((node) => node.id));
     const ctx: BlockContext = { board, detail, inSet, edges };
     if (claims) ctx.claims = claims;
+    if (types) ctx.types = types;
     const blocks = kept.map((node) => {
       let depth = 0;
       let parent = nearestAncestorIn(board, node, inSet);
@@ -344,7 +372,7 @@ export function renderRead(
   board: Board,
   nodes: BoardNode[],
   cursor: number,
-  opts?: { detail?: Detail; maxTokens?: number; claims?: ClaimMarks },
+  opts?: { detail?: Detail; maxTokens?: number; claims?: ClaimMarks; types?: TypeRegistry },
 ): ReadResult {
   const detail = opts?.detail ?? 'summary';
   const budget = budgetOf(opts?.maxTokens);
@@ -376,6 +404,7 @@ export function renderRead(
       return lines.join('\n');
     },
     opts?.claims,
+    opts?.types,
   );
 
   const omitted = total - slice.kept.length;
@@ -398,7 +427,7 @@ export function renderSelection(
   board: Board,
   selection: { by: Actor | null; nodeIds: string[]; edgeIds: string[] },
   cursor: number,
-  opts?: { detail?: Detail; maxTokens?: number; claims?: ClaimMarks },
+  opts?: { detail?: Detail; maxTokens?: number; claims?: ClaimMarks; types?: TypeRegistry },
 ): SelectionResult {
   const detail = opts?.detail ?? 'summary';
   const budget = budgetOf(opts?.maxTokens);
@@ -452,6 +481,7 @@ export function renderSelection(
       return lines.join('\n');
     },
     opts?.claims,
+    opts?.types,
   );
 
   const edgeIds = new Set(slice.edges.map((edge) => edge.id));
@@ -483,7 +513,16 @@ function countLine(counts: Record<string, number>, statuses: Record<string, numb
 }
 
 /** The shape of a board: its frames as a tree, with direct-child counts by type and status. */
-export function renderOutline(board: Board, cursor: number, opts?: OutlineOptions): Outline {
+export function renderOutline(
+  board: Board,
+  cursor: number,
+  opts?: OutlineOptions & {
+    /** Declared types: the outline then ends with a line naming them. */
+    types?: TypeRegistry;
+    /** How many nodes do not fit their declared type (`checkBoardAgainstTypes`). */
+    typeProblems?: number;
+  },
+): Outline {
   const budget = budgetOf(opts?.maxTokens);
   const nodes = Object.values(board.nodes);
   const frames = orderNodes(
@@ -525,6 +564,21 @@ export function renderOutline(board: Board, cursor: number, opts?: OutlineOption
   if (board.description)
     header.push(`Description: ${quote(board.description.replace(/\s+/g, ' ').trim())}`);
 
+  const declared = Object.keys(opts?.types?.nodeTypes ?? {}).sort(compareStrings);
+  let customLine = '';
+  if (declared.length > 0) {
+    const names =
+      declared.length > 12
+        ? `${declared.slice(0, 12).join(', ')} and ${declared.length - 12} more`
+        : declared.join(', ');
+    const problems = opts?.typeProblems ?? 0;
+    const note =
+      problems > 0
+        ? ` (${countOf(problems, 'problem')} on this board: call schema with board to see them)`
+        : '';
+    customLine = `Custom types: ${names} - see the schema${note}.`;
+  }
+
   const render = (shown: OutlineFrame[], hiddenFrames: number) => {
     const shownIds = new Set(shown.map((frame) => frame.id));
     const hiddenBelow = new Map<string, number>();
@@ -552,6 +606,7 @@ export function renderOutline(board: Board, cursor: number, opts?: OutlineOption
         `${countOf(staleLinks, 'code link points', 'code links point')} at code that changed since; call links to see which.`,
       );
     }
+    if (customLine) lines.push(customLine);
     if (hiddenFrames > 0) {
       lines.push(
         truncationLine(['frame', 'frames'], hiddenFrames, [

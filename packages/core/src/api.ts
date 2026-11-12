@@ -72,6 +72,8 @@ import {
   NodeTypeSchema,
   StatusSchema,
 } from './schema.js';
+import type { ApplyTemplateRequest, TemplatesResult } from './templates/types.js';
+import type { SchemaOptions, SchemaResult } from './typedefs.js';
 
 /**
  * Position in a board's change feed. It only ever grows. Pass the cursor from
@@ -95,6 +97,12 @@ export const CreateBoardInputSchema = z.object({
   id: IdSchema.optional(),
   name: z.string().min(1).max(120),
   description: z.string().max(2000).optional(),
+  /**
+   * Start the board from this template (an id from `templates()`). The
+   * template is applied as the creator's first batch, with the board's name
+   * as the title of its outer frame.
+   */
+  template: z.string().min(1).max(64).optional(),
 });
 export type CreateBoardInput = z.infer<typeof CreateBoardInputSchema>;
 
@@ -394,6 +402,21 @@ export interface BoardApi {
   importInto(boardId: string, request: ImportRequest): Promise<ImportIntoResult>;
   /** The board in another format. */
   exportBoard(boardId: string, options: ExportOptions): Promise<ExportResult>;
+
+  // Types and templates (see typedefs.ts and templates/).
+  /**
+   * Every node and edge type a board can use, built-in and declared (by the
+   * project or a plugin), with their fields. With `board`, also the nodes of
+   * that board that do not fit their declared type.
+   */
+  schema(options?: SchemaOptions): Promise<SchemaResult>;
+  /** The templates this server offers: built-in, from plugins, and the project's own. */
+  templates(): Promise<TemplatesResult>;
+  /**
+   * Apply a template as one normal batch by the caller (validation, review
+   * policy, layout, history with the reason `Template: <name>`).
+   */
+  applyTemplate(boardId: string, request: ApplyTemplateRequest): Promise<ApplyResult>;
 
   // Project settings.
   getConfig(): Promise<ProjectConfig>;

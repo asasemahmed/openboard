@@ -11,6 +11,7 @@
 import { z } from 'zod';
 import { OpSchema } from './ops.js';
 import { CommentSchema, EdgeSchema, IdSchema, NodeSchema, ViewSchema } from './schema.js';
+import { EdgeTypesSchema, NodeTypesSchema } from './typedefs.js';
 
 // ── Policy ───────────────────────────────────────────────────────────────────
 
@@ -66,6 +67,10 @@ export const ProjectConfigSchema = z.object({
     /** Mode per agent, by actor id. */
     agents: z.record(IdSchema, PolicyModeSchema),
   }),
+  /** Declared node types, by `x:` name (see typedefs.ts). */
+  nodeTypes: NodeTypesSchema.optional(),
+  /** Declared edge types, by `x:` name. */
+  edgeTypes: EdgeTypesSchema.optional(),
 });
 export type ProjectConfig = z.infer<typeof ProjectConfigSchema>;
 

@@ -1,4 +1,4 @@
-import type { AccessVia, Actor, BoardApi, Role } from '@openboard/core';
+import type { AccessVia, Actor, BoardApi, OpenBoardPlugin, Role } from '@openboard/core';
 
 export const DEFAULT_PORT = 4747;
 
@@ -44,6 +44,12 @@ export interface ServerOptions {
    * Defaults to `Date.now`; tests inject their own.
    */
   clock?: () => number;
+  /**
+   * Plugins: more types, templates, exporters, importers and hooks. Only ever
+   * passed here, in code; nothing is loaded from the project directory. Two
+   * plugins may not share a name, a type, a template id or a format name.
+   */
+  plugins?: OpenBoardPlugin[];
 }
 
 /**
@@ -138,6 +144,8 @@ export interface ProjectPaths {
   serverInfo: string;
   /** `<root>/.openboard/config.json` */
   config: string;
+  /** `<root>/.openboard/templates`: project templates, one `<name>.board.json` each */
+  templates: string;
   /** `<root>/.openboard/<boardId>.board.json` */
   boardFile(boardId: string): string;
 }
