@@ -188,10 +188,20 @@ export interface ChangeEntry {
   reason?: string;
   /** The history batch this change belongs to (see `BoardApi.history`). */
   batchId?: string;
+  /** The transaction source (`TxOrigin.source`); `code` is the server keeping code links current. */
+  source?: TxSource;
+  /** For `code` changes: what happened, e.g. `code link went stale`. */
+  detail?: string;
 }
+
+/** Every `TxOrigin.source`. */
+export const TxSourceSchema = z.enum(['ops', 'ui', 'layout', 'file', 'undo', 'sync', 'code']);
+export type TxSource = z.infer<typeof TxSourceSchema>;
 
 export const ChangesOptionsSchema = z.object({
   since: z.number().int().min(0),
+  /** Leave out changes made with these sources, e.g. `["code", "layout"]`. */
+  excludeSources: z.array(TxSourceSchema).max(7).optional(),
   /** Include the caller's own changes. Off by default: you know what you did. */
   includeOwn: z.boolean().optional(),
   /** Include pure moves and resizes. Off by default: they are rarely meaningful. */

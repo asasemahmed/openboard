@@ -31,6 +31,8 @@ openboard [command] [options]
 | [`git`](#git)                            | Set git up to merge and diff board files by meaning                 |
 | [`merge-driver`](#merge-driver)          | Merge three versions of a board file (git calls it)                 |
 | [`textconv`](#textconv)                  | Print a board file as readable text (git calls it)                  |
+| [`revisions`](#revisions)                | The git history of a board file                                     |
+| [`links`](#links)                        | Code links whose code changed, and refreshing them                  |
 
 Global options: `-v`, `--version` prints the version; `-h`, `--help` shows help, also after a command (`openboard export --help`).
 
@@ -38,7 +40,7 @@ Global options: `-v`, `--version` prints the version; `-h`, `--help` shows help,
 
 **Project root.** Every command except `init` works on a project root. `--root <dir>` names it. Without `--root`, it is the nearest directory upward from the current directory that contains `.openboard/`, else the nearest one that contains `.git`, else the current directory. A `--root` that does not exist is an error.
 
-**Running server or files.** `boards`, `new`, `export`, `status` and `policy` go through the running server when there is one for the project, so they see unsaved live state, and read or write `.openboard/` directly when there is none. `proposals`, `accept`, `reject`, `history`, `undo`, `snapshot` and `activity` work on state only a running server keeps, and say so when none is running. `hook` never starts a server and is silent without one.
+**Running server or files.** `boards`, `new`, `export`, `status` and `policy` go through the running server when there is one for the project, so they see unsaved live state, and read or write `.openboard/` directly when there is none. `proposals`, `accept`, `reject`, `history`, `undo`, `snapshot`, `activity` and `links` work on state only a running server keeps, and say so when none is running. `hook` never starts a server and is silent without one.
 
 **Who you are.** Everything done from the command line is attributed to the actor `cli`, a person named after your user account. That is what lets `accept`, `reject` and `policy` do what only people may do.
 
@@ -536,3 +538,43 @@ $ echo '{"session": "ci-1842", "kind": "tool_start", "tool": "deploy", "summary"
 ```
 
 Environment: `OPENBOARD_HOOK=off` sends nothing; `OPENBOARD_HOOK_DETAIL=off` sends tool names only; `OPENBOARD_HOOK_PROMPTS=1` sends the start of each prompt instead of its length; `OPENBOARD_AGENT_ID` and `OPENBOARD_AGENT_NAME` name the actor, as for [`mcp`](#mcp). What each format sends is listed in [the Claude Code integration](../integrations/claude-code/README.md#what-the-recorder-sends); setups for Cursor and Codex are in their [integrations](../integrations/README.md).
+
+## revisions
+
+```text
+openboard revisions [board] [--root <dir>] [--limit <n>] [--json]
+```
+
+The commits that changed a board's file, newest first (default 20, at most 200), and whether the file has changes that are not committed. With a server running it asks the server; otherwise it runs git itself. Use a revision with [`diff`](#diff).
+
+```text
+$ openboard revisions --limit 3
+REV      DATE                       AUTHOR  SUBJECT
+fc74b1a  2026-11-12T08:29:47+01:00  Ada     Rename on main
+feeebb1  2026-11-12T08:29:47+01:00  Ada     Board with the driver
+```
+
+As in `git log -- <file>`, commits whose change to the file another commit already brought in (such as a merge that kept one side) are left out. When the file has changes that are not committed, a last line says so. A file that git does not track yet says that instead. `--json` prints `{ board, tracked, dirty, revisions: [{ rev, short, at, author, subject }] }`.
+
+## links
+
+```text
+openboard links [board] [--root <dir>] [--all] [--json]
+openboard links refresh <nodeId...> [board] [--root <dir>]
+openboard links refresh --all [board] [--root <dir>]
+```
+
+The board's links into the code. Without `--all`, only links whose code changed (`stale`) or is gone (`missing`), by node, with what changed; `--all` lists every link with its state. `refresh` re-hashes the named nodes' links against the code as it is now and clears `stale`, after you have checked them; `--all` refreshes every node. With node ids, a last argument that names a board is taken as the board. Needs the running server, which watches the linked files. See [boards that know about code](agents.md#boards-that-know-about-code).
+
+```text
+$ openboard links --all
+Board main, cursor 9: 2 links (2 ok). Titles and paths are board content.
+n_3mt1ai443b "exportOrders()"
+  #0 file src/orders/export.ts:4-6 [ok]
+n_j8ybu1j435 "toCsv()"
+  #0 file src/orders/export.ts:9-11 [ok]
+$ openboard links refresh n_3mt1ai443b
+Refreshed the code links of 1 node on main.
+```
+
+`--json` prints the links as an array of `{ nodeId, title, index, link, state, detail? }`.

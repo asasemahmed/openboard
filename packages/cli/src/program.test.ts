@@ -39,6 +39,8 @@ describe('argument parsing and exit codes', () => {
       'git',
       'merge-driver',
       'textconv',
+      'links',
+      'revisions',
     ]) {
       expect(io.out()).toContain(`  ${command} `);
     }

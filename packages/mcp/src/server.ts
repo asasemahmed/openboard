@@ -209,7 +209,12 @@ class Session {
       return 0;
     }
     try {
-      const result = await api.changes(board, { since: last, maxTokens: NOTICE_BUDGET });
+      const result = await api.changes(board, {
+        since: last,
+        maxTokens: NOTICE_BUDGET,
+        // Layout moves and the server's own code-link upkeep are not people editing the board.
+        excludeSources: ['layout', 'code'],
+      });
       if (result.resync) {
         this.#cursors.set(board, Math.max(cursor, result.cursor));
         return 'resync';
@@ -403,6 +408,16 @@ async function waitForAnswer(
   }
 }
 
+/** Core's renderings name API methods; over MCP they are tools. */
+function toolNames(text: string): string {
+  return text
+    .replace('call links to see which.', 'call board_links to see which.')
+    .replace(
+      'call refreshLinks for it to clear the mark.',
+      'call board_links with refresh: [its id] to clear the mark.',
+    );
+}
+
 function defaultOf(boards: BoardSummary[]): string | undefined {
   if (boards.length === 1) return boards[0]?.id;
   return boards.some((b) => b.id === 'main') ? 'main' : undefined;
@@ -453,7 +468,7 @@ export function createMcpServer(options: McpServerOptions): McpServer {
       const text =
         outline.nodeCount === 0
           ? `${outline.text}\nThe board is empty; add to it with board_apply.`
-          : outline.text;
+          : toolNames(outline.text);
       return { text, board, cursor: outline.cursor };
     }),
   );
@@ -784,6 +799,45 @@ export function createMcpServer(options: McpServerOptions): McpServer {
           ? `${sentence(error.message)}. Nothing was claimed. Find node ids with board_read.`
           : undefined,
     ),
+  );
+
+  mcp.registerTool(
+    'board_links',
+    tool('board_links'),
+    ({ board: requested, all, refresh, maxTokens }) =>
+      session.run(async (api) => {
+        const board = await session.board(api, requested);
+        if (refresh !== undefined) {
+          if (all) throw new ToolError('Pass all (to list every link) or refresh, not both.');
+          const result = await api.refreshLinks(
+            board,
+            refresh === 'all' ? { all: true } : { nodeIds: refresh },
+          );
+          const count = refresh === 'all' ? 1 : refresh.length;
+          if (result.status === 'applied') {
+            const nodes = result.applied?.updatedNodes.length ?? 0;
+            if (nodes === 0) {
+              return {
+                text: 'Nothing to refresh: the code links of those nodes already match the code.',
+                board,
+                cursor: result.cursor,
+              };
+            }
+            return {
+              text: `Refreshed the code links of ${nodes} node${nodes === 1 ? '' : 's'}: they are now taken to match the code as it is. Cursor ${result.cursor}${result.batchId ? `, batch ${result.batchId}` : ''}.`,
+              board,
+              cursor: result.cursor,
+            };
+          }
+          const { text, isError } = formatApply(result, count);
+          return { text, isError, board, cursor: result.cursor };
+        }
+        const result = await api.links(
+          board,
+          defined({ stale: all ? undefined : true, maxTokens }),
+        );
+        return { text: toolNames(result.text), board, cursor: result.cursor };
+      }),
   );
 
   // ── Resources ──────────────────────────────────────────────────────────────

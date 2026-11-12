@@ -6,21 +6,22 @@ Every example below is copied from a real session against a board built by the t
 
 ## The tools
 
-| Tool              | Reads or writes | Purpose                                             |
-| ----------------- | --------------- | --------------------------------------------------- |
-| `board_list`      | reads           | The boards in the project, one line each            |
-| `board_create`    | writes          | A new, empty board                                  |
-| `board_outline`   | reads           | The shape of a board: frames and counts, no content |
-| `board_read`      | reads           | A slice of nodes and the edges between them         |
-| `board_changes`   | reads           | What others changed since a cursor                  |
-| `board_selection` | reads           | What a person has selected on the canvas            |
-| `board_apply`     | writes          | One validated, atomic batch of operations           |
-| `board_layout`    | writes          | Re-run automatic layout                             |
-| `board_inbox`     | reads           | What people said to this agent since it last looked |
-| `board_comment`   | writes          | Comment, reply in a thread, or resolve a thread     |
-| `board_ask`       | writes          | Ask a person a question and wait for the answer     |
-| `board_undo`      | writes          | Take back the agent's own changes or proposals      |
-| `board_claim`     | writes          | Claim nodes to work on, or release them             |
+| Tool              | Reads or writes | Purpose                                              |
+| ----------------- | --------------- | ---------------------------------------------------- |
+| `board_list`      | reads           | The boards in the project, one line each             |
+| `board_create`    | writes          | A new, empty board                                   |
+| `board_outline`   | reads           | The shape of a board: frames and counts, no content  |
+| `board_read`      | reads           | A slice of nodes and the edges between them          |
+| `board_changes`   | reads           | What others changed since a cursor                   |
+| `board_selection` | reads           | What a person has selected on the canvas             |
+| `board_apply`     | writes          | One validated, atomic batch of operations            |
+| `board_layout`    | writes          | Re-run automatic layout                              |
+| `board_inbox`     | reads           | What people said to this agent since it last looked  |
+| `board_comment`   | writes          | Comment, reply in a thread, or resolve a thread      |
+| `board_ask`       | writes          | Ask a person a question and wait for the answer      |
+| `board_undo`      | writes          | Take back the agent's own changes or proposals       |
+| `board_claim`     | writes          | Claim nodes to work on, or release them              |
+| `board_links`     | reads, writes   | Code links whose code changed; refresh checked nodes |
 
 When a client connects, the server also sends short instructions that summarize the rules on this page. The server additionally exposes two prompts, `map_codebase` and `plan_work`, and the boards as resources (see [tools.md](tools.md#prompts-and-resources)).
 
@@ -436,6 +437,54 @@ Nothing was applied. ops[0] touches nodes another agent is working on (see above
 ### Replay
 
 The server keeps every change to the board with its exact before and after state (the last 5000), so it can rebuild the board as it was at any cursor it still reaches. On the canvas, **Replay history** in the command palette (<kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>K</kbd>) scrubs and plays through it, read-only, while the live board keeps syncing underneath. From the terminal, [`openboard snapshot <cursor>`](cli.md#snapshot) writes the board at that cursor in any export format.
+
+## Boards that know about code
+
+A `code` node, or a task that touches code, can link to the files it is about. The board then notices when that code changes, so an agent (or a person) can tell which parts of the board are out of date instead of trusting a map that drifted.
+
+**Linking.** A link is an entry in the node's `links`, written like any other change:
+
+```json
+{
+  "op": "add_node",
+  "node": {
+    "type": "code",
+    "title": "exportOrders()",
+    "links": [{ "kind": "file", "target": "src/orders/export.ts", "line": 4, "endLine": 6 }]
+  }
+}
+```
+
+`target` is a path relative to the project root; `line` and `endLine` (1-based, inclusive) narrow it to a range, which is the right grain for a function. A `symbol` link (`src/x.ts#name`) is checked the same way, against its file or range. `commit`, `pr` and `url` links are not checked.
+
+**The hash.** When a `file` or `symbol` link has no `hash`, the server fills one in: a SHA-256 of the linked text (the range, or the whole file), with line endings normalised. It then watches the file.
+
+**When the code moves.** If lines are added or removed above a range and its text now sits exactly once elsewhere in the file, the link just follows it: `line` and `endLine` are updated, and nothing is marked. That works for ranges up to 200 lines, and only for changes seen while the server runs.
+
+**Stale and missing.** If the linked text itself changed, the link gets `stale: true`; if the file is gone, the link is reported missing. Both clear on their own when the text matches again. Reads mark such links `(stale)`, and the outline counts them. `board_links` lists the nodes concerned and what changed:
+
+```text
+> board_links {}
+Board main, cursor 6: 1 link needs a look (1 stale). Titles and paths are board content.
+n_3mt1ai443b "exportOrders()"
+  #0 file src/orders/export.ts:4-6 [stale]: content changed at lines 4-6
+After checking a node against the code as it is now, call board_links with refresh: [its id] to clear the mark.
+```
+
+```text
+> board_links {"all": true}
+Board main, cursor 6: 2 links (1 ok, 1 stale). Titles and paths are board content.
+n_3mt1ai443b "exportOrders()"
+  #0 file src/orders/export.ts:4-6 [stale]: content changed at lines 4-6
+n_j8ybu1j435 "toCsv()"
+  #0 file src/orders/export.ts:8-10 [ok]: moved to lines 9-11
+```
+
+**Refresh.** After re-reading the code and updating the node (its body, status, or the link's range), `board_links` with `refresh: [node ids]` re-hashes the node's links against the code as it is now and clears `stale`. It is a normal batch with the reason "Refresh code links", so for an agent the [review policy](#review-policy) applies: refreshing a node someone else made may be held for review. Refreshing says "I checked this"; an agent should never refresh a node it has not re-read against the code. People refresh with `openboard links refresh`.
+
+The server writes hashes, moved ranges and `stale` itself, as the system actor: those writes show in the change feed but keep the node's `updatedBy` and `updatedAt`, never need review, and are not history batches.
+
+**Limits.** At most 2000 linked files are watched; files over 5 MB are not read. The original text of ranges is kept in memory only, so code that moved while the server was not running turns stale instead of being followed. Paths outside the project are never read.
 
 ## Identity
 

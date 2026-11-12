@@ -662,3 +662,40 @@ describe('code and git rendering', () => {
     );
   });
 });
+
+describe('code-link upkeep in the change feed', () => {
+  it('reads as what happened, not as an edit', () => {
+    const at = T1.toISOString();
+    const { text } = renderChanges(
+      'main',
+      [
+        {
+          seq: 1,
+          at,
+          actor: 'system',
+          kind: 'node_updated',
+          id: 'n',
+          title: 'Note',
+          fields: ['links'],
+          source: 'code',
+          detail: 'code link moved',
+        },
+        {
+          seq: 2,
+          at: T0.toISOString(),
+          actor: 'ada',
+          kind: 'node_updated',
+          id: 'n',
+          title: 'Note',
+          fields: ['links'],
+          source: 'ui',
+        },
+      ],
+      0,
+      2,
+      { resync: false, actors: { ada } },
+    );
+    expect(text).toContain('#1 node_updated n "Note": code link moved');
+    expect(text).toContain('#2 node_updated n "Note": links');
+  });
+});

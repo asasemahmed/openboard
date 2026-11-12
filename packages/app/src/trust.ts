@@ -4,6 +4,7 @@
  * cards. Call once at startup, before the board mounts.
  */
 import { registerBuiltinDecorations } from './nodes/builtinDecorations.js';
+import { registerCodeDecorations } from './nodes/codeDecorations.js';
 import { registerLiveDecorations } from './nodes/liveDecorations.js';
 import { registerTrustDecorations } from './nodes/trustDecorations.js';
 import { ActivityPanel } from './panels/ActivityPanel.js';
@@ -19,6 +20,7 @@ export function registerTrust(): void {
   registerBuiltinDecorations();
   registerTrustDecorations();
   registerLiveDecorations();
+  registerCodeDecorations();
   if (registered) return;
   registered = true;
   registerPanel({

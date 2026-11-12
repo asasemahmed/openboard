@@ -105,3 +105,43 @@ export async function boardIdsAt(
     .filter((name) => name.endsWith('.board.json'))
     .map((name) => name.slice(0, -'.board.json'.length));
 }
+
+/** One commit that touched a file, as `revisions` reports it. */
+export interface FileRevision {
+  rev: string;
+  short: string;
+  at: string;
+  author: string;
+  subject: string;
+}
+
+/**
+ * The commits that changed `file`, newest first, and whether the file on disk
+ * differs from the last commit. `tracked` is false when git does not know it.
+ */
+export async function fileRevisions(
+  io: Pick<CliIo, 'env'>,
+  top: string,
+  file: string,
+  limit = 20,
+): Promise<{ tracked: boolean; dirty: boolean; revisions: FileRevision[] }> {
+  const rel = gitPath(top, file);
+  const known = await git(io, top, ['ls-files', '--error-unmatch', '--', rel]);
+  if (known.code !== 0) return { tracked: false, dirty: false, revisions: [] };
+  const log = await git(io, top, [
+    'log',
+    `--max-count=${limit}`,
+    '--format=%H%x1f%h%x1f%aI%x1f%an%x1f%s',
+    '--',
+    rel,
+  ]);
+  const revisions = log.stdout
+    .split('\n')
+    .filter((line) => line.trim() !== '')
+    .map((line) => {
+      const [rev = '', short = '', at = '', author = '', subject = ''] = line.split('\x1f');
+      return { rev, short, at, author, subject };
+    });
+  const status = await git(io, top, ['status', '--porcelain', '--', rel]);
+  return { tracked: true, dirty: status.stdout.trim() !== '', revisions };
+}

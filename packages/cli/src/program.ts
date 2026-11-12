@@ -4,6 +4,7 @@
  */
 import { Command, CommanderError, InvalidArgumentError, Option } from 'commander';
 import { boardsCommand, newBoardCommand } from './commands/boards.js';
+import { linksCommand, revisionsCommand } from './commands/code.js';
 import { AGENTS, connectCommand } from './commands/connect.js';
 import { diffCommand } from './commands/diff.js';
 import { doctorCommand } from './commands/doctor.js';
@@ -308,6 +309,38 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
     )
     .argument('<file>', 'a board file')
     .action(action((file: string) => textconvCommand(io, file)));
+
+  program
+    .command('links')
+    .description(
+      "list the board's code links whose code changed or is gone, or refresh nodes checked against the code (needs the running server)",
+    )
+    .usage('[board] [--all] | refresh <nodeId...> [board] | refresh --all [board]')
+    .argument(
+      '[args...]',
+      '[board], or refresh and the node ids (a last argument naming a board is the board)',
+    )
+    .addOption(rootOption())
+    .option('--all', 'list every link; with refresh, refresh every node')
+    .option('--json', 'print JSON')
+    .action(
+      action((args: string[], opts: { root?: string; all?: boolean; json?: boolean }) =>
+        linksCommand(io, args, opts),
+      ),
+    );
+
+  program
+    .command('revisions')
+    .description('the git history of a board file, newest first')
+    .argument('[board]', 'board id (default: the only board, or "main")')
+    .addOption(rootOption())
+    .option('--limit <n>', 'how many revisions, 1 to 200 (default: 20)', parseLimit)
+    .option('--json', 'print JSON')
+    .action(
+      action((board: string | undefined, opts: { root?: string; limit?: number; json?: boolean }) =>
+        revisionsCommand(io, board, opts),
+      ),
+    );
 
   program
     .command('doctor')

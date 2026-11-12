@@ -357,10 +357,12 @@ export class LocalBoardApi implements BoardApi {
     const room = await this.room(boardId);
     const cursor = room.cursor;
     const { entries, resync } = room.feed.since(opts.since);
+    const excluded = new Set(opts.excludeSources ?? []);
     const visible = entries.filter(
       (entry) =>
         (opts.includeOwn || entry.actor !== this.actor.id) &&
-        (opts.includeMoves || entry.kind !== 'node_moved'),
+        (opts.includeMoves || entry.kind !== 'node_moved') &&
+        !(entry.source && excluded.has(entry.source)),
     );
     const render: Parameters<typeof renderChanges>[4] = {
       resync,
@@ -396,7 +398,8 @@ export class LocalBoardApi implements BoardApi {
   async apply(boardId: string, request: ApplyRequest): Promise<ApplyResult> {
     const req = parseInput(ApplyEnvelopeSchema, request, 'apply request');
     // Core validates each operation and reports problems by index.
-    const ops = req.ops as Op[];
+    // Code links get their hash in the same batch that stores them.
+    const ops = await this.boards.code.prepareOps(req.ops as Op[]);
     const room = await this.room(boardId, req.dryRun ? 'reading' : 'writing');
 
     const run = async (): Promise<ApplyResult> => {

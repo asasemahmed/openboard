@@ -1,0 +1,448 @@
+/*
+ * Code and git: the "code changed" marker and link states, import, the
+ * board's out-of-date list, and the compare view. Diff colours are core's SVG
+ * diff colours (interop LIGHT_THEME / DARK_THEME), so the canvas and an
+ * exported diff agree.
+ */
+:root {
+  --diff-added: #0b7a55;
+  --diff-removed: #b42318;
+  --diff-updated: #b45309;
+  --diff-moved: #747983;
+  --diff-on-badge: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --diff-added: #3ddc97;
+    --diff-removed: #ff6b5e;
+    --diff-updated: #f5b942;
+    --diff-moved: #868b94;
+    --diff-on-badge: #0e1013;
+  }
+}
+:root[data-theme="dark"] {
+  --diff-added: #3ddc97;
+  --diff-removed: #ff6b5e;
+  --diff-updated: #f5b942;
+  --diff-moved: #868b94;
+  --diff-on-badge: #0e1013;
+}
+
+/* ── Code links ───────────────────────────────────────────────────────────── */
+
+.code-marker {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: none;
+  height: 18px;
+  margin-right: 4px;
+  padding: 0 6px 0 4px;
+  border: 1px solid var(--accent-ink);
+  border-radius: 4px;
+  background: var(--card);
+  color: var(--accent-ink);
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.link-row {
+  display: grid;
+  gap: 2px;
+  padding: 4px 4px 4px 8px;
+  align-items: stretch;
+}
+.link-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.link-main > svg {
+  flex: none;
+}
+.link-lines {
+  color: var(--ink-2);
+}
+.link-actions {
+  display: flex;
+  flex: none;
+  margin-left: auto;
+}
+.link-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-left: 24px;
+  color: var(--ink-2);
+  font-size: 12px;
+}
+.link-state svg {
+  flex: none;
+}
+.link-state.state-ok svg {
+  color: var(--status-done);
+}
+.link-state.state-stale,
+.link-state.state-missing,
+.link-state.state-outside {
+  color: var(--accent-ink);
+}
+.link-state .link-btn {
+  font-size: 12px;
+}
+.link-note {
+  margin: 2px 0 0 24px;
+  color: var(--ink-2);
+  font-size: 12px;
+}
+.link-row-edit {
+  padding: 6px 0;
+}
+.link-form-kind {
+  width: 104px;
+  flex: none;
+}
+.link-form-label {
+  align-self: center;
+  width: 104px;
+  flex: none;
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+.link-form .field-hint code {
+  font-size: 11.5px;
+  overflow-wrap: anywhere;
+}
+
+/* ── Out of date with the code ────────────────────────────────────────────── */
+
+.code-status {
+  color: var(--accent-ink);
+}
+.code-popover {
+  width: 340px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+.code-popover-head {
+  display: grid;
+  gap: 2px;
+  font-size: 13px;
+}
+.code-list {
+  display: grid;
+  gap: 2px;
+  max-height: 320px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+.code-item {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
+  font-size: 12.5px;
+}
+.code-item:hover {
+  background: var(--hover);
+}
+.code-item-detail {
+  color: var(--ink-2);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.code-item-detail code {
+  font-size: 11.5px;
+  color: var(--ink);
+}
+
+/* ── Import ───────────────────────────────────────────────────────────────── */
+
+.import-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 6px;
+}
+.import-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.import-text {
+  min-height: 160px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.import-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.import-options .field + .field {
+  margin-top: 0;
+}
+.import-preview,
+.import-error,
+.import-done {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  font-size: 13px;
+}
+.import-error {
+  border-color: var(--danger);
+}
+.import-error > p {
+  color: var(--danger);
+}
+.import-done {
+  border: 0;
+  padding: 0;
+  margin-top: 12px;
+  background: transparent;
+}
+.import-warnings {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--ink-2);
+  font-size: 12.5px;
+}
+@media (max-width: 560px) {
+  .import-options {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Revisions ────────────────────────────────────────────────────────────── */
+
+.revision-picker {
+  margin-top: 14px;
+  font-size: 13px;
+}
+.revision-dirty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: var(--ink-2);
+  font-size: 12.5px;
+}
+.revision-list {
+  display: grid;
+  gap: 2px;
+  max-height: 50vh;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+.revision-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+}
+.revision-row:hover {
+  background: var(--hover);
+}
+.revision-hash {
+  grid-row: 1 / span 2;
+  color: var(--accent-ink);
+  font-size: 12px;
+}
+.revision-subject {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.revision-meta {
+  color: var(--ink-3);
+  font-size: 11.5px;
+}
+.settings-root {
+  align-self: center;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+/* ── Compare ──────────────────────────────────────────────────────────────── */
+
+.compare {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.compare-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  min-height: 0;
+}
+.compare-side {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-left: 1px solid var(--line);
+  background: var(--paper);
+  overflow: auto;
+}
+.diff-legend {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12.5px;
+}
+.diff-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.diff-legend strong {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+.diff-swatch {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  border: 2px solid var(--diff-color);
+  border-radius: 3px;
+}
+.diff-removed .diff-swatch {
+  border-style: dashed;
+}
+.diff-added {
+  --diff-color: var(--diff-added);
+}
+.diff-updated {
+  --diff-color: var(--diff-updated);
+}
+.diff-moved {
+  --diff-color: var(--diff-moved);
+}
+.diff-removed {
+  --diff-color: var(--diff-removed);
+}
+.compare-tools {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+.diff-group h3 {
+  margin-bottom: 4px;
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 650;
+}
+.diff-group ul {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.diff-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
+  font-size: 12.5px;
+}
+.diff-item:hover {
+  background: var(--hover);
+}
+
+/* On the canvas */
+.diff-outline {
+  position: absolute;
+  inset: -3px;
+  border: 2px solid var(--diff-color);
+  border-radius: 14px;
+  pointer-events: none;
+}
+.diff-outline.diff-moved {
+  border-width: 1px;
+  border-style: dotted;
+}
+.frame .diff-outline {
+  border-radius: 18px;
+}
+.diff-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 150px;
+  height: 18px;
+  margin-right: 4px;
+  padding: 0 6px 0 2px;
+  border: 1px solid var(--diff-color);
+  border-radius: 4px;
+  background: var(--card);
+  color: var(--ink);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.diff-badge {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  flex: none;
+  border-radius: 3px;
+  background: var(--diff-color);
+  color: var(--diff-on-badge);
+  font-size: 11px;
+  line-height: 1;
+}
+.diff-chip-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.card.is-ghost.is-diff-removed,
+.frame.is-ghost.is-diff-removed {
+  border: 1.5px dashed var(--diff-removed);
+}
+.card.is-diff-removed .card-title,
+.frame.is-diff-removed .frame-title {
+  text-decoration: line-through;
+  color: var(--ink-2);
+}
+.compare .board-edge.is-ghost {
+  stroke: var(--diff-removed) !important;
+}
+.card.is-unchanged,
+.frame.is-unchanged {
+  opacity: 0.32;
+}

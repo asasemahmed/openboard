@@ -653,7 +653,9 @@ export function renderChanges(
       batch = batchKey;
       let line = `  #${entry.seq} ${entry.kind} ${entry.id}`;
       if (entry.title !== undefined) line += ` ${quote(entry.title)}`;
-      if (entry.fields?.length) line += `: ${entry.fields.join(', ')}`;
+      // The server's own code-link upkeep says what happened rather than which field.
+      if (entry.source === 'code') line += `: ${entry.detail ?? 'code links checked'}`;
+      else if (entry.fields?.length) line += `: ${entry.fields.join(', ')}`;
       lines.push(line);
     }
     if (count < sorted.length) {

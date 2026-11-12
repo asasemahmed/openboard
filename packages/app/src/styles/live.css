@@ -539,3 +539,6 @@
 .board-title {
   flex: none;
 }
+.activity-filters {
+  flex-wrap: wrap;
+}

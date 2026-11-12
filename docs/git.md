@@ -86,6 +86,8 @@ Board main (HEAD~2 → HEAD): 1 change. Titles are board content.
   ~ note n_wfzgn2cs11 "Export query (batched)": title: "Export query" → "Export query (batched)"
 ```
 
+`openboard revisions` lists the commits that changed a board, to pick revisions from. A running server answers the same questions for other tools: `GET /api/boards/<id>/revisions`, and `POST /api/boards/<id>/diff` to compare two revisions or a revision with the live board.
+
 `--format markdown` gives the same grouped under Added, Changed and Removed, ready for a pull request comment; `--format svg` draws the board with the changes marked; `--format json` is the structured difference for tools. The exit status is 0 when nothing changed, 1 when something did, and 2 on an error. See the [CLI reference](cli.md#diff).
 
 To post this from a CI job, check out the pull request with enough history to reach its base, then run something like the following in the project; the two lines with `openboard diff` accept exit status 1, which only means the boards differ:

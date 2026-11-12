@@ -6,7 +6,11 @@
  */
 import type { Actor, BoardDoc, Claim } from '@openboard/core';
 import type { AgentSession } from '../lib/agents.js';
-import { colorFor } from '../lib/identity.js';
+import { colorFor, initials } from '../lib/identity.js';
+
+/** Names longer than this show as initials on a claim chip. */
+const SHORT_NAME = 14;
+
 import { type Clock, systemClock } from './activity.js';
 import { Emitter } from './emitter.js';
 
@@ -59,8 +63,10 @@ export function claimChip(
     claim.note ? `Note: ${claim.note}` : '',
     `Claimed until ${clockTime(until)} (${minutes} min left).`,
   ].filter(Boolean);
+  // A long name would push the status out of the card's label row: initials say who, the tooltip says it in full.
+  const who = actor.name.length > SHORT_NAME ? initials(actor.name) : actor.name;
   return {
-    label: `${actor.name} · ${status}`,
+    label: `${who} · ${status}`,
     tooltip: parts.join(' '),
     color: colorFor({ ...actor, kind: 'agent' }),
     name: actor.name,

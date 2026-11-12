@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useRoute } from './lib/router.js';
 import { BoardScreen } from './shell/BoardScreen.js';
 import { HomeScreen } from './shell/HomeScreen.js';
-import { api } from './state/boards.js';
+import { loadServerInfo, serverInfo } from './state/boards.js';
 import { adoptServerName } from './state/identity.js';
 import { Toasts } from './ui/Toasts.js';
 
@@ -12,10 +12,7 @@ export function App() {
   const firstRoute = useRef(route);
   // A new person is called what the server calls its user, until they pick a name.
   useEffect(() => {
-    api
-      .info()
-      .then((info) => adoptServerName(info?.user))
-      .catch(() => {});
+    void loadServerInfo().then(() => adoptServerName(serverInfo.get()?.user));
   }, []);
   if (route.name === 'board') {
     return (

@@ -1,8 +1,8 @@
 /** The list of boards on the server, shared by the home screen, switcher and palette. */
 import type { BoardSummary } from '@openboard/core';
-import { ApiError, createApiClient } from '../lib/api.js';
+import { ApiError, createApiClient, type ServerInfo } from '../lib/api.js';
 import { isString, readStored, writeStored } from '../lib/storage.js';
-import { Emitter, useStoreValue } from './emitter.js';
+import { Emitter, useStoreValue, Value } from './emitter.js';
 import { currentActor } from './identity.js';
 
 export type BoardsSnapshot =
@@ -67,4 +67,20 @@ export function lastBoardId(): string | undefined {
 
 export function rememberBoard(id: string): void {
   writeStored(LAST_BOARD, id);
+}
+
+/** What the server said about itself (`GET /api/info`): project root, its user. Null until known. */
+export const serverInfo = new Value<ServerInfo | null>(null);
+
+let infoLoading: Promise<void> | null = null;
+
+/** Read the server info once; later calls reuse the first answer. */
+export function loadServerInfo(): Promise<void> {
+  infoLoading ??= api
+    .info()
+    .then((info) => serverInfo.set(info))
+    .catch(() => {
+      infoLoading = null;
+    });
+  return infoLoading;
 }

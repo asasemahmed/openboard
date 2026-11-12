@@ -119,6 +119,8 @@ Ids are letters, digits and `_ . : -`, starting with a letter or digit, at most 
 | `createdBy`, `createdAt` | actor id, timestamp         | Who created it, and when                                                                                                            |
 | `updatedBy`, `updatedAt` | actor id, timestamp         | Who last changed its meaning, and when                                                                                              |
 
+On `file` and `symbol` links, `hash` and `stale` are written by the server, not by people or agents: `hash` (`sha256:` and 32 hex digits) records the linked text when the link was made or last refreshed, `stale: true` says that text has changed since, and `line`/`endLine` move with the code when it shifts. Such writes keep the node's `updatedBy` and `updatedAt`. See [boards that know about code](agents.md#boards-that-know-about-code).
+
 `view.x` and `view.y` are relative to the top-left corner of the parent frame, or to the canvas origin for a node without a parent, so moving a frame does not rewrite its children. `pinned: true` means a person placed the node and automatic layout leaves it alone. A node without `view` has not been placed yet; the server places it.
 
 ### Edge

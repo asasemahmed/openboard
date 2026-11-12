@@ -224,6 +224,14 @@ export function ActivityPanel() {
         >
           Replay
         </Button>
+        <Button
+          size="sm"
+          icon="history"
+          title="See what changed since a git commit of the board"
+          onClick={() => session.ui.comparePicker.set(true)}
+        >
+          Compare
+        </Button>
         <label className="check-label">
           <input
             type="checkbox"

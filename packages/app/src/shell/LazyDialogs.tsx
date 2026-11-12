@@ -18,6 +18,12 @@ const ShortcutsSheet = lazy(() =>
 const SettingsDialog = lazy(() =>
   import('./SettingsDialog.js').then((m) => ({ default: m.SettingsDialog })),
 );
+const ImportDialog = lazy(() =>
+  import('./ImportDialog.js').then((m) => ({ default: m.ImportDialog })),
+);
+const ComparePicker = lazy(() =>
+  import('./ComparePicker.js').then((m) => ({ default: m.ComparePicker })),
+);
 const ConnectAgentDialog = lazy(() =>
   import('./ConnectAgentDialog.js').then((m) => ({ default: m.ConnectAgentDialog })),
 );
@@ -60,6 +66,12 @@ export function LazyDialogs() {
       </OnceOpened>
       <OnceOpened store={ui.settings} isOpen={ui.settings.get}>
         <SettingsDialog />
+      </OnceOpened>
+      <OnceOpened store={ui.importDialog} isOpen={() => ui.importDialog.get() !== null}>
+        <ImportDialog />
+      </OnceOpened>
+      <OnceOpened store={ui.comparePicker} isOpen={ui.comparePicker.get}>
+        <ComparePicker />
       </OnceOpened>
       <OnceOpened store={ui.newBoard} isOpen={ui.newBoard.get}>
         <NewBoard />

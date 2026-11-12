@@ -98,6 +98,20 @@ export function fakeApi(overrides: Partial<ApiClient> = {}): ApiClient {
     lineage: vi.fn(async () => 'l_test'),
     claim: vi.fn(),
     snapshotAt: vi.fn(),
+    links: vi.fn(async (boardId: string) => ({
+      boardId,
+      cursor: 0,
+      links: [],
+      text: '',
+      tokens: 0,
+      truncated: false,
+    })),
+    refreshLinks: vi.fn(),
+    revisions: vi.fn(),
+    boardAtRevision: vi.fn(),
+    diff: vi.fn(),
+    importInto: vi.fn(),
+    exportBoard: vi.fn(),
     ...overrides,
   };
 }

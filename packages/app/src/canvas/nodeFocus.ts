@@ -82,6 +82,8 @@ function useGhostFocus(id: string, ghost: boolean) {
     openReview(session, owner);
   }, [session, id]);
   if (!ghost) return null;
+  // In a read-only view (a comparison) ghosts are pictures of the past, not proposals.
+  if (session.ui.readOnly) return {};
   return {
     tabIndex: 0,
     role: 'button',

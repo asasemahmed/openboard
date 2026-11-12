@@ -23,6 +23,7 @@ OpenBoard is an open canvas that AI agents read and edit over MCP while you edit
 - **Agents ask instead of guessing.** Agents put questions to you on the board and wait for the answer, read your comments and mentions in their inbox, and reply in the thread.
 - **Boards in git.** Each board is a deterministic JSON file in `.openboard/`. A merge driver merges boards by meaning, never leaving conflict markers; `openboard diff` summarizes board changes for review, as text, Markdown or SVG; and the server picks up changes from a checkout or a merge.
 - **Import and export.** Bring in Mermaid flowcharts and JSON Canvas files, and export boards as Markdown, Mermaid, JSON Canvas or SVG.
+- **Boards that notice when code changes.** Link a node to a file or a range of lines; when that code changes, the board marks the node, so agents know which parts of the map to re-check.
 
 ## Quick start
 

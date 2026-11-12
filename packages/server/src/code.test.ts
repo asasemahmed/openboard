@@ -80,23 +80,86 @@ afterEach(async () => {
 });
 
 describe('code links', () => {
-  it('fills hashes from the linked content, as system upkeep that is not a batch', async () => {
-    const [whole, range, symbol, url] = await links();
+  it('hashes links in the same batch that stores them', async () => {
+    const [whole, range, symbol, url] = (await api(ADA).getBoard('plan')).nodes.n?.links ?? [];
     expect(whole?.hash).toBe(hashContent(SOURCE));
     expect(range?.hash).toBe(hashContent('export function foo() {\n  return 1;\n}'));
     expect(symbol?.hash).toBe(hashContent('export const bar = 2;'));
     expect(url?.hash).toBeUndefined();
     expect(range?.hash).toMatch(new RegExp(`^${LINK_HASH_PREFIX}[0-9a-f]{32}$`));
-    const board = await api(ADA).getBoard('plan');
-    expect(board.nodes.n?.updatedBy).toBe('ada');
+    await boards.code.idle();
     const changes = await api(BOT).changes('plan', { since: 0 });
-    expect(changes.changes.at(-1)).toMatchObject({
-      actor: 'system',
-      kind: 'node_updated',
-      fields: ['links'],
-    });
+    expect(changes.changes.every((c) => c.actor === 'ada')).toBe(true);
     const history = await api(ADA).history('plan', { includeMoves: true });
     expect(history.batches.map((b) => b.actor)).toEqual(['ada']);
+  });
+
+  it('hashes links stored another way as system upkeep, and answers from the document', async () => {
+    const room = await boards.get('plan');
+    room.doc.apply(
+      [
+        {
+          op: 'add_node',
+          id: 'u',
+          node: {
+            type: 'code',
+            title: 'From a tab',
+            links: [{ kind: 'file', target: 'src/a.ts' }],
+          },
+        },
+      ],
+      { actor: ADA, source: 'ui' },
+    );
+    // Asked before the upkeep ran: the pending update is applied first.
+    const result = await api(BOT).links('plan');
+    expect(result.links.find((l) => l.nodeId === 'u')).toMatchObject({ state: 'ok' });
+    expect(room.doc.getNode('u')?.links?.[0]?.hash).toBe(hashContent(SOURCE));
+    expect(room.doc.getNode('u')?.updatedBy).toBe('ada');
+    const changes = await api(BOT).changes('plan', { since: 0 });
+    const upkeep = changes.changes.at(-1);
+    expect(upkeep).toMatchObject({ actor: 'system', source: 'code', detail: 'code link hashed' });
+    expect(changes.text).toContain(`#${upkeep?.seq} node_updated u "From a tab": code link hashed`);
+    const quiet = await api(BOT).changes('plan', { since: 0, excludeSources: ['code', 'layout'] });
+    expect(quiet.changes.some((c) => c.source === 'code')).toBe(false);
+    expect(quiet.changes.some((c) => c.source === 'ui')).toBe(true);
+  });
+
+  it('reports a link it cannot hash as unchecked', async () => {
+    await writeFile(file('src/big.txt'), 'x'.repeat(5 * 1024 * 1024 + 10));
+    await api(ADA).apply('plan', {
+      layout: 'none',
+      ops: [
+        {
+          op: 'add_node',
+          id: 'big',
+          node: { type: 'code', title: 'Big', links: [{ kind: 'file', target: 'src/big.txt' }] },
+        },
+      ],
+    });
+    const entry = (await api(ADA).links('plan')).links.find((l) => l.nodeId === 'big');
+    expect(entry).toMatchObject({ state: 'unchecked', detail: 'file too large to check' });
+    expect(entry?.link.hash).toBeUndefined();
+  });
+
+  it('reports a missing file for a link a tab stored, as the document does', async () => {
+    const room = await boards.get('plan');
+    room.doc.apply(
+      [
+        {
+          op: 'add_node',
+          id: 'm',
+          node: {
+            type: 'code',
+            title: 'Missing',
+            links: [{ kind: 'file', target: 'src/none.ts' }],
+          },
+        },
+      ],
+      { actor: ADA, source: 'ui' },
+    );
+    const entry = (await api(ADA).links('plan')).links.find((l) => l.nodeId === 'm');
+    expect(entry).toMatchObject({ state: 'missing', detail: 'file missing' });
+    expect(room.doc.getNode('m')?.links?.[0]?.stale).toBe(true);
   });
 
   it('normalises line endings before hashing', async () => {
@@ -117,6 +180,8 @@ describe('code links', () => {
     expect(whole?.stale).toBe(true);
     expect(range?.stale).toBe(true);
     expect(symbol?.stale).toBeUndefined();
+    const changes = await api(BOT).changes('plan', { since: 0 });
+    expect(changes.text).toContain('"Foo": code link went stale');
     const result = await api(BOT).links('plan', { stale: true });
     expect(result.links.map((l) => [l.index, l.state, l.detail])).toEqual([
       [0, 'stale', 'content changed'],

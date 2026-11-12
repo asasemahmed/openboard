@@ -1,4 +1,6 @@
 /** UI state that belongs to one open board but not to the document. */
+import type { DiffView } from '../lib/diffView.js';
+import type { CompareTarget } from '../lib/revisions.js';
 import { isBoolean, readStored, writeStored } from '../lib/storage.js';
 import { Value } from './emitter.js';
 
@@ -46,6 +48,16 @@ export class UiStore {
   readonly focusProposal = new Value<{ id: string; at: number } | null>(null);
   /** Follow one agent session (`<actor>/<session>`) instead of everyone's changes. */
   readonly followSession = new Value<string | null>(null);
+  /** The import dialog, with text a drop or a paste brought along. */
+  readonly importDialog = new Value<{ text?: string; filename?: string } | null>(null);
+  /** The "Compare with…" revision picker. */
+  readonly comparePicker = new Value(false);
+  /** Comparing the live board with this revision (the compare view is shown). */
+  readonly compare = new Value<CompareTarget | null>(null);
+  /** In a compare view: what changed, for the canvas decorations. */
+  readonly diff = new Value<DiffView | null>(null);
+  /** In a compare view: dim everything the diff does not touch. */
+  readonly onlyChanges = new Value(false);
   /** The question stack folded to a count in the top bar. */
   readonly asksCollapsed = new Value(false);
   readonly inspectorOpen = new Value(
@@ -101,7 +113,9 @@ export class UiStore {
       this.confirm.get() !== null ||
       this.newBoard.get() ||
       this.connectAgent.get() ||
-      this.settings.get()
+      this.settings.get() ||
+      this.importDialog.get() !== null ||
+      this.comparePicker.get()
     );
   }
 }

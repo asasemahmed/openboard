@@ -77,6 +77,19 @@ export function createSession(options: SessionOptions): BoardSession {
     fetchSnapshot: (cursor, signal) => options.api.snapshotAt(options.boardId, cursor, signal),
     describeError: (error) => calmMessage(error),
   });
+  // While replaying, what lands on the board joins the end of the timeline.
+  let replayTimer: ReturnType<typeof setTimeout> | null = null;
+  const offReplay = doc.observe(() => {
+    if (!replay.active || replayTimer) return;
+    replayTimer = setTimeout(() => {
+      replayTimer = null;
+      if (!replay.active) return;
+      options.api
+        .history(options.boardId, { limit: 50, includeMoves: true, maxTokens: MAX_MAX_TOKENS })
+        .then((result) => replay.append(result.batches))
+        .catch(() => {});
+    }, 800);
+  });
   const offActivity = doc.observe((event) => {
     // The first change from someone else is a good moment to learn the feed cursor.
     if (!event.local && connection.get().synced) feed.prime();
@@ -109,6 +122,8 @@ export function createSession(options: SessionOptions): BoardSession {
     destroy() {
       offSelection();
       offActivity();
+      offReplay();
+      if (replayTimer) clearTimeout(replayTimer);
       replay.destroy();
       claims.destroy();
       activity.destroy();

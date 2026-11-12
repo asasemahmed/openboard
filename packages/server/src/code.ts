@@ -217,25 +217,78 @@ export class CodeLinks {
   }
 
   /** Every link of the board with its state, read fresh from disk. Writes nothing. */
+  /**
+   * Every link of the board with its state. Pending upkeep is written first,
+   * so the answer is the document's state: what reads and the outline show.
+   */
   async entries(room: Room): Promise<LinkEntry[]> {
+    this.pendingNodes.delete(room);
+    const timer = this.roomTimers.get(room);
+    if (timer) clearTimeout(timer);
+    this.roomTimers.delete(room);
+    await room.lock.run(() => this.check(room));
     const out: LinkEntry[] = [];
     const board = room.doc.toJSON();
     const ordered = Object.values(board.nodes).sort((a, b) => (a.id < b.id ? -1 : 1));
     for (const node of ordered) {
       for (const [index, link] of (node.links ?? []).entries()) {
+        const entry: LinkEntry = { nodeId: node.id, title: node.title, index, link, state: 'ok' };
         const evaluation = await this.evaluate(link, false);
-        const entry: LinkEntry = {
-          nodeId: node.id,
-          title: node.title,
-          index,
-          link,
-          state: evaluation.state,
-        };
-        if (evaluation.detail) entry.detail = evaluation.detail;
+        if (evaluation.state === 'outside' || evaluation.state === 'unchecked') {
+          entry.state = evaluation.state;
+        } else if (link.stale) {
+          entry.state = evaluation.state === 'missing' ? 'missing' : 'stale';
+        } else if (link.hash === undefined) entry.state = 'unchecked';
+        // `detail` explains a state that is not ok; for an ok link it says where it moved.
+        const detail = entry.state === evaluation.state ? evaluation.detail : undefined;
+        if (detail) entry.detail = detail;
+        else if (entry.state === 'stale') entry.detail = 'content changed';
         out.push(entry);
       }
     }
     return out;
+  }
+
+  /**
+   * Fill `hash` on the `file` and `symbol` links a batch stores, from the code
+   * as it is now, so a link is never stored unhashed through the API (a
+   * missing file or a range not in the file marks it `stale` instead). Other
+   * operations, and anything malformed, pass through untouched for validation.
+   */
+  async prepareOps<T>(ops: T[]): Promise<T[]> {
+    const out: T[] = [];
+    for (const op of ops) {
+      const raw = op as { op?: unknown; node?: { links?: unknown }; patch?: { links?: unknown } };
+      const holder =
+        raw?.op === 'add_node' ? raw.node : raw?.op === 'update_node' ? raw.patch : undefined;
+      if (!holder || !Array.isArray(holder.links)) {
+        out.push(op);
+        continue;
+      }
+      const links = await Promise.all(holder.links.map((link: unknown) => this.hashOne(link)));
+      const next = { ...holder, links };
+      out.push({ ...raw, ...(raw.op === 'add_node' ? { node: next } : { patch: next }) } as T);
+    }
+    return out;
+  }
+
+  private async hashOne(link: unknown): Promise<unknown> {
+    const candidate = link as Partial<Link> | null;
+    if (
+      typeof candidate !== 'object' ||
+      candidate === null ||
+      (candidate.kind !== 'file' && candidate.kind !== 'symbol') ||
+      typeof candidate.target !== 'string' ||
+      candidate.hash !== undefined
+    ) {
+      return link;
+    }
+    try {
+      const evaluation = await this.evaluate(candidate as Link, true);
+      return evaluation.next ?? link;
+    } catch {
+      return link;
+    }
   }
 
   /**
@@ -283,6 +336,7 @@ export class CodeLinks {
     const lines = file.text.split('\n');
     const current = rangeText(lines, link);
     if (link.hash === undefined) {
+      if (!remember) return { state: 'unchecked', detail: 'not hashed yet' };
       if (current === null) {
         return {
           state: 'stale',

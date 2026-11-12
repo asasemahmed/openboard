@@ -464,10 +464,14 @@ export class ActivityStore extends Emitter {
   flash(
     items: ReadonlyArray<{ kind: ItemKind; id: string; verb: ChangeVerb }>,
     actorId: string,
+    opts: { replace?: boolean } = {},
   ): void {
-    if (this.destroyed || items.length === 0) return;
+    if (this.destroyed) return;
     const changes = items.map((item) => ({ ...item, actorId }));
-    this.dispatch(receive(this.state, changes, '', this.clock.now()));
+    // Replay shows what one step did, so by default the step's highlights replace the last ones.
+    const base: ActivityState =
+      opts.replace === false ? this.state : { ...EMPTY_ACTIVITY, nextId: this.state.nextId };
+    this.dispatch(receive(base, changes, '', this.clock.now()));
   }
 
   dismissRemoval(id: number): void {

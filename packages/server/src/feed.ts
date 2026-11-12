@@ -16,7 +16,7 @@
  */
 import { appendFile, readFile } from 'node:fs/promises';
 import type { BoardDoc, ChangeEntry, DocEvent } from '@openboard/core';
-import { ChangeKindSchema } from '@openboard/core';
+import { ChangeKindSchema, type Link, type TxSource, TxSourceSchema } from '@openboard/core';
 import { errorMessage, isErrno, writeFileAtomic } from './fsutil.js';
 
 /** How many entries are kept in memory (and, after compaction, on disk). */
@@ -111,6 +111,12 @@ export class ChangeFeed {
       if (change.title !== undefined) entry.title = change.title;
       if (tag.reason !== undefined) entry.reason = tag.reason;
       if (tag.batchId !== undefined) entry.batchId = tag.batchId;
+      if (event.origin) entry.source = event.origin.source;
+      if (event.origin?.source === 'code') {
+        const state = event.states?.nodes[change.id];
+        const detail = state ? codeDetail(state.before?.links, state.after?.links) : undefined;
+        if (detail) entry.detail = detail;
+      }
       added.push(entry);
     }
     this.entries.push(...added);
@@ -196,8 +202,27 @@ function parseEntry(line: string): ChangeEntry | null {
     if (typeof raw.title === 'string') entry.title = raw.title;
     if (typeof raw.reason === 'string') entry.reason = raw.reason;
     if (typeof raw.batchId === 'string') entry.batchId = raw.batchId;
+    if (TxSourceSchema.safeParse(raw.source).success) entry.source = raw.source as TxSource;
+    if (typeof raw.detail === 'string') entry.detail = raw.detail;
     return entry;
   } catch {
     return null;
   }
+}
+
+/** What the server's code-link upkeep did to a node's links, in words. */
+export function codeDetail(
+  before: Link[] | undefined,
+  after: Link[] | undefined,
+): string | undefined {
+  const parts = new Set<string>();
+  (after ?? []).forEach((link, i) => {
+    const old = before?.[i];
+    if (!old) return;
+    if (link.stale && !old.stale) parts.add('code link went stale');
+    else if (!link.stale && old.stale) parts.add('code link up to date again');
+    else if (link.line !== old.line || link.endLine !== old.endLine) parts.add('code link moved');
+    else if (link.hash !== undefined && old.hash === undefined) parts.add('code link hashed');
+  });
+  return parts.size > 0 ? [...parts].join(', ') : undefined;
 }
