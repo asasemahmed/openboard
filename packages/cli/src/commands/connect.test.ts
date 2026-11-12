@@ -2,6 +2,7 @@ import { mkdir, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { shellQuote } from '../lib/mcp.js';
 import { captureIo, tempDir } from '../testing/helpers.js';
 import { connectCommand } from './connect.js';
 
@@ -42,6 +43,18 @@ describe('connect', () => {
     );
   });
 
+  it('prints the Gemini CLI command and the .gemini/settings.json block', async () => {
+    const root = await tempDir();
+    const out = await connectOutput('gemini-cli', root);
+    expect(out).toContain(`Gemini CLI, for the boards in ${root}:`);
+    expect(out).toContain(
+      `  gemini mcp add openboard ${shellQuote(NODE)} ${shellQuote(BIN)} mcp --root ${shellQuote(root)}\n`,
+    );
+    expect(out).toContain('Or add this to .gemini/settings.json:');
+    expect(out).toContain('    \"mcpServers\": {');
+    expect(out).toContain(`        \"command\": ${JSON.stringify(NODE)},`);
+  });
+
   it('prints the stdio command and the HTTP URL for any client', async () => {
     const root = await tempDir();
     const out = await connectOutput('generic', root);
@@ -60,9 +73,10 @@ describe('connect', () => {
     );
     expect(out).toMatch(/ {2}Cursor {7}add to \.cursor\/mcp\.json: \{ "mcpServers": \{/);
     expect(out).toMatch(/ {2}Codex {8}add to ~\/\.codex\/config\.toml: \[mcp_servers\.openboard\]/);
+    expect(out).toMatch(/ {2}Gemini CLI {3}add to \.gemini\/settings\.json: \{ "mcpServers": \{/);
     expect(out).toContain(`  Other        stdio: ${NODE} ${BIN} mcp --root ${root}`);
     expect(out).toContain(
-      'Details for one agent: openboard connect <claude-code|cursor|codex|generic>',
+      'Details for one agent: openboard connect <claude-code|cursor|codex|gemini-cli|generic>',
     );
   });
 
@@ -80,7 +94,13 @@ describe('connect', () => {
     expect(info.root).toBe(root);
     expect(info.stdio).toEqual({ command: NODE, args: [BIN, 'mcp', '--root', root] });
     expect(info.http).toEqual({ url: 'http://127.0.0.1:4747/mcp', running: false });
-    expect(Object.keys(info.agents)).toEqual(['claude-code', 'cursor', 'codex', 'generic']);
+    expect(Object.keys(info.agents)).toEqual([
+      'claude-code',
+      'cursor',
+      'codex',
+      'gemini-cli',
+      'generic',
+    ]);
 
     const one = JSON.parse(await connectOutput('codex', root, true));
     expect(Object.keys(one.agents)).toEqual(['codex']);

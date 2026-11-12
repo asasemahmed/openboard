@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "openboard": {
+      "command": "/absolute/path/to/node",
+      "args": [
+        "/absolute/path/to/openboard/packages/cli/dist/bin.js",
+        "mcp",
+        "--root",
+        "/absolute/path/to/your/project"
+      ]
+    }
+  }
+}

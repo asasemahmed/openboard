@@ -159,7 +159,7 @@ Older OpenCode versions put the server directly under `mcp`, without `servers`.
 | Zed                | Zed's `settings.json`                 | `context_servers`                            |
 | Anything else      | Your client's MCP settings            | stdio, or `http://127.0.0.1:4747/mcp`        |
 
-If `node` is not on the path your client starts servers with, use the absolute Node.js path that `openboard connect` prints. Setups that also teach the agent how to work on a board — a plugin with a skill for Claude Code, a rule for Cursor, a snippet for Codex, and a generic guide for everything else — are in [`integrations/`](integrations/README.md).
+If `node` is not on the path your client starts servers with, use the absolute Node.js path that `openboard connect` prints. Setups that also teach the agent how to work on a board — a plugin with a skill for Claude Code, a rule for Cursor, a snippet for Codex, a `GEMINI.md` snippet for Gemini CLI, and a generic guide for everything else — are in [`integrations/`](integrations/README.md).
 
 Then try:
 
