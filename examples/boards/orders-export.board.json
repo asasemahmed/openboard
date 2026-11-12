@@ -1,0 +1,251 @@
+{
+  "schemaVersion": 1,
+  "id": "orders-export",
+  "name": "Orders export",
+  "description": "Let customers export their orders as CSV.",
+  "createdAt": "2026-11-12T11:30:56.334Z",
+  "updatedAt": "2026-11-12T11:30:56.347Z",
+  "actors": {
+    "coding-agent": {
+      "id": "coding-agent",
+      "kind": "agent",
+      "name": "Coding agent"
+    },
+    "maya": {
+      "id": "maya",
+      "kind": "human",
+      "name": "Maya"
+    }
+  },
+  "nodes": {
+    "n_8rluyp8zof": {
+      "id": "n_8rluyp8zof",
+      "type": "code",
+      "title": "orders/export.ts",
+      "parent": "n_hxvi0s2iof",
+      "body": "Builds the whole file in memory today.",
+      "links": [
+        {
+          "kind": "file",
+          "target": "src/orders/export.ts",
+          "line": 12,
+          "endLine": 48,
+          "stale": true
+        }
+      ],
+      "view": {
+        "x": 344,
+        "y": 400
+      },
+      "createdBy": "coding-agent",
+      "createdAt": "2026-11-12T11:30:56.347Z",
+      "updatedBy": "coding-agent",
+      "updatedAt": "2026-11-12T11:30:56.347Z"
+    },
+    "n_e98ysoxyp8": {
+      "id": "n_e98ysoxyp8",
+      "type": "question",
+      "title": "Which columns go into the export?",
+      "parent": "n_hxvi0s2iof",
+      "body": "Needed before the query can be written.",
+      "view": {
+        "x": 32,
+        "y": 408
+      },
+      "createdBy": "maya",
+      "createdAt": "2026-11-12T11:30:56.343Z",
+      "updatedBy": "maya",
+      "updatedAt": "2026-11-12T11:30:56.343Z"
+    },
+    "n_hxvi0s2iof": {
+      "id": "n_hxvi0s2iof",
+      "type": "frame",
+      "title": "Plan",
+      "view": {
+        "x": 0,
+        "y": 0,
+        "w": 1264,
+        "h": 576
+      },
+      "createdBy": "maya",
+      "createdAt": "2026-11-12T11:30:56.343Z",
+      "updatedBy": "maya",
+      "updatedAt": "2026-11-12T11:30:56.343Z"
+    },
+    "n_i3cd1t2mvr": {
+      "id": "n_i3cd1t2mvr",
+      "type": "note",
+      "title": "Export orders as CSV",
+      "parent": "n_hxvi0s2iof",
+      "tags": [
+        "goal"
+      ],
+      "body": "Customers can download the orders they see, with the current filters.",
+      "view": {
+        "x": 32,
+        "y": 224
+      },
+      "createdBy": "maya",
+      "createdAt": "2026-11-12T11:30:56.343Z",
+      "updatedBy": "maya",
+      "updatedAt": "2026-11-12T11:30:56.343Z"
+    },
+    "n_ldytvprz50": {
+      "id": "n_ldytvprz50",
+      "type": "task",
+      "title": "Add the export button",
+      "status": "todo",
+      "parent": "n_hxvi0s2iof",
+      "tags": [
+        "web"
+      ],
+      "view": {
+        "x": 968,
+        "y": 264
+      },
+      "createdBy": "maya",
+      "createdAt": "2026-11-12T11:30:56.343Z",
+      "updatedBy": "maya",
+      "updatedAt": "2026-11-12T11:30:56.343Z"
+    },
+    "n_nk1e2mu14a": {
+      "id": "n_nk1e2mu14a",
+      "type": "task",
+      "title": "Write the export query",
+      "status": "done",
+      "parent": "n_hxvi0s2iof",
+      "tags": [
+        "backend"
+      ],
+      "view": {
+        "x": 344,
+        "y": 264
+      },
+      "createdBy": "maya",
+      "createdAt": "2026-11-12T11:30:56.343Z",
+      "updatedBy": "maya",
+      "updatedAt": "2026-11-12T11:30:56.343Z"
+    },
+    "n_sj7ayhtj04": {
+      "id": "n_sj7ayhtj04",
+      "type": "task",
+      "title": "Add the export endpoint",
+      "status": "in_progress",
+      "parent": "n_hxvi0s2iof",
+      "tags": [
+        "backend"
+      ],
+      "body": "GET /orders/export streams a CSV file.",
+      "view": {
+        "x": 656,
+        "y": 240
+      },
+      "createdBy": "maya",
+      "createdAt": "2026-11-12T11:30:56.343Z",
+      "updatedBy": "maya",
+      "updatedAt": "2026-11-12T11:30:56.343Z"
+    },
+    "n_z2p4rt9emy": {
+      "id": "n_z2p4rt9emy",
+      "type": "decision",
+      "title": "Stream rows instead of building the file in memory",
+      "parent": "n_hxvi0s2iof",
+      "body": "An export can reach a million rows.",
+      "view": {
+        "x": 344,
+        "y": 56
+      },
+      "createdBy": "coding-agent",
+      "createdAt": "2026-11-12T11:30:56.347Z",
+      "updatedBy": "coding-agent",
+      "updatedAt": "2026-11-12T11:30:56.347Z"
+    },
+    "n_zqbf849bc0": {
+      "id": "n_zqbf849bc0",
+      "type": "risk",
+      "title": "Large exports time out",
+      "parent": "n_hxvi0s2iof",
+      "body": "No pagination yet; mitigated by streaming.",
+      "view": {
+        "x": 32,
+        "y": 72
+      },
+      "createdBy": "coding-agent",
+      "createdAt": "2026-11-12T11:30:56.347Z",
+      "updatedBy": "coding-agent",
+      "updatedAt": "2026-11-12T11:30:56.347Z"
+    }
+  },
+  "edges": {
+    "e_1a14h27wh6": {
+      "id": "e_1a14h27wh6",
+      "type": "evidence_for",
+      "source": "n_zqbf849bc0",
+      "target": "n_z2p4rt9emy",
+      "createdBy": "coding-agent",
+      "createdAt": "2026-11-12T11:30:56.347Z",
+      "updatedBy": "coding-agent",
+      "updatedAt": "2026-11-12T11:30:56.347Z"
+    },
+    "e_4xl58ndhhm": {
+      "id": "e_4xl58ndhhm",
+      "type": "implements",
+      "source": "n_sj7ayhtj04",
+      "target": "n_8rluyp8zof",
+      "createdBy": "coding-agent",
+      "createdAt": "2026-11-12T11:30:56.347Z",
+      "updatedBy": "coding-agent",
+      "updatedAt": "2026-11-12T11:30:56.347Z"
+    },
+    "e_jcws41rhzv": {
+      "id": "e_jcws41rhzv",
+      "type": "blocks",
+      "source": "n_e98ysoxyp8",
+      "target": "n_nk1e2mu14a",
+      "createdBy": "maya",
+      "createdAt": "2026-11-12T11:30:56.343Z",
+      "updatedBy": "maya",
+      "updatedAt": "2026-11-12T11:30:56.343Z"
+    },
+    "e_jjl8lpdjs0": {
+      "id": "e_jjl8lpdjs0",
+      "type": "relates_to",
+      "source": "n_z2p4rt9emy",
+      "target": "n_sj7ayhtj04",
+      "createdBy": "coding-agent",
+      "createdAt": "2026-11-12T11:30:56.347Z",
+      "updatedBy": "coding-agent",
+      "updatedAt": "2026-11-12T11:30:56.347Z"
+    },
+    "e_oyxtojtyt2": {
+      "id": "e_oyxtojtyt2",
+      "type": "depends_on",
+      "source": "n_ldytvprz50",
+      "target": "n_sj7ayhtj04",
+      "createdBy": "maya",
+      "createdAt": "2026-11-12T11:30:56.343Z",
+      "updatedBy": "maya",
+      "updatedAt": "2026-11-12T11:30:56.343Z"
+    },
+    "e_r3vdd3h4bg": {
+      "id": "e_r3vdd3h4bg",
+      "type": "implements",
+      "source": "n_nk1e2mu14a",
+      "target": "n_i3cd1t2mvr",
+      "createdBy": "maya",
+      "createdAt": "2026-11-12T11:30:56.343Z",
+      "updatedBy": "maya",
+      "updatedAt": "2026-11-12T11:30:56.343Z"
+    },
+    "e_yyg5ubbceh": {
+      "id": "e_yyg5ubbceh",
+      "type": "depends_on",
+      "source": "n_sj7ayhtj04",
+      "target": "n_nk1e2mu14a",
+      "createdBy": "maya",
+      "createdAt": "2026-11-12T11:30:56.343Z",
+      "updatedBy": "maya",
+      "updatedAt": "2026-11-12T11:30:56.343Z"
+    }
+  }
+}

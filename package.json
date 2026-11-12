@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "description": "The open canvas for AI agents.",
-  "license": "MIT",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "packageManager": "pnpm@12.18.0",
   "engines": {
     "node": ">=22"

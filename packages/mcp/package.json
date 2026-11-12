@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "description": "MCP server that exposes an OpenBoard to AI agents.",
-  "license": "MIT",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
