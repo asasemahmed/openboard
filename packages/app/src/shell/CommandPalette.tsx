@@ -144,6 +144,7 @@ export function CommandPalette() {
             ? 'Show agent-made connections only when pointed at'
             : 'Show every connection',
         lead: icon('connection'),
+        shortcut: 'c',
         keywords: 'edges lines links hide quiet',
         run: () => ui.connections.set(ui.connections.get() === 'all' ? 'quiet' : 'all'),
       },
