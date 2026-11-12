@@ -23,6 +23,7 @@ import {
   depthOf,
   frameAt,
   framesToGrow,
+  landingInFrame,
   type Placement,
   type PlacementMap,
   type Rect,
@@ -65,9 +66,10 @@ export function addNodeOps(spec: NewNode, map: PlacementMap): Op[] {
     ? { ...FRAME_MIN }
     : defaultNodeSize({ type: spec.type, title: spec.title, status: spec.status });
   const parent = frameAt(spec.at, map);
-  let pos = toParentSpace({ x: spec.at.x - size.w / 2, y: spec.at.y - size.h / 2 }, parent, map);
-  if (parent !== undefined) pos = clampIntoFrame(pos);
-  pos = snapXY(pos);
+  let pos = snapXY(
+    toParentSpace({ x: spec.at.x - size.w / 2, y: spec.at.y - size.h / 2 }, parent, map),
+  );
+  if (parent !== undefined) pos = landingInFrame({ ...pos, ...size }, parent, map);
   const view: View = { x: pos.x, y: pos.y, pinned: true };
   if (isFrame) {
     view.w = size.w;
@@ -120,7 +122,7 @@ export function moveOps(ids: readonly string[], map: PlacementMap): Op[] {
     // No snapping here: React Flow already snapped the drag, and a reparented
     // node must land exactly where it was dropped.
     if (target !== undefined) {
-      pos = clampIntoFrame(pos);
+      pos = landingInFrame({ ...pos, w: item.w, h: item.h }, target, working, moved);
       touchedFrames.add(target);
     }
     ops.push({ op: 'move_node', id, view: { x: pos.x, y: pos.y, pinned: true } });

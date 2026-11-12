@@ -37,6 +37,8 @@
   --on-accent: #ffffff;
   --accent-soft: rgba(255, 90, 31, 0.1);
   --focus: #c2410c;
+  /* recent changes by others: outline and chip */
+  --recent-line: rgba(255, 90, 31, 0.55);
 
   --danger: #b42318;
   --danger-soft: rgba(180, 35, 24, 0.08);
@@ -107,6 +109,7 @@
     --on-accent: #15171a;
     --accent-soft: rgba(255, 90, 31, 0.14);
     --focus: #ff7a45;
+    --recent-line: rgba(255, 122, 69, 0.6);
     --danger: #ff6b5e;
     --danger-soft: rgba(255, 107, 94, 0.1);
     --type-note: #f3f1ec;
@@ -157,6 +160,7 @@
   --on-accent: #15171a;
   --accent-soft: rgba(255, 90, 31, 0.14);
   --focus: #ff7a45;
+  --recent-line: rgba(255, 122, 69, 0.6);
   --danger: #ff6b5e;
   --danger-soft: rgba(255, 107, 94, 0.1);
   --type-note: #f3f1ec;

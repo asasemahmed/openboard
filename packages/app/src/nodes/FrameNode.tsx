@@ -6,6 +6,7 @@
 import { FRAME_MIN, FRAME_PADDING } from '@openboard/core';
 import { Handle, type NodeProps, NodeResizer, Position } from '@xyflow/react';
 import { memo } from 'react';
+import { useNodeFocus } from '../canvas/nodeFocus.js';
 import { resizeOps } from '../lib/commands.js';
 import type { FlowNode } from '../lib/flow.js';
 import { useSession } from '../state/context.js';
@@ -48,11 +49,13 @@ function FrameNodeView({ id, data, selected }: NodeProps<FlowNode>) {
     () => session.ui.dropTarget.get() === id,
   );
   const { count, minW, minH } = useFrameContent(id, selected);
+  const focus = useNodeFocus(id, ghost);
 
   return (
     <section
       className={`frame${selected ? ' is-selected' : ''}${isDropTarget ? ' is-drop-target' : ''}${ghost ? ' is-ghost' : ''}`}
       aria-label={`Frame: ${node.title}`}
+      {...focus}
     >
       {!ghost && (
         <NodeResizer

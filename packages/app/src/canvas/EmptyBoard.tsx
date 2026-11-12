@@ -1,8 +1,10 @@
+import { useSession } from '../state/context.js';
 import { Button, Kbd } from '../ui/Button.js';
 import type { BoardActions } from './actions.js';
 
 /** Shown over an empty canvas. The canvas stays live underneath (double-click still works). */
 export function EmptyBoard({ actions }: { actions: BoardActions }) {
+  const { ui } = useSession();
   return (
     <div className="empty-board" role="note">
       <div className="empty-board-card">
@@ -10,7 +12,12 @@ export function EmptyBoard({ actions }: { actions: BoardActions }) {
         <p>
           Double-click anywhere or press <Kbd shortcut="n" /> to add a note.
         </p>
-        <p className="muted">Agents connected over MCP can fill it in too.</p>
+        <p className="muted">
+          Agents connected over MCP can fill it in too.{' '}
+          <button type="button" className="link-btn" onClick={() => ui.connectAgent.set(true)}>
+            Connect an agent
+          </button>
+        </p>
         <div className="empty-board-actions">
           <Button
             variant="primary"

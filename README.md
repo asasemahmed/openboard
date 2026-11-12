@@ -10,29 +10,50 @@
 
 # OpenBoard
 
-OpenBoard is an open canvas that any AI agent can see, edit, and be steered from.
+OpenBoard is an open canvas that AI agents read and edit over MCP while you edit it in the browser. Run it in a project, and the agent you already use — Claude Code, Cursor, Codex, or any other [MCP](https://modelcontextprotocol.io) client — can map your code, lay out a plan, and keep it current on a board you both see. The board is a typed graph of tasks, decisions, risks, questions and code, saved as a readable file in your repository. OpenBoard does not build agents; it is the shared surface between you and yours.
 
-You run one command and a board opens in your browser. The agent you already use — Claude Code, Cursor, Codex, or anything that speaks [MCP](https://modelcontextprotocol.io) — gets tools to read the board, write to it, and react to what you do on it.
+## What it does
 
-We do not build agents. We build the shared surface between you and your agents.
+- **A live canvas.** The board runs in your browser and stays in sync with everyone editing it. Changes made by others, people or agents, are highlighted as they arrive.
+- **Agent tools over MCP.** Eight `board_*` tools to outline, read, change and lay out a board, over stdio or Streamable HTTP, with ready-made setups for Claude Code, Cursor and Codex.
+- **Budgeted reads, atomic writes.** Agents read an outline, a slice or just what changed, within a token budget. They write whole intents as one batch that is validated and applied all at once, and the layout engine places what they add.
+- **Selection as context.** Select cards on the canvas and say "these"; the agent sees what you selected.
+- **Boards in git.** Each board is a deterministic JSON file in `.openboard/`. It diffs and merges like code, and the server picks up changes from a checkout or a merge.
 
-## Why
+## Quick start
 
-- **Plans that persist.** Agent plans stop disappearing into chat scrollback and live on a board that stays up to date.
-- **Any agent.** Whiteboard features today are closed and tied to one assistant. OpenBoard works with whatever agent you bring.
-- **Steer by pointing.** Select nodes, move them, comment on them, approve or reject changes. The agent sees it.
-- **See the work.** Every agent and task is visible with live status, including subagents.
-- **Boards in git.** Boards are files in your repo. They diff, merge, and review like code.
+You need Node.js 22 or newer. From a clone of this repository:
+
+```bash
+corepack enable
+pnpm install
+pnpm build
+alias openboard="node $PWD/packages/cli/dist/bin.js"
+cd /path/to/your/project
+openboard start
+```
+
+The board opens in your browser. [Getting started](docs/getting-started.md) walks through the canvas and your first prompts.
+
+## Connect your agent
+
+In your project, run:
+
+```bash
+openboard connect
+```
+
+It prints the exact setup for Claude Code, Cursor, Codex and any other MCP client. For a setup that also teaches the agent how to work on a board, use the plugin, rule or snippet in [`integrations/`](integrations/README.md).
 
 ## How it works
 
 ```
-  Agents (Claude Code, Cursor, Codex, custom)        You (browser)
-            |  MCP                                        |  WebSocket
+  Agents (Claude Code, Cursor, Codex, ...)           You (browser)
+            |  MCP: stdio or HTTP                         |  WebSocket
             v                                             v
   +---------------------------------------------------------------+
   |                       openboard server                        |
-  |  MCP layer  ->  Proposals + policies  ->  Board document      |
+  |   agent tools  ->  validation + layout  ->  board document    |
   +---------------------------------------------------------------+
                                |
                     .openboard/*.board.json  (in your repo)
@@ -40,17 +61,23 @@ We do not build agents. We build the shared surface between you and your agents.
 
 Three ideas carry the design:
 
-1. **Structure over pixels.** The board is a typed graph. Agents edit meaning; the layout engine places things.
-2. **Budgeted reads, intent writes.** Agents read an outline, a frame, a selection, or just what changed. They write whole intents that are validated before they land.
-3. **You stay in control.** Agent changes arrive as proposals you can accept or reject, with trust set per agent and per area.
+1. **Structure over pixels.** The board is a typed graph. Agents edit meaning; the layout engine places things, and leaves alone what you placed.
+2. **Budgeted reads, intent writes.** Agents read an outline, a frame, the selection or what changed, never more than they asked for. They write whole intents that are validated before they land.
+3. **The board is shared ground.** People and agents edit the same document. Every change is attributed, others see it as it happens, and board text is treated as data, not as instructions.
 
-## Status
+## Documentation
 
-Early development. Nothing is released yet, and the commands and APIs shown here may change.
+- [Getting started](docs/getting-started.md): build, start, connect, first prompts
+- [How agents work with a board](docs/agents.md): the read and write paths, selection, cursors, identity, trust
+- [Tool reference](docs/tools.md): every tool, operation, validation error and type
+- [CLI reference](docs/cli.md): every command and flag
+- [Board file format](docs/board-format.md): the `.board.json` file, for reviewers and tool authors
+- [Integrations](integrations/README.md): Claude Code, Cursor, Codex and generic MCP setups
+- [Architecture](docs/ARCHITECTURE.md): how the packages fit together
 
-## Contributing
+## Development
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). The short version: the repo will be public, so nothing goes in that could not be published.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup, commands and ground rules.
 
 ## License
 

@@ -1,9 +1,13 @@
+import { FRAME_PADDING } from '@openboard/core';
 import { describe, expect, it } from 'vitest';
 import {
   absoluteRect,
+  CLEAR_GAP,
+  clearSpot,
   commonFrame,
   frameAt,
   framesToGrow,
+  landingInFrame,
   type Placement,
   reparentPosition,
   toCanvasSpace,
@@ -83,5 +87,76 @@ describe('geometry', () => {
     const both = framesToGrow(['inner'], far);
     expect(both.get('inner')?.w).toBe(1196);
     expect(both.get('outer')?.w).toBe(40 + 1196 + 32);
+  });
+});
+
+describe('dropping at a frame edge', () => {
+  const frame: Placement = { id: 'f', x: 0, y: 0, w: 900, h: 600, frame: true };
+  const sibling: Placement = {
+    id: 's',
+    parent: 'f',
+    x: FRAME_PADDING.left,
+    y: FRAME_PADDING.top,
+    w: 264,
+    h: 96,
+    frame: false,
+  };
+  const map = new Map<string, Placement>([
+    ['f', frame],
+    ['s', sibling],
+  ]);
+  const size = { w: 264, h: 64 };
+
+  it('leaves a drop that is free after clamping where it lands', () => {
+    expect(landingInFrame({ x: 400, y: -20, ...size }, 'f', map)).toEqual({
+      x: 400,
+      y: FRAME_PADDING.top,
+    });
+  });
+
+  it('nudges a clamped drop off the sibling it would cover, to the nearest free spot', () => {
+    const spot = landingInFrame({ x: -40, y: 80, ...size }, 'f', map);
+    // Straight below the sibling is closer than beside it.
+    expect(spot).toEqual({
+      x: FRAME_PADDING.left,
+      y: FRAME_PADDING.top + sibling.h + CLEAR_GAP,
+    });
+    const placed = { ...spot, ...size };
+    expect(placed.y >= sibling.y + sibling.h || placed.x >= sibling.x + sibling.w).toBe(true);
+  });
+
+  it('never leaves the padded content box while searching', () => {
+    const spot = landingInFrame({ x: 10, y: 10, ...size }, 'f', map);
+    expect(spot.x).toBeGreaterThanOrEqual(FRAME_PADDING.left);
+    expect(spot.y).toBeGreaterThanOrEqual(FRAME_PADDING.top);
+  });
+
+  it('does not nudge a drop made fully inside the frame, even onto a sibling', () => {
+    expect(landingInFrame({ x: 48, y: 64, ...size }, 'f', map)).toEqual({ x: 48, y: 64 });
+  });
+
+  it('ignores the nodes being dragged', () => {
+    expect(landingInFrame({ x: -40, y: 80, ...size }, 'f', map, new Set(['s']))).toEqual({
+      x: FRAME_PADDING.left,
+      y: 80,
+    });
+  });
+
+  it('finds the nearest gap between several siblings', () => {
+    const others = [
+      { x: 32, y: 56, w: 200, h: 80 },
+      { x: 32, y: 144, w: 200, h: 80 },
+      { x: 248, y: 56, w: 200, h: 200 },
+    ];
+    const spot = clearSpot({ x: 32, y: 56, w: 200, h: 80 }, others);
+    const rect = { ...spot, w: 200, h: 80 };
+    for (const o of others) {
+      const apart =
+        rect.x >= o.x + o.w + CLEAR_GAP ||
+        rect.x + rect.w + CLEAR_GAP <= o.x ||
+        rect.y >= o.y + o.h + CLEAR_GAP ||
+        rect.y + rect.h + CLEAR_GAP <= o.y;
+      expect(apart).toBe(true);
+    }
   });
 });

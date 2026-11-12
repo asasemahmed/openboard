@@ -118,6 +118,7 @@ One server process serves one project root.
 | Method and path                        | Purpose                                                             |
 | -------------------------------------- | ------------------------------------------------------------------- |
 | `GET /api/health`                      | `{ ok, version, pid, root }`                                        |
+| `GET /api/info`                        | `{ version, root, projectName, url, ...ServerOptions.info }`        |
 | `GET /api/boards` · `POST /api/boards` | List and create boards                                              |
 | `GET /api/boards/:id`                  | Full board JSON                                                     |
 | `POST /api/boards/:id/outline`         | `BoardApi.outline`                                                  |
@@ -127,7 +128,7 @@ One server process serves one project root.
 | `GET /api/boards/:id/selection`        | `BoardApi.selection`                                                |
 | `POST /api/boards/:id/layout`          | `BoardApi.layout`                                                   |
 | `GET /sync/:id` (WebSocket)            | Document sync and presence, using the standard y-websocket protocol |
-| `ALL /mcp`                             | MCP over Streamable HTTP                                            |
+| `ALL /mcp`                             | MCP over Streamable HTTP, mounted with `OpenBoardServer.mount`      |
 | `GET /*`                               | The web app                                                         |
 
 Request and response bodies are the JSON forms of the `BoardApi` types. Errors are `{ "error": { "code", "message", "details" } }` with the HTTP status from `OpenBoardError.status`.
@@ -155,7 +156,7 @@ The server reads awareness to answer `BoardApi.selection` with the most recent n
   .openboard/
     <board id>.board.json     the board; deterministic, meant for git
     .local/                   runtime state; ignored by git
-      server.json             { pid, port, url, token, startedAt } of the running server
+      server.json             { pid, port, url, root, version, startedAt } of the running server
       <board id>.ydoc         document state with history, for fast restarts
       <board id>.changes.jsonl  the change feed
 ```

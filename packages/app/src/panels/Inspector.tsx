@@ -1,14 +1,33 @@
-/** The right-hand inspector: whatever is selected, or the board itself. */
+/**
+ * The right-hand inspector: whatever is selected, or the board itself. The
+ * editors for a selection load separately (they are not needed to show a
+ * board) and are fetched as soon as the browser is idle.
+ */
 import { LIMITS } from '@openboard/core';
+import { lazy, Suspense, useEffect } from 'react';
 import { useBoardEdge, useBoardNode, useMeta, useSelection, useSession } from '../state/context.js';
 import { useStoreValue } from '../state/emitter.js';
 import { toasts } from '../state/toasts.js';
 import { Kbd } from '../ui/Button.js';
-import { EdgeInspector } from './EdgeInspector.js';
 import { Field, Section } from './fields.js';
-import { MultiInspector } from './MultiInspector.js';
-import { NodeInspector } from './NodeInspector.js';
 import { useDraft } from './useDraft.js';
+
+const loadEditors = () =>
+  Promise.all([
+    import('./NodeInspector.js'),
+    import('./EdgeInspector.js'),
+    import('./MultiInspector.js'),
+  ]);
+const NodeInspector = lazy(() => loadEditors().then(([m]) => ({ default: m.NodeInspector })));
+const EdgeInspector = lazy(() => loadEditors().then(([, m]) => ({ default: m.EdgeInspector })));
+const MultiInspector = lazy(() => loadEditors().then(([, , m]) => ({ default: m.MultiInspector })));
+
+function usePreloadEditors(): void {
+  useEffect(() => {
+    const idle = globalThis.requestIdleCallback ?? ((fn: () => void) => setTimeout(fn, 200));
+    idle(() => void loadEditors());
+  }, []);
+}
 
 function BoardInfo() {
   const session = useSession();
@@ -72,10 +91,15 @@ export function Inspector() {
       : undefined;
   const node = useBoardNode(singleNode);
   const edge = useBoardEdge(singleEdge);
+  usePreloadEditors();
 
-  if (node) return <NodeInspector key={node.id} node={node} />;
-  if (edge) return <EdgeInspector key={edge.id} edge={edge} />;
-  if (selection.nodeIds.length + selection.edgeIds.length > 1)
-    return <MultiInspector selection={selection} />;
-  return <BoardInfo />;
+  let editor = null;
+  if (node) editor = <NodeInspector key={node.id} node={node} />;
+  else if (edge) editor = <EdgeInspector key={edge.id} edge={edge} />;
+  else if (selection.nodeIds.length + selection.edgeIds.length > 1)
+    editor = <MultiInspector selection={selection} />;
+  if (!editor) return <BoardInfo />;
+  return (
+    <Suspense fallback={<p className="inspector-loading muted">Loading…</p>}>{editor}</Suspense>
+  );
 }

@@ -466,3 +466,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.inspector-loading {
+  padding: 16px;
+  font-size: 13px;
+}

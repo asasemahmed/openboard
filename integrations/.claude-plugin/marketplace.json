@@ -1,0 +1,14 @@
+{
+  "name": "openboard",
+  "description": "OpenBoard integrations for Claude Code, loaded from a source checkout.",
+  "owner": {
+    "name": "OpenBoard contributors"
+  },
+  "plugins": [
+    {
+      "name": "openboard",
+      "source": "./claude-code",
+      "description": "The OpenBoard MCP server and a skill for working on the board."
+    }
+  ]
+}

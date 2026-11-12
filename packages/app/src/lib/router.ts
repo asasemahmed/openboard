@@ -2,6 +2,7 @@
  * A two-route client router on the History API.
  *   /           the board list (or the last board on first load)
  *   /b/<id>     one board
+ *   /?board=<id>  an older link form, replaced by /b/<id> on load
  */
 import { useSyncExternalStore } from 'react';
 
@@ -21,6 +22,18 @@ export function parseRoute(pathname: string): Route {
 
 export function boardPath(boardId: string): string {
   return `/b/${encodeURIComponent(boardId)}`;
+}
+
+/** The `/b/<id>` path for an old `/?board=<id>` link, or null. */
+export function legacyBoardRedirect(pathname: string, search: string): string | null {
+  if (pathname !== '/' && pathname !== '') return null;
+  const id = new URLSearchParams(search).get('board');
+  return id ? boardPath(id) : null;
+}
+
+if (typeof location !== 'undefined' && typeof history !== 'undefined') {
+  const target = legacyBoardRedirect(location.pathname, location.search);
+  if (target) history.replaceState(null, '', target + location.hash);
 }
 
 const listeners = new Set<() => void>();

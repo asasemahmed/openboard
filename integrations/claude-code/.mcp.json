@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "openboard": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/../../packages/cli/dist/bin.js", "mcp"]
+    }
+  }
+}

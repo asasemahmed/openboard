@@ -11,19 +11,15 @@ import { useShortcuts } from '../canvas/useShortcuts.js';
 import { toActor } from '../lib/identity.js';
 import { LeftPanel, RightPanel } from '../panels/PanelSlot.js';
 import { SessionProvider, useMeta, useSession } from '../state/context.js';
-import { useValue } from '../state/emitter.js';
 import { identity } from '../state/identity.js';
 import type { BoardSession } from '../state/session.js';
-import { CommandPalette } from './CommandPalette.js';
 import { ConfirmHost } from './ConfirmHost.js';
-import { NewBoardDialog } from './NewBoardDialog.js';
-import { ShortcutsSheet } from './ShortcutsSheet.js';
+import { LazyDialogs } from './LazyDialogs.js';
 import { TopBar } from './TopBar.js';
 
 function Workspace({ onlyRenderVisibleElements }: { onlyRenderVisibleElements: boolean }) {
   const session = useSession();
   const actions = useBoardActions();
-  const newBoard = useValue(session.ui.newBoard);
   const { meta } = useMeta();
   useShortcuts(actions);
 
@@ -55,10 +51,8 @@ function Workspace({ onlyRenderVisibleElements }: { onlyRenderVisibleElements: b
           <RightPanel />
         </div>
       </div>
-      <CommandPalette />
-      <ShortcutsSheet />
+      <LazyDialogs />
       <ConfirmHost />
-      <NewBoardDialog open={newBoard} onClose={() => session.ui.newBoard.set(false)} />
     </ActionsProvider>
   );
 }

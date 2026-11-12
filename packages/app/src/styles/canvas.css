@@ -54,6 +54,10 @@
   stroke-dasharray: 5 4;
 }
 
+/* Labels sit above every card (selected cards are lifted to z-index 1000 and up). */
+.react-flow__edgelabel-renderer {
+  z-index: 2000;
+}
 .edge-label {
   position: absolute;
   display: inline-flex;
@@ -84,6 +88,35 @@
 .edge-label.is-ghost {
   color: var(--accent-ink);
   border: 1px dashed var(--accent);
+}
+.board-edge.is-recent {
+  animation: edge-recent var(--recent-ms, 8000ms) linear;
+}
+.edge-label.is-recent {
+  animation: edge-label-recent var(--recent-ms, 8000ms) linear;
+}
+@keyframes edge-recent {
+  0%,
+  88% {
+    stroke: var(--edge-accent);
+  }
+}
+@keyframes edge-label-recent {
+  0%,
+  88% {
+    border-color: var(--recent-line);
+    color: var(--accent-ink);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .board-edge.is-recent {
+    animation: none;
+    stroke: var(--edge-accent) !important;
+  }
+  .edge-label.is-recent {
+    animation: none;
+    border-color: var(--recent-line);
+  }
 }
 .edge-label-text {
   font-family: var(--font-sans);
@@ -209,4 +242,98 @@
   display: flex;
   gap: 8px;
   margin-top: 8px;
+}
+
+/* ── Activity: off-screen changes and removals ────────────────────────────── */
+
+.offscreen-stack {
+  position: absolute;
+  z-index: 6;
+  display: flex;
+  gap: 6px;
+  pointer-events: none;
+}
+.offscreen-top {
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.offscreen-bottom {
+  bottom: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.offscreen-left {
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  flex-direction: column;
+  align-items: flex-start;
+}
+.offscreen-right {
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  flex-direction: column;
+  align-items: flex-end;
+}
+.offscreen-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px 0 9px;
+  border: 1px solid var(--recent-line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 550;
+  white-space: nowrap;
+  box-shadow: var(--shadow-pop);
+  pointer-events: auto;
+  animation: pop-in var(--dur) var(--ease);
+}
+.offscreen-pill svg {
+  color: var(--accent-ink);
+  flex: none;
+}
+.offscreen-pill:hover {
+  border-color: var(--accent);
+}
+
+.removal-stack {
+  position: absolute;
+  left: 15px;
+  bottom: 60px;
+  z-index: 6;
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+  max-width: min(360px, calc(100% - 30px));
+  pointer-events: none;
+}
+.removal-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 5px 5px 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--ink-2);
+  font-size: 12.5px;
+  box-shadow: var(--shadow-pop);
+  pointer-events: auto;
+  animation: pop-in var(--dur) var(--ease);
+}
+.removal-notice-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.removal-notice svg {
+  flex: none;
 }

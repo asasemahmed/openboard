@@ -6,6 +6,7 @@ import { useValue } from '../state/emitter.js';
 import { IconButton, Kbd } from '../ui/Button.js';
 import { Icon, Logo } from '../ui/Icon.js';
 import { AddMenu } from './AddMenu.js';
+import { ConnectAgentButton, FollowToggle } from './AgentControls.js';
 import { BoardName } from './BoardName.js';
 import { BoardSwitcher } from './BoardSwitcher.js';
 import { ConnectionStatus } from './ConnectionStatus.js';
@@ -70,6 +71,10 @@ export function TopBar() {
         </button>
       </div>
       <div className="topbar-end">
+        <div className="toolbar-group" role="group" aria-label="Agents">
+          <ConnectAgentButton />
+          <FollowToggle />
+        </div>
         <PanelToggles />
         <ConnectionStatus />
         <Participants />

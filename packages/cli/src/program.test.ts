@@ -23,6 +23,8 @@ describe('argument parsing and exit codes', () => {
       'new',
       'export',
       'doctor',
+      'mcp',
+      'connect',
     ]) {
       expect(io.out()).toContain(`  ${command} `);
     }
@@ -99,10 +101,16 @@ describe('argument parsing and exit codes', () => {
     expect(readFileSync(path.join(dir, 'out.txt'), 'utf8')).toContain('Board main');
   });
 
-  it('reserves the mcp command', async () => {
-    const io = captureIo(await tempDir());
-    expect(await run(['mcp'], io)).toBe(1);
-    expect(io.err()).toBe('The MCP server is not available in this build yet.\n');
+  it('runs connect and rejects an unknown agent', async () => {
+    const dir = await tempDir();
+    const io = captureIo(dir);
+    expect(await run(['connect', 'cursor', '--root', dir], io)).toBe(0);
+    expect(io.out()).toContain('Add this to .cursor/mcp.json:');
+    const bad = captureIo(dir);
+    expect(await run(['connect', 'vim'], bad)).toBe(1);
+    expect(bad.err()).toBe(
+      'openboard: unknown agent "vim" (choose one of: claude-code, cursor, codex, generic)\n',
+    );
   });
 
   it('creates a board with new', async () => {

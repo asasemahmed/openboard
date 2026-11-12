@@ -15,6 +15,7 @@ import {
   ReactFlow,
   SelectionMode,
   useReactFlow,
+  useStoreApi,
 } from '@xyflow/react';
 import { type MouseEvent, useCallback } from 'react';
 import { moveOps } from '../lib/commands.js';
@@ -26,17 +27,21 @@ import { CardNode } from '../nodes/CardNode.js';
 import { FrameNode } from '../nodes/FrameNode.js';
 import { useSession } from '../state/context.js';
 import { useStoreValue, useValue } from '../state/emitter.js';
-import { applyOrReport, type BoardActions } from './actions.js';
+import { ActivityLayer } from './ActivityLayer.js';
+import { applyOrReport, type BoardActions, reducedMotion } from './actions.js';
 import { BoardEdge } from './BoardEdge.js';
 import { Cursors } from './Cursors.js';
 import { EdgeMarkers } from './EdgeMarkers.js';
 import { EmptyBoard } from './EmptyBoard.js';
+import { useNodeKeyboard } from './nodeFocus.js';
 import { ZoomControls } from './ZoomControls.js';
 
 const nodeTypes = { card: CardNode, frame: FrameNode };
 const edgeTypes = { board: BoardEdge };
 const PAN_BUTTONS = [1, 2];
 const FIT_OPTIONS = { padding: 0.15, maxZoom: 1 };
+/** A node revealed by keyboard keeps at least this much room to the edge of the view. */
+const REVEAL_MARGIN = 48;
 
 export interface CanvasProps {
   actions: BoardActions;
@@ -52,6 +57,39 @@ export function Canvas({ actions, onlyRenderVisibleElements = true }: CanvasProp
   const minimap = useValue(ui.minimap);
   const { resolved } = useTheme();
   const flow = useReactFlow();
+  const flowStore = useStoreApi<FlowNode, FlowEdge>();
+
+  // Select a node and, if it is not fully in view, pan to it at the current zoom.
+  const reveal = useCallback(
+    (id: string) => {
+      store.select([id]);
+      const rect = absoluteRect(id, store.placements());
+      if (!rect) return;
+      const { transform, width, height } = flowStore.getState();
+      const [tx, ty, zoom] = transform;
+      const view = { x: -tx / zoom, y: -ty / zoom, w: width / zoom, h: height / zoom };
+      const m = REVEAL_MARGIN / zoom;
+      const inside =
+        rect.x >= view.x + m &&
+        rect.y >= view.y + m &&
+        rect.x + rect.w <= view.x + view.w - m &&
+        rect.y + rect.h <= view.y + view.h - m;
+      if (inside) return;
+      ui.pauseFollow();
+      const c = center(rect);
+      void flow.setCenter(c.x, c.y, { zoom, duration: reducedMotion() ? 0 : 200 });
+    },
+    [store, flowStore, flow, ui],
+  );
+  const onKeyDown = useNodeKeyboard(reveal);
+
+  // A pan or zoom by the person (not one the app makes) holds follow mode back.
+  const onMoveStart = useCallback(
+    (event: globalThis.MouseEvent | TouchEvent | null) => {
+      if (event) ui.pauseFollow();
+    },
+    [ui],
+  );
 
   const dropTargetFor = useCallback(
     (dragged: readonly FlowNode[], primary: FlowNode): string | undefined => {
@@ -138,7 +176,7 @@ export function Canvas({ actions, onlyRenderVisibleElements = true }: CanvasProp
   }, [ui, presence]);
 
   return (
-    <div className="canvas-root">
+    <div className="canvas-root" onKeyDown={onKeyDown}>
       <EdgeMarkers />
       <ReactFlow<FlowNode, FlowEdge>
         nodes={nodes}
@@ -155,6 +193,7 @@ export function Canvas({ actions, onlyRenderVisibleElements = true }: CanvasProp
         onDoubleClick={onDoubleClick}
         onMouseMove={onMouseMove}
         onMouseLeave={onMouseLeave}
+        onMoveStart={onMoveStart}
         connectionMode={ConnectionMode.Loose}
         connectionRadius={28}
         deleteKeyCode={null}
@@ -187,6 +226,7 @@ export function Canvas({ actions, onlyRenderVisibleElements = true }: CanvasProp
         />
         <Cursors />
         <ZoomControls actions={actions} />
+        <ActivityLayer />
         {minimap && (
           <MiniMap<FlowNode>
             position="bottom-right"

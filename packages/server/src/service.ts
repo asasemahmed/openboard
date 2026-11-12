@@ -33,6 +33,7 @@ import {
   renderRead,
   renderSelection,
   type SelectionResult,
+  SYSTEM_ACTOR,
   selectNodes,
 } from '@openboard/core';
 import { z } from 'zod';
@@ -144,7 +145,10 @@ export class LocalBoardApi implements BoardApi {
         (opts.includeOwn || entry.actor !== this.actor.id) &&
         (opts.includeMoves || entry.kind !== 'node_moved'),
     );
-    const render: Parameters<typeof renderChanges>[4] = { resync, actors: room.actors() };
+    const render: Parameters<typeof renderChanges>[4] = {
+      resync,
+      actors: { [SYSTEM_ACTOR.id]: SYSTEM_ACTOR, ...room.actors() },
+    };
     if (opts.maxTokens !== undefined) render.maxTokens = opts.maxTokens;
     return renderChanges(room.id, visible, opts.since, cursor, render);
   }

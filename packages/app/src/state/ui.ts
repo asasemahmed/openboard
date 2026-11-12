@@ -9,6 +9,12 @@ export type ConfirmRequest = {
   actions: Array<{ label: string; tone?: 'danger' | 'primary'; run: () => void }>;
 };
 
+/**
+ * Follow mode: `on` fits the view to each burst of changes by others;
+ * `paused` is on, but held back because the person moved the view themselves.
+ */
+export type FollowState = 'off' | 'on' | 'paused';
+
 /** Below this width the inspector overlays the canvas, so it starts closed. */
 const NARROW_WIDTH = 960;
 
@@ -22,6 +28,8 @@ export class UiStore {
   readonly minimap = new Value(readStored('minimap', isBoolean) ?? false);
   readonly confirm = new Value<ConfirmRequest | null>(null);
   readonly newBoard = new Value(false);
+  readonly connectAgent = new Value(false);
+  readonly follow = new Value<FollowState>(readStored('follow', isBoolean) ? 'on' : 'off');
   /** Open panel id per side; the panel registry decides what can go there. */
   readonly leftPanel = new Value<string | null>(null);
   readonly inspectorOpen = new Value(
@@ -32,6 +40,13 @@ export class UiStore {
 
   constructor() {
     this.minimap.subscribe(() => writeStored('minimap', this.minimap.get()));
+    // Pausing is not a preference; only on and off are remembered.
+    this.follow.subscribe(() => writeStored('follow', this.follow.get() !== 'off'));
+  }
+
+  /** The person moved the view: hold follow mode back until they turn it on again. */
+  pauseFollow(): void {
+    if (this.follow.get() === 'on') this.follow.set('paused');
   }
 
   openPalette(query = ''): void {
@@ -48,7 +63,8 @@ export class UiStore {
       this.palette.get().open ||
       this.shortcuts.get() ||
       this.confirm.get() !== null ||
-      this.newBoard.get()
+      this.newBoard.get() ||
+      this.connectAgent.get()
     );
   }
 }

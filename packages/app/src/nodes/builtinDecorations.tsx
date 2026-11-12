@@ -1,4 +1,6 @@
 /** Decorations every board shows. Registered once at startup. */
+import type { CSSProperties } from 'react';
+import { actorName } from '../state/activity.js';
 import { useSession } from '../state/context.js';
 import { useStoreValue } from '../state/emitter.js';
 import { toasts } from '../state/toasts.js';
@@ -51,6 +53,41 @@ function PeerSelection({ node }: DecorationProps) {
   );
 }
 
+/** A quiet robot glyph on nodes an agent created. People's nodes carry nothing. */
+function AgentAuthor({ node }: DecorationProps) {
+  const { store } = useSession();
+  const actor = useStoreValue(store, () =>
+    Object.hasOwn(store.meta.actors, node.createdBy)
+      ? store.meta.actors[node.createdBy]
+      : undefined,
+  );
+  if (actor?.kind !== 'agent') return null;
+  const label = `Created by ${actor.name}`;
+  return (
+    <span className="author-mark" role="img" aria-label={label} title={label}>
+      <Icon name="agent" size={13} />
+    </span>
+  );
+}
+
+/** Outline and "<name> · added" chip on what someone else just changed; fades out on its own. */
+function RecentChange({ node }: DecorationProps) {
+  const { activity, store } = useSession();
+  const highlight = useStoreValue(activity, () => activity.highlightFor('node', node.id));
+  const name = useStoreValue(store, () =>
+    highlight ? actorName(store.meta.actors, highlight.actorId) : null,
+  );
+  if (!highlight) return null;
+  const style = { '--recent-ms': `${highlight.until - highlight.at}ms` } as CSSProperties;
+  return (
+    <div key={highlight.at} className="recent-outline" style={style} aria-hidden="true">
+      <span className="recent-chip">
+        {name ?? 'Someone'} · {highlight.verb}
+      </span>
+    </div>
+  );
+}
+
 let registered = false;
 
 export function registerBuiltinDecorations(): void {
@@ -62,6 +99,20 @@ export function registerBuiltinDecorations(): void {
     order: 100,
     applies: (node, ghost) => !ghost && node.view?.pinned === true,
     Component: PinBadge,
+  });
+  registerNodeDecoration({
+    id: 'agent-author',
+    slot: 'header',
+    order: 50,
+    applies: (_node, ghost) => !ghost,
+    Component: AgentAuthor,
+  });
+  registerNodeDecoration({
+    id: 'recent-change',
+    slot: 'overlay',
+    order: 10,
+    applies: (_node, ghost) => !ghost,
+    Component: RecentChange,
   });
   registerNodeDecoration({
     id: 'peer-selection',

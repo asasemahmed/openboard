@@ -1,8 +1,10 @@
 import path from 'node:path';
+import { actorForClient, createHttpHandler } from '@openboard/mcp';
 import { boardUrl, openBrowser, waitForSignal } from '../lib/browser.js';
 import { CliError } from '../lib/errors.js';
 import { type CliIo, isDebug, println } from '../lib/io.js';
-import { cliActor, locateApp, projectName, resolveRoot } from '../lib/project.js';
+import { mcpLaunch, shellCommand } from '../lib/mcp.js';
+import { cliActor, cliVersion, locateApp, projectName, resolveRoot } from '../lib/project.js';
 import { findRunningServer, projectPaths, startServer } from '../lib/server.js';
 
 export interface StartOptions {
@@ -40,8 +42,10 @@ export async function startCommand(io: CliIo, options: StartOptions = {}): Promi
     );
   }
 
+  const stdio = mcpLaunch(root);
   const server = await startServer({
     root,
+    info: ({ url }) => ({ mcp: { httpUrl: `${url}/mcp`, stdio } }),
     ...(options.port !== undefined ? { port: options.port } : {}),
     ...(options.host !== undefined ? { host: options.host } : {}),
     ...(app.built && app.dir ? { appDir: app.dir } : {}),
@@ -49,6 +53,13 @@ export async function startCommand(io: CliIo, options: StartOptions = {}): Promi
       if (isDebug(io)) println(io.stderr, line);
     },
   });
+
+  // MCP over HTTP, in process: each session gets its own actor from its client name.
+  const mcp = createHttpHandler({
+    resolveApi: (client) => server.api(actorForClient(client, {})),
+    version: cliVersion(),
+  });
+  server.mount('/mcp', mcp);
 
   try {
     const api = server.api(cliActor(io.env));
@@ -66,9 +77,9 @@ export async function startCommand(io: CliIo, options: StartOptions = {}): Promi
     println(io.stdout, `OpenBoard is running at ${url}`);
     println(io.stdout, `Boards: ${boardsDir}`);
     println(io.stdout, '');
-    println(io.stdout, 'Connect an agent:');
-    println(io.stdout, `  MCP over HTTP   ${new URL('/mcp', server.url).toString()}`);
-    println(io.stdout, '  MCP over stdio  openboard mcp');
+    println(io.stdout, 'Connect an agent (`openboard connect` shows the setup for each agent):');
+    println(io.stdout, `  MCP over HTTP   ${server.url}/mcp`);
+    println(io.stdout, `  MCP over stdio  ${shellCommand(stdio)}`);
     println(io.stdout, '');
     println(io.stdout, 'Press Ctrl+C to stop.');
     options.onReady?.(server.url);
@@ -76,6 +87,7 @@ export async function startCommand(io: CliIo, options: StartOptions = {}): Promi
     if (wantsBrowser && io.stdout.isTTY) await openBrowser(io, url);
     await (io.shutdown ?? waitForSignal)();
   } finally {
+    await mcp.close();
     await server.close();
   }
   return 0;

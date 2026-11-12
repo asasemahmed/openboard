@@ -30,6 +30,12 @@ export const SHORTCUTS: ShortcutDef[] = [
     label: 'Nudge (hold Shift for more)',
     group: 'Edit',
   },
+  { keys: ['tab', 'shift+tab'], label: 'Next or previous card', group: 'Select' },
+  {
+    keys: ['alt+arrowup', 'alt+arrowdown', 'alt+arrowleft', 'alt+arrowright'],
+    label: 'Nearest card in that direction',
+    group: 'Select',
+  },
   { keys: ['mod+a'], label: 'Select everything', group: 'Select' },
   { keys: ['escape'], label: 'Deselect, close', group: 'Select' },
   { keys: ['mod+k'], label: 'Search and commands', group: 'View' },

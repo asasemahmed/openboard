@@ -54,6 +54,24 @@ describe('moveOps', () => {
     expect(doc.getNode('inner')?.view?.w).toBe(200 + 264 + FRAME_PADDING.right);
   });
 
+  it('nudges a card dropped over a frame edge off the sibling it would cover', () => {
+    const { doc, map } = setup();
+    // note1 at the root; its centre lands inside "inner" (canvas x 140..540), its left edge
+    // pokes past the frame, and clamping alone would put it on top of task1.
+    drop(map, 'note1', 140 - 60, 160 + 60);
+    const ops = moveOps(['note1'], map);
+    expect(doc.apply(ops, { actor: ME }).ok).toBe(true);
+    const note = doc.getNode('note1');
+    const task = doc.getNode('task1');
+    expect(note?.parent).toBe('inner');
+    const n = { x: note?.view?.x ?? 0, y: note?.view?.y ?? 0, w: 264, h: 64 };
+    const t = { x: task?.view?.x ?? 0, y: task?.view?.y ?? 0, w: 264, h: 96 };
+    const overlap = n.x < t.x + t.w && n.x + n.w > t.x && n.y < t.y + t.h && n.y + n.h > t.y;
+    expect(overlap).toBe(false);
+    expect(n.x).toBeGreaterThanOrEqual(FRAME_PADDING.left);
+    expect(n.y).toBeGreaterThanOrEqual(FRAME_PADDING.top);
+  });
+
   it('writes only a move when the parent does not change', () => {
     const { map } = setup();
     drop(map, 'risk1', 1040, 160);

@@ -11,13 +11,14 @@ import { getRequestListener } from '@hono/node-server';
 import { type Actor, OpenBoardError } from '@openboard/core';
 import { Boards } from './boards.js';
 import { errorMessage, isErrno, writeFileAtomic } from './fsutil.js';
-import { createHttpApp } from './http.js';
+import { createHttpApp, mountHandler } from './http.js';
 import { canonicalRoot, findProjectRoot, findRunningServer, projectPaths } from './paths.js';
 import { isLoopbackBind, type SecurityConfig } from './security.js';
 import { LocalBoardApi } from './service.js';
 import { SyncServer } from './sync.js';
 import {
   DEFAULT_PORT,
+  type MountHandler,
   type OpenBoardServer,
   type ServerInfo,
   type ServerOptions,
@@ -140,6 +141,9 @@ async function start(
   await boards.start();
 
   const security: SecurityConfig = { port: 0, checkHost: isLoopbackBind(host) };
+  const mounts = new Map<string, MountHandler>();
+  let url = '';
+  const extraInfo = options.info;
   const app = createHttpApp({
     boards,
     version: VERSION,
@@ -147,6 +151,13 @@ async function start(
     ...(options.appDir ? { appDir: options.appDir } : {}),
     security: () => security,
     log,
+    url: () => url,
+    ...(extraInfo === undefined
+      ? {}
+      : {
+          info: typeof extraInfo === 'function' ? () => extraInfo({ url, root }) : () => extraInfo,
+        }),
+    mounts,
   });
   const sync = new SyncServer(boards, { security: () => security, log });
   const server = createServer(getRequestListener(app.fetch));
@@ -170,7 +181,7 @@ async function start(
   }
   security.port = port;
 
-  const url = `http://${urlHost(host)}:${port}`;
+  url = `http://${urlHost(host)}:${port}`;
   const info: ServerInfo = {
     pid: process.pid,
     port,
@@ -211,6 +222,7 @@ async function start(
     url,
     root,
     api: (actor: Actor) => new LocalBoardApi(boards, actor, log),
+    mount: (mountPath: string, handler: MountHandler) => mountHandler(mounts, mountPath, handler),
     close: () => {
       closing ??= close();
       return closing;

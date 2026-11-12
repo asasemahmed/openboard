@@ -23,6 +23,16 @@
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent);
 }
+.card:focus-visible,
+.frame:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+/* Focus is shown by the ring above only; a click focuses without one. */
+.card:focus:not(:focus-visible),
+.frame:focus:not(:focus-visible) {
+  outline: none;
+}
 .card.is-ghost {
   border: 1.5px dashed var(--accent);
   background: transparent;
@@ -207,6 +217,72 @@
   font-weight: 600;
   line-height: 15px;
   white-space: nowrap;
+}
+
+/* Made by an agent: a quiet glyph at the end of the label row. */
+.author-mark {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  color: var(--ink-3);
+  flex: none;
+}
+
+/*
+ * Recently changed by someone else. One fade in, a long hold, one fade out,
+ * timed to the highlight (--recent-ms); nothing repeats.
+ */
+.recent-outline {
+  position: absolute;
+  inset: -4px;
+  border: 1.5px solid var(--recent-line);
+  border-radius: 15px;
+  pointer-events: none;
+  animation: recent-life var(--recent-ms, 8000ms) linear both;
+}
+.frame .recent-outline {
+  border-radius: 19px;
+}
+.recent-chip {
+  /* Sits on the right of the label row, over the pin and author marks while it lasts,
+     so it never collides with edges, their labels or other people's name tags. */
+  position: absolute;
+  top: 15px;
+  right: 14px;
+  max-width: calc(100% - 120px);
+  padding: 0 6px;
+  border: 1px solid var(--recent-line);
+  border-radius: 4px;
+  background: var(--card);
+  color: var(--accent-ink);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.frame .recent-chip {
+  top: 15px;
+  right: 16px;
+}
+@keyframes recent-life {
+  0% {
+    opacity: 0;
+  }
+  3%,
+  88% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .recent-outline {
+    animation: none;
+  }
 }
 
 /* ── Frames ───────────────────────────────────────────────────────────────── */

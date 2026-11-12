@@ -89,6 +89,7 @@ export function shortcutKeys(spec: string, isMac = IS_MAC): string[] {
     escape: 'Esc',
     esc: 'Esc',
     enter: 'Enter',
+    tab: 'Tab',
     backspace: isMac ? '⌫' : 'Backspace',
     delete: 'Delete',
     space: 'Space',
