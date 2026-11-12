@@ -19,6 +19,7 @@
  */
 import type { BoardDiff } from '../diff.js';
 import type { Board, BoardEdge, BoardNode } from '../schema.js';
+import { builtinTypeGlyph } from '../type-glyphs.js';
 import { BOOKKEEPING_FIELDS, compareStrings } from '../util.js';
 import { boardGeometry, facingSides, type Rect, sidePoint, union } from './layout.js';
 import {
@@ -100,29 +101,19 @@ function typeLabel(type: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-/**
- * Glyphs for the built-in card types on a 16px grid, the same drawings the
- * canvas uses (`BUILTIN_TYPE_PATHS` in the app's TypeIcon). Other types get a dot.
- */
-const TYPE_GLYPHS: Record<string, string> = {
-  note: '<path d="M2.75 2.75h10.5v6.5l-4 4h-6.5z"/><path d="M13.25 9.25h-4v4"/>',
-  task: '<rect x="2.5" y="2.5" width="11" height="11" rx="3"/><path d="M5.5 8.25l1.75 1.75 3.25-3.75"/>',
-  decision: '<path d="M8 1.75L14.25 8 8 14.25 1.75 8z"/><path d="M6 8h4M8.5 6.5L10 8 8.5 9.5"/>',
-  question:
-    '<circle cx="8" cy="8" r="5.75"/><path d="M6.4 6.5a1.7 1.7 0 113 1.1c-.6.5-1.4.8-1.4 1.65M8 11.25v.01"/>',
-  risk: '<path d="M8 2.25l6 10.5H2z"/><path d="M8 6.5v2.75M8 11.25v.01"/>',
-  doc: '<path d="M4 1.75h5l3.5 3.5v9H4z"/><path d="M9 1.75v3.5h3.5M6 8.5h4M6 11h4"/>',
-  code: '<path d="M5.5 4.5L2 8l3.5 3.5M10.5 4.5L14 8l-3.5 3.5"/>',
-  agent:
-    '<rect x="2.75" y="5" width="10.5" height="8" rx="2"/><path d="M8 2.5V5M6 9h.01M10 9h.01M6.5 11.25h3"/>',
-  run: '<circle cx="8" cy="8" r="5.75"/><path d="M6.75 5.75v4.5L10.5 8z"/>',
-};
-
 /** The type's glyph, 14px, with its top-left corner at (x, y). */
 function typeGlyph(type: string, x: number, y: number, color: string): string {
-  const glyph = Object.hasOwn(TYPE_GLYPHS, type) ? TYPE_GLYPHS[type] : undefined;
+  const glyph = builtinTypeGlyph(type);
   if (!glyph) return `<circle cx="${n(x + 7)}" cy="${n(y + 7)}" r="3.5" fill="${color}"/>`;
-  return `<g transform="translate(${n(x)} ${n(y)}) scale(0.875)" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${glyph}</g>`;
+  const drawing = glyph
+    .map(({ tag, attrs }) => {
+      const attributes = Object.entries(attrs)
+        .map(([name, value]) => `${name}="${xmlEscape(value)}"`)
+        .join(' ');
+      return `<${tag} ${attributes}/>`;
+    })
+    .join('');
+  return `<g transform="translate(${n(x)} ${n(y)}) scale(0.875)" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${drawing}</g>`;
 }
 
 function text(
