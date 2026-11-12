@@ -106,6 +106,18 @@ describe('agent presence', () => {
     expect(Object.keys(agents())).toEqual(['bot/default']);
   });
 
+  it('gives anonymous callers no presence', async () => {
+    const anonymous = new LocalBoardApi(
+      boards,
+      { id: 'anonymous', kind: 'agent', name: 'Anonymous agent' },
+      () => {},
+      { anonymous: true },
+    );
+    await anonymous.read('plan');
+    expect(agents()).toEqual({});
+    expect(room.knownActors.has('anonymous')).toBe(false);
+  });
+
   it('keeps one entry per session', async () => {
     await api(BOT, 's1').outline('plan');
     await api(BOT, 's2').read('plan', { ids: ['h1'] });

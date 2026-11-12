@@ -17,8 +17,10 @@ import {
   slugify,
 } from '@openboard/core';
 import { type FSWatcher, watch } from 'chokidar';
+import { CodeLinks } from './code.js';
 import { ConfigStore } from './config.js';
 import { ensureLocalDir, errorMessage, isErrno } from './fsutil.js';
+import { Git } from './git.js';
 import { LiveHub } from './live.js';
 import { assertBoardId, boardIdFromFile, CONFIG_FILE, localBoardFiles } from './paths.js';
 import { refreshProposals } from './review.js';
@@ -60,6 +62,10 @@ export class Boards {
   readonly live: LiveHub;
   /** The clock used for presence, sessions and claims. */
   readonly clock: () => number;
+  /** Code-link upkeep for every open board. */
+  readonly code: CodeLinks;
+  /** The project's git repository, if any. */
+  readonly git: Git;
   private readonly opts: BoardsOptions & { config: ConfigStore };
 
   constructor(
@@ -74,6 +80,8 @@ export class Boards {
       rooms: () => [...this.open.values()],
       log: this.log,
     });
+    this.code = new CodeLinks(paths.root, this.log);
+    this.git = new Git(paths.root);
     this.opts = {
       onProposalsStale: (room) => refreshProposals(room, this.log),
       ...opts,
@@ -155,6 +163,7 @@ export class Boards {
           if (room) {
             this.open.set(id, room);
             this.live.roomOpened(room);
+            this.code.attach(room);
           }
           // Not there (yet): forget the miss so a later call looks again.
           else this.rooms.delete(id);
@@ -189,6 +198,7 @@ export class Boards {
       const room = await pending;
       this.open.set(id, room);
       this.live.roomOpened(room);
+      this.code.attach(room);
       room.knownActors.set(actor.id, actor);
       return room;
     } catch (error) {
@@ -219,6 +229,7 @@ export class Boards {
   async close(): Promise<void> {
     this.closing = true;
     this.live.close();
+    await this.code.close();
     if (this.poller) clearInterval(this.poller);
     this.poller = null;
     await this.watcher?.close();

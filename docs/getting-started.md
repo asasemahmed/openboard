@@ -116,7 +116,7 @@ your-project/
 
 Commit the `*.board.json` files and `config.json`. They are written with a stable layout so that a change on the board is a small diff, and the running server picks up changes to them from a checkout, merge or editor. `.openboard/.local/` is runtime state: `openboard init` and the server create it with a `.gitignore` of its own so git skips it. The format is described in [board-format.md](board-format.md).
 
-More boards: `openboard new "Release plan"` creates `.openboard/release-plan.board.json`. `openboard boards` lists them.
+More boards: `openboard new "Release plan"` creates `.openboard/release-plan.board.json`. `openboard boards` lists them. `openboard import flow.mmd` adds a Mermaid flowchart (or a JSON Canvas) to a board, and `openboard export --format markdown` (or `mermaid`, `canvas`, `svg`) writes one out. Run `openboard git setup --diff` once per clone so git merges and diffs boards by meaning; see [Boards in git](git.md).
 
 ## Stop
 

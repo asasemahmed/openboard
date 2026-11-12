@@ -8,9 +8,11 @@
  * for a cursor this feed never reached (its runtime state was wiped), the
  * answer says `resync` so the caller re-reads instead of trusting a gap.
  *
- * Comments are part of the board but have no change kind of their own: a
- * transaction that only changed comments still moves the cursor, through a
- * mark line (`{"seq", "mark"}`) that is never returned by `since`.
+ * Comments, the actor registry and board metadata are part of the board but
+ * have no change kind of their own: a transaction that only changed those
+ * still moves the cursor, through a mark line (`{"seq", "mark"}`) that is
+ * never returned by `since`. So every state of the board JSON has its own
+ * cursor, which is what makes `snapshotAt` exact.
  */
 import { appendFile, readFile } from 'node:fs/promises';
 import type { BoardDoc, ChangeEntry, DocEvent } from '@openboard/core';
@@ -93,9 +95,10 @@ export class ChangeFeed {
   /** Record one transaction. Called by `attach`, or by a room that tags its transactions. */
   record(event: DocEvent, tag: FeedTag = {}): void {
     if (event.changes.length === 0) {
-      if (event.comments && event.comments.length > 0) {
+      if (event.states) {
         this.seq++;
-        this.persistLines(`${JSON.stringify({ seq: this.seq, mark: 'comments' })}\n`, 1);
+        const mark = event.comments?.length ? 'comments' : 'board';
+        this.persistLines(`${JSON.stringify({ seq: this.seq, mark })}\n`, 1);
       }
       return;
     }

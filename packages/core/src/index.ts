@@ -1,5 +1,6 @@
 export * from './api.js';
 export * from './apply.js';
+export * from './code.js';
 export * from './collab.js';
 export * from './diff.js';
 export * from './doc.js';

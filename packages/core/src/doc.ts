@@ -119,7 +119,15 @@ export interface DocApplyContext extends ApplyContext {
   source?: TxOrigin['source'];
 }
 
-const TX_SOURCES: ReadonlySet<string> = new Set(['ops', 'ui', 'layout', 'file', 'undo', 'sync']);
+const TX_SOURCES: ReadonlySet<string> = new Set([
+  'ops',
+  'ui',
+  'layout',
+  'file',
+  'undo',
+  'sync',
+  'code',
+]);
 const META_KEYS = ['schemaVersion', 'id', 'name', 'description', 'createdAt', 'updatedAt'] as const;
 const EPOCH = '1970-01-01T00:00:00.000Z';
 

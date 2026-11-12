@@ -149,4 +149,21 @@ describe('against a real server', () => {
     expect((await ada.history('plan')).earliest).toBe(0);
     expect(await code(ada.snapshotAt('plan', 10_000))).toBe('invalid_request');
   });
+
+  it('round-trips code links, revisions, import and export', async () => {
+    expect((await ada.links('plan')).links).toEqual([]);
+    expect((await ada.refreshLinks('plan', { all: true })).status).toBe('applied');
+    const revisions = await ada.revisions('plan');
+    expect(revisions.tracked).toBe(false);
+    expect(await code(ada.boardAtRevision('plan', 'HEAD'))).toBe('not_found');
+    expect(await code(ada.boardAtRevision('plan', '--help'))).toBe('invalid_request');
+    expect(await code(ada.diffRevisions('plan', { from: 'HEAD' }))).toBe('not_found');
+    const imported = await ada.importInto('plan', { text: 'flowchart TD\n  A[One] --> B[Two]' });
+    expect(imported).toMatchObject({ status: 'applied', format: 'mermaid', warnings: [] });
+    const exported = await ada.exportBoard('plan', { format: 'mermaid' });
+    expect(exported.mime).toBe('text/vnd.mermaid');
+    expect(exported.filename).toBe('plan.mmd');
+    expect(exported.text).toContain('One');
+    expect(await code(ada.exportBoard('plan', { format: 'pdf' }))).toBe('invalid_request');
+  });
 });

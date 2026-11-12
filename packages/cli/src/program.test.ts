@@ -34,6 +34,11 @@ describe('argument parsing and exit codes', () => {
       'hook',
       'activity',
       'snapshot',
+      'import',
+      'diff',
+      'git',
+      'merge-driver',
+      'textconv',
     ]) {
       expect(io.out()).toContain(`  ${command} `);
     }
@@ -90,7 +95,9 @@ describe('argument parsing and exit codes', () => {
     const badFormat = captureIo(dir);
     expect(await run(['export', '--format', 'pdf'], badFormat)).toBe(1);
     expect(badFormat.err().trim().split('\n')).toHaveLength(1);
-    expect(badFormat.err()).toContain('json, outline, text');
+    expect(badFormat.err()).toContain(
+      'json, markdown, md, mermaid, mmd, canvas, jsoncanvas, svg, outline, text',
+    );
 
     const badPort = captureIo(dir);
     expect(await run(['start', '--port', 'abc', '--no-open'], badPort)).toBe(1);

@@ -91,7 +91,7 @@ Every write is a Yjs transaction tagged with an origin of this shape, exported f
 ```ts
 interface TxOrigin {
   actorId: string;
-  source: 'ops' | 'ui' | 'layout' | 'file' | 'undo' | 'sync';
+  source: 'ops' | 'ui' | 'layout' | 'file' | 'undo' | 'sync' | 'code';
 }
 ```
 
@@ -119,7 +119,7 @@ Everyone who proposes, asks, answers, decides, comments or undoes is added to th
 
 Defined in [`packages/core/src/live.ts`](../packages/core/src/live.ts). All of it is memory only on the server (claims excepted, see below), and none of it reaches the board file, the change feed or the history.
 
-**Agent presence.** Agents are not sync peers, so the server publishes their presence into each board's awareness: one entry per agent and session, `{ actor, agent: { status, detail?, focus?, session, parent?, at } }`. Every API call by an agent updates it: reads are `reading` with `focus` on the nodes returned (at most 20), writes are `writing` with `focus` on what they touched, a long-poll on a question is `waiting`. After 20 seconds without activity an agent is `idle`, or `waiting` when it has a pending proposal or an open question there; after 10 minutes it disappears. A call names its session with the `x-openboard-session` header (the SDK's `session` option); calls without one use the session `default`.
+**Agent presence.** Agents are not sync peers, so the server publishes their presence into each board's awareness: one entry per agent and session, `{ actor, agent: { status, detail?, focus?, session, parent?, at } }`. Every API call by an agent updates it: reads are `reading` with `focus` on the nodes returned (at most 20), writes are `writing` with `focus` on what they touched, a long-poll on a question is `waiting`. After 20 seconds without activity an agent is `idle`, or `waiting` when it has a pending proposal or an open question there; after 10 minutes it disappears. A call names its session with the `x-openboard-session` header (the SDK's `session` option); calls without one use the session `default`. A caller that sends no actor headers at all gets no presence and is not remembered; it reaches the actor registry only by changing something.
 
 **Activity sessions.** Agent tooling (editor or CLI hooks) reports what it does with `POST /api/activity` (`ActivityEvent`): sessions starting and ending, prompts, tools starting and ending, subagents. The server keeps the most recent 200 sessions, drops ended ones after 30 minutes, and shows a session as `working` (with `detail`, for example `Bash: pnpm test`) on every board its agent touched since the server started and on every board open in a browser. `GET /api/sessions` lists them. Browsers receive the list through the same awareness: one entry per open board, `{ actor: SYSTEM_ACTOR, live: { sessions, at } }`, holding sessions that have not ended (at most 50, each with its last 5 steps). Awareness was chosen over a separate event stream because each open board already has an awareness connection.
 
@@ -127,7 +127,21 @@ Activity text is untrusted and may be sensitive: it can quote file paths and com
 
 **Claims.** An agent can claim nodes it is working on (`POST /api/boards/:id/claims`), for 15 minutes by default and 120 at most. A claim is a soft lock kept in the document's `claims` map, so browsers see it; it is not a board edit, needs no review, and is not saved in the board file or the history. While a claim is in force, another agent's `apply` that changes, removes or re-parents the node (or removes the frame it sits in) is refused with the operation error `claimed`; moving it is still allowed, and people are never blocked. Claiming is all or nothing unless `partial`; releasing goes node by node, and people may release any claim. Any later call by the holder on that board renews its claims once half their length has passed. Expired claims are ignored at once and swept away within seconds; removing a node removes its claim. Reads mark claimed nodes (`claimed by <name> until <time>`).
 
-**Replay.** The history also keeps every transaction that changed the board JSON, with exact before and after states (the last 5000). `snapshotAt(cursor)` (`GET /api/boards/:id/at/:cursor`) rebuilds the board as it was right after that cursor by reverting later transactions, newest first. `HistoryResult.earliest` is the oldest cursor it can reach; an older one fails with `not_found`.
+**Replay.** The history also keeps every transaction that changed the board JSON, with exact before and after states (the last 5000). `snapshotAt(cursor)` (`GET /api/boards/:id/at/:cursor`) rebuilds the board as it was right after that cursor by reverting later transactions, newest first. `HistoryResult.earliest` is the oldest cursor it can reach; an older one fails with `not_found`. Snapshots are exact for every cursor because every change to the board JSON moves the cursor, including changes that have no entry in the change feed (comments, the actor registry, board metadata): the feed records a hidden mark for those.
+
+## Code and git
+
+Defined in [`packages/core/src/code.ts`](../packages/core/src/code.ts).
+
+**Code links.** A node's `file` and `symbol` links point into the project: a path relative to the root (`symbol` is `path#name`). The server fills `hash` when a link has none: `sha256:` and the first 32 hex digits of the SHA-256 of the linked text with line endings normalised to `\n` — the whole file, or lines `line..endLine` (1-based, inclusive). It watches every linked file of every open board (chokidar, debounced, following editors that save by renaming, with a stat poll every 2 seconds as a backstop; at most 2000 watched files, files over 5 MB are not read). When the linked text changes, a range whose original text now sits exactly once elsewhere in the file just moves (`line`/`endLine` follow, at most 200 lines); otherwise the link gets `stale: true`, as it does when the file is gone. `stale` clears when the text matches again. All links are checked when a board is opened. The original text of ranges is kept in memory only (at most 4 MB), so code that moved while the server was not running turns stale instead of being followed.
+
+These writes are made as the system actor with the transaction source `code`. They keep the node's bookkeeping fields, appear in the change feed (`node_updated`, field `links`), never need review and are not history batches; undo and proposals ignore them when they compare a node with what they expect. Paths that leave the project after normalisation, absolute paths outside it, and symlinks that resolve outside are never read; `links` reports them as `outside`.
+
+`links` lists every link with its state (`ok`, `stale`, `missing`, `outside`, `unchecked`) and what changed; `refreshLinks` re-hashes the named nodes' links against the code as it is now and clears `stale`, as a normal batch with the reason "Refresh code links" (so for an agent it follows the review policy). Reads mark stale links at every detail, and the outline counts them.
+
+**Git.** `revisions` lists the commits that touched the board file (`tracked: false`, not an error, outside a repository, when git is missing, or for a file never committed), `boardAtRevision` parses the file as committed, and `diffRevisions` compares two revisions or a revision with the live board. Git runs with `execFile` (no shell), a timeout and the project root as its working directory; a revision must match `RevisionSchema` (no leading `-`, no whitespace, `:` or `..`) and is resolved to a commit id before anything else uses it.
+
+**Import and export.** `importInto` reads Mermaid or JSON Canvas through the importers in `core/src/interop` and applies the result as one normal batch by the caller (policy, layout, history with the reason "Import from <format>"), optionally inside a frame; `GET /api/boards/:id/export?format=` returns any exporter's output as a download, and `format=svg&diffFrom=<rev>` draws the changes since that revision.
 
 ## Reading a board
 
@@ -157,39 +171,46 @@ One server process serves one project root.
 
 ### HTTP surface
 
-| Method and path                                    | Purpose                                                             |
-| -------------------------------------------------- | ------------------------------------------------------------------- |
-| `GET /api/health`                                  | `{ ok, version, pid, root }`                                        |
-| `GET /api/info`                                    | `{ version, root, projectName, url, ...ServerOptions.info }`        |
-| `GET /api/boards` · `POST /api/boards`             | List and create boards                                              |
-| `GET /api/boards/:id`                              | Full board JSON                                                     |
-| `POST /api/boards/:id/outline`                     | `BoardApi.outline`                                                  |
-| `POST /api/boards/:id/read`                        | `BoardApi.read`                                                     |
-| `POST /api/boards/:id/changes`                     | `BoardApi.changes`                                                  |
-| `POST /api/boards/:id/apply`                       | `BoardApi.apply`                                                    |
-| `GET /api/boards/:id/selection`                    | `BoardApi.selection`                                                |
-| `POST /api/boards/:id/layout`                      | `BoardApi.layout`                                                   |
-| `GET /api/config` · `PUT /api/config`              | `BoardApi.getConfig` · `setConfig` (people only)                    |
-| `GET /api/boards/:id/proposals?status=&maxTokens=` | `BoardApi.proposals` (`status` is `pending` or `all`)               |
-| `POST /api/boards/:id/proposals/:pid/decide`       | `BoardApi.decideProposal` (body: `Decision`; people only)           |
-| `POST /api/boards/:id/proposals/:pid/withdraw`     | `BoardApi.withdrawProposal` (author only)                           |
-| `POST /api/boards/:id/history`                     | `BoardApi.history` (body: `HistoryOptions`)                         |
-| `POST /api/boards/:id/undo`                        | `BoardApi.undo` (body: `UndoRequest`)                               |
-| `POST /api/boards/:id/comments`                    | `BoardApi.comment` (body: `CommentInput`; 201 with the `Comment`)   |
-| `POST /api/boards/:id/threads/:thread/resolve`     | `BoardApi.resolveThread` (body: `{ resolved }`, default true)       |
-| `POST /api/boards/:id/inbox`                       | `BoardApi.inbox` (body: `InboxOptions`)                             |
-| `POST /api/boards/:id/asks`                        | `BoardApi.ask` (body: `AskInput`; 201 with the `Ask`)               |
-| `GET /api/boards/:id/asks?status=&maxTokens=`      | `BoardApi.asks` (`status` is `open`, the default, or `all`)         |
-| `GET /api/boards/:id/asks/:aid?waitMs=`            | `BoardApi.askResult`; a long-poll of at most `MAX_ASK_WAIT_MS`      |
-| `POST /api/boards/:id/asks/:aid/answer`            | `BoardApi.answerAsk` (body: `AnswerInput`; people only)             |
-| `POST /api/boards/:id/asks/:aid/cancel`            | `BoardApi.cancelAsk` (the author or a person)                       |
-| `POST /api/activity`                               | `BoardApi.reportActivity` (body: `ActivityEvent`)                   |
-| `GET /api/sessions?includeEnded=&maxTokens=`       | `BoardApi.sessions`                                                 |
-| `POST /api/boards/:id/claims`                      | `BoardApi.claim` (body: `ClaimRequest`)                             |
-| `GET /api/boards/:id/at/:cursor`                   | `BoardApi.snapshotAt`: the `Board` right after that cursor          |
-| `GET /sync/:id?lineage=` (WebSocket)               | Document sync and presence, using the standard y-websocket protocol |
-| `ALL /mcp`                                         | MCP over Streamable HTTP, mounted with `OpenBoardServer.mount`      |
-| `GET /*`                                           | The web app                                                         |
+| Method and path                                       | Purpose                                                             |
+| ----------------------------------------------------- | ------------------------------------------------------------------- |
+| `GET /api/health`                                     | `{ ok, version, pid, root }`                                        |
+| `GET /api/info`                                       | `{ version, root, projectName, url, ...ServerOptions.info }`        |
+| `GET /api/boards` · `POST /api/boards`                | List and create boards                                              |
+| `GET /api/boards/:id`                                 | Full board JSON                                                     |
+| `POST /api/boards/:id/outline`                        | `BoardApi.outline`                                                  |
+| `POST /api/boards/:id/read`                           | `BoardApi.read`                                                     |
+| `POST /api/boards/:id/changes`                        | `BoardApi.changes`                                                  |
+| `POST /api/boards/:id/apply`                          | `BoardApi.apply`                                                    |
+| `GET /api/boards/:id/selection`                       | `BoardApi.selection`                                                |
+| `POST /api/boards/:id/layout`                         | `BoardApi.layout`                                                   |
+| `GET /api/config` · `PUT /api/config`                 | `BoardApi.getConfig` · `setConfig` (people only)                    |
+| `GET /api/boards/:id/proposals?status=&maxTokens=`    | `BoardApi.proposals` (`status` is `pending` or `all`)               |
+| `POST /api/boards/:id/proposals/:pid/decide`          | `BoardApi.decideProposal` (body: `Decision`; people only)           |
+| `POST /api/boards/:id/proposals/:pid/withdraw`        | `BoardApi.withdrawProposal` (author only)                           |
+| `POST /api/boards/:id/history`                        | `BoardApi.history` (body: `HistoryOptions`)                         |
+| `POST /api/boards/:id/undo`                           | `BoardApi.undo` (body: `UndoRequest`)                               |
+| `POST /api/boards/:id/comments`                       | `BoardApi.comment` (body: `CommentInput`; 201 with the `Comment`)   |
+| `POST /api/boards/:id/threads/:thread/resolve`        | `BoardApi.resolveThread` (body: `{ resolved }`, default true)       |
+| `POST /api/boards/:id/inbox`                          | `BoardApi.inbox` (body: `InboxOptions`)                             |
+| `POST /api/boards/:id/asks`                           | `BoardApi.ask` (body: `AskInput`; 201 with the `Ask`)               |
+| `GET /api/boards/:id/asks?status=&maxTokens=`         | `BoardApi.asks` (`status` is `open`, the default, or `all`)         |
+| `GET /api/boards/:id/asks/:aid?waitMs=`               | `BoardApi.askResult`; a long-poll of at most `MAX_ASK_WAIT_MS`      |
+| `POST /api/boards/:id/asks/:aid/answer`               | `BoardApi.answerAsk` (body: `AnswerInput`; people only)             |
+| `POST /api/boards/:id/asks/:aid/cancel`               | `BoardApi.cancelAsk` (the author or a person)                       |
+| `POST /api/activity`                                  | `BoardApi.reportActivity` (body: `ActivityEvent`)                   |
+| `GET /api/sessions?includeEnded=&maxTokens=`          | `BoardApi.sessions`                                                 |
+| `POST /api/boards/:id/claims`                         | `BoardApi.claim` (body: `ClaimRequest`)                             |
+| `GET /api/boards/:id/at/:cursor`                      | `BoardApi.snapshotAt`: the `Board` right after that cursor          |
+| `POST /api/boards/:id/links`                          | `BoardApi.links` (body: `LinksOptions`)                             |
+| `POST /api/boards/:id/links/refresh`                  | `BoardApi.refreshLinks` (body: `RefreshLinksRequest`)               |
+| `GET /api/boards/:id/revisions?limit=`                | `BoardApi.revisions`                                                |
+| `GET /api/boards/:id/revisions/:rev`                  | `BoardApi.boardAtRevision`                                          |
+| `POST /api/boards/:id/diff`                           | `BoardApi.diffRevisions` (body: `DiffRequest`)                      |
+| `POST /api/boards/:id/import`                         | `BoardApi.importInto` (body: `ImportRequest`)                       |
+| `GET /api/boards/:id/export?format=&theme=&diffFrom=` | The exporter's output as a download (its own content type)          |
+| `GET /sync/:id?lineage=` (WebSocket)                  | Document sync and presence, using the standard y-websocket protocol |
+| `ALL /mcp`                                            | MCP over Streamable HTTP, mounted with `OpenBoardServer.mount`      |
+| `GET /*`                                              | The web app                                                         |
 
 Request and response bodies are the JSON forms of the `BoardApi` types. Errors are `{ "error": { "code", "message", "details" } }` with the HTTP status from `OpenBoardError.status`.
 

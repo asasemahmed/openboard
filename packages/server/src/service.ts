@@ -48,11 +48,26 @@ import {
   classifyOps,
   type Decision,
   DecisionSchema,
+  type DiffRequest,
+  DiffRequestSchema,
+  type DiffResult,
+  detectFormat,
+  diffBoards,
+  EXPORTERS,
+  type ExportOptions,
+  ExportOptionsSchema,
+  type ExportResult,
   explainVerdicts,
+  findExporter,
+  findImporter,
   type HistoryOptions,
   HistoryOptionsSchema,
   type HistoryResult,
   IdSchema,
+  IMPORTERS,
+  type ImportIntoResult,
+  type ImportRequest,
+  ImportRequestSchema,
   type InboxOptions,
   InboxOptionsSchema,
   type InboxResult,
@@ -60,6 +75,9 @@ import {
   type LayoutRequest,
   LayoutRequestSchema,
   type LayoutResult,
+  type LinksOptions,
+  LinksOptionsSchema,
+  type LinksResult,
   MAX_ASK_WAIT_MS,
   MAX_MAX_TOKENS,
   newId,
@@ -73,6 +91,7 @@ import {
   type Proposal,
   type ProposalItem,
   type ProposalsResult,
+  parseBoard,
   policyModeFor,
   previewOf,
   proposalOps,
@@ -80,15 +99,24 @@ import {
   type ReadQuery,
   ReadQuerySchema,
   type ReadResult,
+  type RefreshLinksRequest,
+  RefreshLinksRequestSchema,
   type RestoreItems,
+  RevisionSchema,
+  type RevisionsOptions,
+  RevisionsOptionsSchema,
+  type RevisionsResult,
   renderAsks,
   renderChanges,
   renderClaims,
+  renderDiff,
   renderHistory,
   renderInbox,
+  renderLinks,
   renderOutline,
   renderProposals,
   renderRead,
+  renderRevisions,
   renderSelection,
   renderSessions,
   renderUndo,
@@ -175,11 +203,18 @@ type Conflict = UndoResult['conflicts'][number];
 export interface SessionOptions {
   /** Session id (as in `ActivityEvent.session`); `DEFAULT_SESSION` when omitted. */
   session?: string;
+  /**
+   * The caller did not say who it is. It then has no presence and is not
+   * remembered as a known actor; it reaches the actor registry only by
+   * changing something.
+   */
+  anonymous?: boolean;
 }
 
 export class LocalBoardApi implements BoardApi {
   readonly actor: Actor;
   readonly session: string | undefined;
+  private readonly anonymous: boolean;
 
   constructor(
     private readonly boards: Boards,
@@ -190,6 +225,7 @@ export class LocalBoardApi implements BoardApi {
     this.actor = parseInput(ActorSchema, actor, 'actor');
     this.session =
       options.session === undefined ? undefined : parseInput(IdSchema, options.session, 'session');
+    this.anonymous = options.anonymous === true;
   }
 
   /**
@@ -201,12 +237,13 @@ export class LocalBoardApi implements BoardApi {
       throw new OpenBoardError('invalid_request', 'board id must be a string');
     }
     const room = await this.boards.get(boardId);
-    room.knownActors.set(this.actor.id, this.actor);
+    if (!this.anonymous) room.knownActors.set(this.actor.id, this.actor);
     this.mark(room, status);
     return room;
   }
 
   private mark(room: Room, status: 'reading' | 'writing' | 'waiting', focus?: string[]): void {
+    if (this.anonymous) return;
     this.boards.live.mark(room, this.actor, this.session, status, focus);
   }
 
@@ -843,7 +880,14 @@ export class LocalBoardApi implements BoardApi {
       const title = current?.title ?? snap.after?.title ?? snap.before?.title;
       if (title !== undefined) titles[id] = title;
       if (jsonEqual(current, snap.after)) plan.nodes[id] = snap.before;
-      else conflicts.push({ kind: 'node', id, reason: later(current, snap) });
+      else if (current && snap.after && sameButCodeUpkeep(current, snap.after)) {
+        // The server updated code links since; keep its upkeep unless the batch changed links.
+        const before = snap.before;
+        plan.nodes[id] =
+          before && jsonEqual(before.links, snap.after.links)
+            ? withLinks(before, current.links)
+            : before;
+      } else conflicts.push({ kind: 'node', id, reason: later(current, snap) });
     }
     for (const [id, snap] of Object.entries(record.edges)) {
       const current = doc.storedEdge(id) ?? null;
@@ -1308,6 +1352,184 @@ export class LocalBoardApi implements BoardApi {
     return room.history.snapshot(room.doc.raw(), at, room.cursor);
   }
 
+  // ── Code and git ───────────────────────────────────────────────────────────
+
+  async links(boardId: string, options?: LinksOptions): Promise<LinksResult> {
+    const opts = parseInput(LinksOptionsSchema, options ?? {}, 'links options');
+    const room = await this.room(boardId);
+    let entries = await this.boards.code.entries(room);
+    if (opts.stale) entries = entries.filter((e) => e.state !== 'ok' && e.state !== 'unchecked');
+    return renderLinks(room.id, room.cursor, entries, {
+      ...(opts.maxTokens !== undefined ? { maxTokens: opts.maxTokens } : {}),
+      ...(opts.stale ? { staleOnly: true } : {}),
+    });
+  }
+
+  async refreshLinks(boardId: string, request: RefreshLinksRequest): Promise<ApplyResult> {
+    const req = parseInput(RefreshLinksRequestSchema, request, 'refresh request');
+    const room = await this.room(boardId, 'writing');
+    let nodes: BoardNode[];
+    if (req.all) nodes = room.doc.nodes().filter((node) => node.links?.length);
+    else {
+      const ids = [...new Set(req.nodeIds ?? [])];
+      const missing = ids.filter((id) => !room.doc.getNode(id));
+      if (missing.length > 0) {
+        throw new OpenBoardError(
+          'not_found',
+          `no node ${missing.map((id) => `"${id}"`).join(', ')} on board "${room.id}"`,
+        );
+      }
+      nodes = ids.map((id) => room.doc.getNode(id) as BoardNode);
+    }
+    const ops: Op[] = [];
+    for (const node of nodes) {
+      const links = await this.boards.code.rehash(node);
+      if (links && !jsonEqual(links, node.links)) {
+        ops.push({ op: 'update_node', id: node.id, patch: { links } });
+      }
+    }
+    if (ops.length === 0) {
+      return {
+        status: 'applied',
+        cursor: room.cursor,
+        refs: {},
+        applied: {
+          refs: {},
+          addedNodes: [],
+          updatedNodes: [],
+          removedNodes: [],
+          addedEdges: [],
+          updatedEdges: [],
+          removedEdges: [],
+        },
+      };
+    }
+    return this.apply(room.id, { ops, reason: 'Refresh code links', layout: 'none' });
+  }
+
+  private boardFile(room: Room): string {
+    return this.boards.paths.boardFile(room.id);
+  }
+
+  async revisions(boardId: string, options?: RevisionsOptions): Promise<RevisionsResult> {
+    const opts = parseInput(RevisionsOptionsSchema, options ?? {}, 'revisions options');
+    const room = await this.room(boardId);
+    const file = this.boardFile(room);
+    const tracked = await this.boards.git.tracked(file);
+    const revisions = tracked ? await this.boards.git.log(file, opts.limit ?? 20) : [];
+    const dirty = tracked ? await this.boards.git.dirty(file) : false;
+    const result = { tracked: tracked && revisions.length > 0, revisions, dirty };
+    return { boardId: room.id, ...result, text: renderRevisions(room.id, result) };
+  }
+
+  async boardAtRevision(boardId: string, rev: string): Promise<Board> {
+    const parsed = parseInput(RevisionSchema, rev, 'revision');
+    const room = await this.room(boardId);
+    const text = await this.boards.git.show(parsed, this.boardFile(room));
+    try {
+      return parseBoard(text);
+    } catch (error) {
+      throw new OpenBoardError(
+        'invalid_request',
+        `the board file in revision ${parsed} does not parse: ${errorMessage(error)}`,
+      );
+    }
+  }
+
+  async diffRevisions(boardId: string, request: DiffRequest): Promise<DiffResult> {
+    const req = parseInput(DiffRequestSchema, request, 'diff request');
+    const room = await this.room(boardId);
+    const before = await this.boardAtRevision(room.id, req.from);
+    const after = req.to ? await this.boardAtRevision(room.id, req.to) : room.doc.toJSON();
+    const diff = diffBoards(before, after);
+    const to = req.to ?? 'live';
+    return {
+      boardId: room.id,
+      from: req.from,
+      to,
+      diff,
+      ...renderDiff(room.id, diff, { from: req.from, to }),
+    };
+  }
+
+  async importInto(boardId: string, request: ImportRequest): Promise<ImportIntoResult> {
+    const req = parseInput(ImportRequestSchema, request, 'import request');
+    const room = await this.room(boardId, req.dryRun ? 'reading' : 'writing');
+    const format = req.format ?? detectFormat(req.filename ?? '', req.text);
+    const importer = format ? findImporter(format) : undefined;
+    if (!importer) {
+      const names = IMPORTERS.map((i) => i.name).join(', ');
+      throw new OpenBoardError(
+        'invalid_request',
+        format
+          ? `"${format}" cannot be imported; importable formats: ${names}`
+          : `the format could not be detected; pass format (one of: ${names})`,
+      );
+    }
+    const parsed = importer.parse(req.text);
+    let ops = parsed.ops;
+    if (req.frame !== undefined) {
+      const frame = room.doc.getNode(req.frame);
+      if (!frame)
+        throw new OpenBoardError('not_found', `no node "${req.frame}" on board "${room.id}"`);
+      if (frame.type !== 'frame') {
+        throw new OpenBoardError(
+          'invalid_request',
+          `"${req.frame}" is a ${frame.type}, not a frame`,
+        );
+      }
+      const into = req.frame;
+      ops = ops.map((op) =>
+        op.op === 'add_node' && op.node.parent === undefined
+          ? { ...op, node: { ...op.node, parent: into } }
+          : op,
+      );
+    }
+    if (ops.length === 0) {
+      throw new OpenBoardError(
+        'invalid_request',
+        `nothing to import from this ${importer.name} text`,
+        {
+          warnings: parsed.warnings,
+        },
+      );
+    }
+    const result = await this.apply(room.id, {
+      ops,
+      reason: `Import from ${importer.name}`,
+      ...(req.dryRun ? { dryRun: true } : {}),
+    });
+    return { ...result, format: importer.name, warnings: parsed.warnings };
+  }
+
+  async exportBoard(boardId: string, options: ExportOptions): Promise<ExportResult> {
+    const opts = parseInput(ExportOptionsSchema, options, 'export options');
+    const room = await this.room(boardId);
+    const exporter = findExporter(opts.format);
+    if (!exporter) {
+      throw new OpenBoardError(
+        'invalid_request',
+        `unknown export format "${opts.format}"; one of: ${EXPORTERS.map((e) => e.name).join(', ')}`,
+      );
+    }
+    const board = room.doc.toJSON();
+    const render: Record<string, unknown> = {};
+    if (opts.theme) render.theme = opts.theme;
+    if (opts.diffFrom !== undefined) {
+      if (exporter.name !== 'svg') {
+        throw new OpenBoardError('invalid_request', 'diffFrom works with the svg format only');
+      }
+      const before = await this.boardAtRevision(room.id, opts.diffFrom);
+      render.before = before;
+      render.diff = diffBoards(before, board);
+    }
+    return {
+      text: exporter.render(board, render),
+      mime: exporter.mime,
+      filename: `${room.id}${opts.diffFrom !== undefined ? '.diff' : ''}${exporter.extension}`,
+    };
+  }
+
   // ── Settings ───────────────────────────────────────────────────────────────
 
   async getConfig(): Promise<ProjectConfig> {
@@ -1345,4 +1567,21 @@ function reviewedIds(proposal: Proposal | undefined, record: BatchRecord): Set<s
     if (parent !== undefined && removed.includes(parent) && !snap.after?.parent) ids.add(id);
   }
   return ids;
+}
+
+/** Links without what the server maintains on them (hash, moved lines, stale). */
+function linkIdentity(links: BoardNode['links']): unknown {
+  return (links ?? []).map(({ hash: _h, stale: _s, line: _l, endLine: _e, ...link }) => link);
+}
+
+/** True when two states of a node differ only in code-link upkeep. */
+function sameButCodeUpkeep(a: BoardNode, b: BoardNode): boolean {
+  const { links: linksA, ...restA } = a;
+  const { links: linksB, ...restB } = b;
+  return jsonEqual(restA, restB) && jsonEqual(linkIdentity(linksA), linkIdentity(linksB));
+}
+
+function withLinks(node: BoardNode, links: BoardNode['links']): BoardNode {
+  const { links: _old, ...rest } = node;
+  return links && links.length > 0 ? { ...rest, links } : rest;
 }

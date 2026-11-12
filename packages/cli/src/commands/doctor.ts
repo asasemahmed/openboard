@@ -8,6 +8,7 @@ import { type CliIo, println } from '../lib/io.js';
 import { type AppLocation, cliActor, locateApp, resolveRoot } from '../lib/project.js';
 import { findRunningServer, projectPaths } from '../lib/server.js';
 import { readBoardFiles } from '../lib/store.js';
+import { gitStatus } from './git.js';
 
 export type CheckStatus = 'ok' | 'warn' | 'fail';
 
@@ -93,6 +94,32 @@ async function gitCheck(root: string, local: string): Promise<Check | undefined>
         label: '.openboard/.local is not ignored by git',
         hint: 'add ".openboard/.local/" to .gitignore, or run `openboard init`',
       };
+}
+
+/** In a git repository: whether board files merge with the OpenBoard driver. Informational. */
+async function mergeDriverCheck(io: CliIo, root: string): Promise<Check> {
+  try {
+    const report = await gitStatus(io, { root });
+    if (report.attributes.merge && report.mergeDriver) {
+      return report.current.merge
+        ? { status: 'ok', label: 'git merges board files with the OpenBoard merge driver' }
+        : {
+            status: 'warn',
+            label: 'The OpenBoard merge driver in git runs another install',
+            hint: 'run `openboard git setup` to point it at this one',
+          };
+    }
+    return {
+      status: 'warn',
+      label: 'git merges board files as plain text (optional: the OpenBoard merge driver)',
+      hint: 'run `openboard git setup` so merges never leave conflict markers in a board',
+    };
+  } catch (error) {
+    return {
+      status: 'warn',
+      label: `Could not check the git merge driver: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
 }
 
 /** Run every check. Never throws for a failed check; it becomes a `fail` line. */
@@ -207,6 +234,7 @@ export async function runChecks(io: CliIo, options: DoctorOptions = {}): Promise
 
   const git = await gitCheck(root, paths.local);
   if (git) checks.push(git);
+  if (git) checks.push(await mergeDriverCheck(io, root));
   return checks;
 }
 

@@ -13,6 +13,19 @@
  */
 import { z } from 'zod';
 import type {
+  DiffRequest,
+  DiffResult,
+  ExportOptions,
+  ExportResult,
+  ImportIntoResult,
+  ImportRequest,
+  LinksOptions,
+  LinksResult,
+  RefreshLinksRequest,
+  RevisionsOptions,
+  RevisionsResult,
+} from './code.js';
+import type {
   AnswerInput,
   Ask,
   AskInput,
@@ -342,6 +355,26 @@ export interface BoardApi {
    * `HistoryResult.earliest`).
    */
   snapshotAt(boardId: string, cursor: Cursor): Promise<Board>;
+
+  // Code and git (see code.ts).
+  /** Code links of the board and whether the code they point at changed. */
+  links(boardId: string, options?: LinksOptions): Promise<LinksResult>;
+  /**
+   * Re-hash the links of these nodes against the code as it is now and clear
+   * `stale`: "I checked this node against the new code". A normal batch, so
+   * the review policy applies to agents.
+   */
+  refreshLinks(boardId: string, request: RefreshLinksRequest): Promise<ApplyResult>;
+  /** The git history of the board file, newest first. */
+  revisions(boardId: string, options?: RevisionsOptions): Promise<RevisionsResult>;
+  /** The board as committed in `rev`. */
+  boardAtRevision(boardId: string, rev: string): Promise<Board>;
+  /** What changed between two revisions, or between a revision and the live board. */
+  diffRevisions(boardId: string, request: DiffRequest): Promise<DiffResult>;
+  /** Read Mermaid, JSON Canvas, ... into the board as one normal batch by the caller. */
+  importInto(boardId: string, request: ImportRequest): Promise<ImportIntoResult>;
+  /** The board in another format. */
+  exportBoard(boardId: string, options: ExportOptions): Promise<ExportResult>;
 
   // Project settings.
   getConfig(): Promise<ProjectConfig>;

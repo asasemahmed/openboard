@@ -392,4 +392,25 @@ describe('static app', () => {
       await removeRoot(withApp.root);
     }
   });
+
+  it('does not remember callers that do not say who they are until they change something', async () => {
+    await api(
+      server,
+      'POST',
+      '/api/boards',
+      { name: 'Plan' },
+      { 'x-openboard-actor-id': 'ada', 'x-openboard-actor-kind': 'human' },
+    );
+    await api(server, 'POST', '/api/boards/plan/read', {});
+    const board = await api(server, 'GET', '/api/boards/plan', undefined, {
+      'x-openboard-actor-id': 'ada',
+      'x-openboard-actor-kind': 'human',
+    });
+    expect(Object.keys(board.json.actors)).toEqual([]);
+    await api(server, 'POST', '/api/boards/plan/apply', {
+      ops: [{ op: 'add_node', node: { type: 'note', title: 'Anon' } }],
+    });
+    const after = await api(server, 'GET', '/api/boards/plan');
+    expect(Object.keys(after.json.actors)).toEqual(['anonymous']);
+  });
 });

@@ -1,6 +1,12 @@
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { EXPORTERS, type Exporter, exporterForFile, findExporter } from '../exporters.js';
+import {
+  EXPORTERS,
+  type Exporter,
+  exporterForFile,
+  FORMAT_NAMES,
+  findExporter,
+} from '../exporters.js';
 import { CliError } from '../lib/errors.js';
 import { type CliIo, println } from '../lib/io.js';
 import { resolveRoot } from '../lib/project.js';
@@ -12,6 +18,8 @@ export interface ExportOptions {
   format?: string;
   /** Write here instead of stdout. */
   out?: string;
+  /** For `svg`. */
+  theme?: 'light' | 'dark';
 }
 
 /** The exporter for `--format`, else the one `--out`'s extension selects, else `json`. */
@@ -19,8 +27,9 @@ export function chooseExporter(options: Pick<ExportOptions, 'format' | 'out'>): 
   if (options.format !== undefined) {
     const exporter = findExporter(options.format);
     if (!exporter) {
-      const names = EXPORTERS.map((e) => e.name).join(', ');
-      throw new CliError(`unknown format "${options.format}" (choose one of: ${names})`);
+      throw new CliError(
+        `unknown format "${options.format}" (choose one of: ${FORMAT_NAMES.join(', ')})`,
+      );
     }
     return exporter;
   }
@@ -48,7 +57,11 @@ export async function exportCommand(
   const root = resolveRoot(io, options.root);
   const { store } = await openSession(io, root);
   const board = await store.getBoard(boardId ?? (await defaultBoardId(store)));
-  await writeExport(io, exporter.render(board), options.out);
+  await writeExport(
+    io,
+    exporter.render(board, options.theme ? { theme: options.theme } : {}),
+    options.out,
+  );
   return 0;
 }
 

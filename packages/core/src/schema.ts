@@ -254,7 +254,8 @@ export interface BoardSummary extends BoardMeta {
 /** Tag carried by every write to the board document. See docs/ARCHITECTURE.md. */
 export interface TxOrigin {
   actorId: string;
-  source: 'ops' | 'ui' | 'layout' | 'file' | 'undo' | 'sync';
+  /** `code`: the server updating code links (hash, moved lines, `stale`); see code.ts. */
+  source: 'ops' | 'ui' | 'layout' | 'file' | 'undo' | 'sync' | 'code';
 }
 
 /**

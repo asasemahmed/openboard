@@ -220,6 +220,8 @@ export class History {
    */
   begin(event: DocEvent, ctx: TxContext | null, now = Date.now()): PendingBatch | null {
     const states = event.states;
+    // Code-link upkeep by the server is not something anyone did, so not a batch.
+    if (event.origin?.source === 'code') return null;
     if (
       !states ||
       Object.keys(states.nodes).length +

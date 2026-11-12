@@ -249,6 +249,46 @@ describe('routes', () => {
       method: 'GET',
       path: '/api/boards/main/at/12',
     },
+    {
+      name: 'links',
+      call: (a) => a.links('main', { stale: true }),
+      method: 'POST',
+      path: '/api/boards/main/links',
+      body: { stale: true },
+    },
+    {
+      name: 'refreshLinks',
+      call: (a) => a.refreshLinks('main', { nodeIds: ['n_1'] }),
+      method: 'POST',
+      path: '/api/boards/main/links/refresh',
+      body: { nodeIds: ['n_1'] },
+    },
+    {
+      name: 'revisions',
+      call: (a) => a.revisions('main', { limit: 5 }),
+      method: 'GET',
+      path: '/api/boards/main/revisions?limit=5',
+    },
+    {
+      name: 'boardAtRevision',
+      call: (a) => a.boardAtRevision('main', 'HEAD~1'),
+      method: 'GET',
+      path: '/api/boards/main/revisions/HEAD~1',
+    },
+    {
+      name: 'diffRevisions',
+      call: (a) => a.diffRevisions('main', { from: 'HEAD' }),
+      method: 'POST',
+      path: '/api/boards/main/diff',
+      body: { from: 'HEAD' },
+    },
+    {
+      name: 'importInto',
+      call: (a) => a.importInto('main', { text: 'flowchart TD\n A-->B', frame: 'f' }),
+      method: 'POST',
+      path: '/api/boards/main/import',
+      body: { text: 'flowchart TD\n A-->B', frame: 'f' },
+    },
     { name: 'getConfig', call: (a) => a.getConfig(), method: 'GET', path: '/api/config' },
     {
       name: 'setConfig',
@@ -293,6 +333,27 @@ describe('routes', () => {
     const { api: plain, calls } = client();
     await plain.outline('main');
     expect(calls[0]?.headers['x-openboard-session']).toBeUndefined();
+  });
+
+  it('exports as raw text with the type and file name from the response', async () => {
+    const { api, calls } = client(
+      () =>
+        new Response('<svg/>', {
+          status: 200,
+          headers: {
+            'content-type': 'image/svg+xml; charset=utf-8',
+            'content-disposition': 'attachment; filename="main.diff.svg"',
+          },
+        }),
+    );
+    await expect(api.exportBoard('main', { format: 'svg', diffFrom: 'HEAD' })).resolves.toEqual({
+      text: '<svg/>',
+      mime: 'image/svg+xml',
+      filename: 'main.diff.svg',
+    });
+    expect(calls[0]?.url).toBe(
+      'http://127.0.0.1:4747/api/boards/main/export?format=svg&diffFrom=HEAD',
+    );
   });
 
   it('path-encodes board ids', async () => {

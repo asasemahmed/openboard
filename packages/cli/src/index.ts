@@ -51,7 +51,15 @@ export {
   statusCommand,
 } from './commands/status.js';
 export { type StopOptions, stopCommand } from './commands/stop.js';
-export { EXPORTERS, type Exporter, exporterForFile, findExporter } from './exporters.js';
+export {
+  EXPORTERS,
+  type Exporter,
+  exporterForFile,
+  FORMAT_NAMES,
+  findExporter,
+  fullText,
+  outlineText,
+} from './exporters.js';
 export { CliError } from './lib/errors.js';
 export { type CliIo, type Output, processIo } from './lib/io.js';
 export {
