@@ -25,6 +25,24 @@ export {
 export { defaultBoardId, type ExportOptions, exportCommand } from './commands/export.js';
 export { type InitOptions, initCommand } from './commands/init.js';
 export { type McpOptions, mcpCommand } from './commands/mcp.js';
+export {
+  POLICY_MODES,
+  type PolicyOptions,
+  type PolicySetOptions,
+  policyCommand,
+  policySetCommand,
+  policyUnsetCommand,
+} from './commands/policy.js';
+export {
+  type DecideOptions,
+  decideCommand,
+  type HistoryCommandOptions,
+  historyCommand,
+  type ProposalsOptions,
+  proposalsCommand,
+  type UndoCommandOptions,
+  undoCommand,
+} from './commands/review.js';
 export { type StartOptions, startCommand } from './commands/start.js';
 export {
   getStatus,

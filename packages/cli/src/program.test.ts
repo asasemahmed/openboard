@@ -25,6 +25,12 @@ describe('argument parsing and exit codes', () => {
       'doctor',
       'mcp',
       'connect',
+      'policy',
+      'proposals',
+      'accept',
+      'reject',
+      'history',
+      'undo',
     ]) {
       expect(io.out()).toContain(`  ${command} `);
     }
@@ -45,6 +51,24 @@ describe('argument parsing and exit codes', () => {
     const status = captureIo(dir);
     expect(await run(['status', '--json'], status)).toBe(0);
     expect(JSON.parse(status.out()).boards).toHaveLength(1);
+  });
+
+  it('routes policy subcommands and their --root', async () => {
+    const dir = await tempDir();
+    const elsewhere = captureIo(await tempDir());
+    expect(
+      await run(['policy', 'set', 'review_all', '--agent', 'bot', '--root', dir], elsewhere),
+    ).toBe(0);
+    expect(elsewhere.out()).toBe('Agent bot now uses review_all.\n');
+    const shown = captureIo(dir);
+    expect(await run(['policy', '--root', dir, '--json'], shown)).toBe(0);
+    expect(JSON.parse(shown.out()).policy.agents).toEqual({ bot: 'review_all' });
+    const unset = captureIo(dir);
+    expect(await run(['policy', '--root', dir, 'unset', '--agent', 'bot'], unset)).toBe(0);
+    expect(unset.out()).toBe('Agent bot now uses the default, review_destructive.\n');
+    const missing = captureIo(dir);
+    expect(await run(['policy', 'unset'], missing)).toBe(1);
+    expect(missing.err()).toBe("openboard: required option '--agent <id>' not specified\n");
   });
 
   it('rejects an unknown command with one line', async () => {

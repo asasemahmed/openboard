@@ -5,7 +5,9 @@
  */
 import { useReactFlow, useStore } from '@xyflow/react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { calmMessage } from '../lib/api.js';
 import { absoluteRect, boundsOf, type Rect } from '../lib/geometry.js';
+import { undoOutcome } from '../lib/historyRows.js';
 import {
   type Located,
   type OffscreenGroup,
@@ -17,11 +19,14 @@ import {
   byActor,
   changeCountLabel,
   type Highlight,
+  type RemovalNotice,
   removalMessage,
 } from '../state/activity.js';
 import { useSession } from '../state/context.js';
 import { useStoreValue } from '../state/emitter.js';
+import { undoBatch } from '../state/review.js';
 import type { BoardSession } from '../state/session.js';
+import { toasts } from '../state/toasts.js';
 import { IconButton } from '../ui/Button.js';
 import { Icon, type IconName } from '../ui/Icon.js';
 import { reducedMotion } from './actions.js';
@@ -115,11 +120,64 @@ function OffscreenPills() {
   );
 }
 
+/** The batches that made a removal: named by the change feed, or found in the history. */
+async function removalBatches(session: BoardSession, notice: RemovalNotice): Promise<string[]> {
+  if (notice.batchIds && notice.batchIds.length > 0) return [...notice.batchIds];
+  const ids = new Set(notice.itemIds ?? []);
+  if (ids.size === 0) return [];
+  const result = await session.api.history(session.boardId, {
+    limit: 20,
+    maxTokens: 50_000,
+    ...(notice.actorId ? { actor: notice.actorId } : {}),
+  });
+  const batch = result.batches.find(
+    (b) =>
+      !b.undoneBy && b.source !== 'undo' && [...b.nodeIds, ...b.edgeIds].some((id) => ids.has(id)),
+  );
+  return batch ? [batch.id] : [];
+}
+
 function RemovalNotices() {
-  const { activity, store } = useSession();
+  const session = useSession();
+  const { activity, store } = session;
   const removals = useStoreValue(activity, () => activity.get().removals);
   const actors = useStoreValue(store, () => store.meta.actors);
+  const [busy, setBusy] = useState<number | null>(null);
   if (removals.length === 0) return null;
+
+  const undo = async (notice: RemovalNotice) => {
+    setBusy(notice.id);
+    try {
+      const batches = await removalBatches(session, notice);
+      if (batches.length === 0) {
+        toasts.show('That removal is no longer in the history, so it cannot be undone here.', {
+          tone: 'error',
+        });
+        return;
+      }
+      const results = [];
+      for (const batchId of batches) {
+        const result = await undoBatch(session, { batchId });
+        if (!result.ok) {
+          toasts.show(result.message, { tone: 'error' });
+          return;
+        }
+        results.push(result.value);
+      }
+      activity.dismissRemoval(notice.id);
+      toasts.show(
+        undoOutcome({
+          undone: results.flatMap((r) => r.undone),
+          conflicts: results.flatMap((r) => r.conflicts),
+        }),
+      );
+    } catch (error) {
+      toasts.show(calmMessage(error, 'batch'), { tone: 'error' });
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
     <div className="removal-stack" role="status" aria-live="polite">
       {removals.map((notice) => (
@@ -128,6 +186,14 @@ function RemovalNotices() {
           <span className="removal-notice-text">
             {removalMessage(notice, actorName(actors, notice.actorId))}
           </span>
+          <button
+            type="button"
+            className="removal-undo"
+            disabled={busy === notice.id}
+            onClick={() => void undo(notice)}
+          >
+            {busy === notice.id ? 'Undoing…' : 'Undo'}
+          </button>
           <IconButton
             icon="close"
             label="Dismiss"
@@ -153,10 +219,12 @@ function useAnnouncement(): string {
         const parts = [...byActor(highlights)].map(([actorId, list]) => {
           const name = actorName(session.store.meta.actors, actorId) ?? 'Someone';
           const added = list.filter((h) => h.verb === 'added').length;
-          const updated = list.length - added;
+          const commented = list.filter((h) => h.verb === 'commented').length;
+          const updated = list.length - added - commented;
           const what = [
             added ? `added ${added === 1 ? '1 item' : `${added} items`}` : '',
             updated ? `changed ${updated === 1 ? '1 item' : `${updated} items`}` : '',
+            commented ? `commented on ${commented === 1 ? '1 card' : `${commented} cards`}` : '',
           ]
             .filter(Boolean)
             .join(' and ');

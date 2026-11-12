@@ -43,6 +43,31 @@ describe('doctor', () => {
     expect(io.out()).toMatch(/FAIL {2}\.openboard\/bad\.board\.json: board file is invalid: /);
   });
 
+  it('checks config.json when there is one', async () => {
+    const dir = await tempDir();
+    await initCommand(captureIo(dir));
+    const file = path.join(dir, '.openboard/config.json');
+    const none = await runChecks(captureIo(dir), { root: dir, app: await builtApp() });
+    expect(none.some((c) => c.label.includes('config.json'))).toBe(false);
+
+    await writeFile(
+      file,
+      JSON.stringify({ version: 1, policy: { default: 'review_all', agents: { bot: 'locked' } } }),
+    );
+    const good = await runChecks(captureIo(dir), { root: dir, app: await builtApp() });
+    expect(good.find((c) => c.label.includes('config.json'))).toEqual({
+      status: 'ok',
+      label:
+        '.openboard/config.json parses (agents default to review_all; 1 agent has its own mode)',
+    });
+
+    await writeFile(file, '{"version": 1, "policy": {"default": "sometimes", "agents": {}}}');
+    const io = captureIo(dir);
+    expect(await doctorCommand(io, { root: dir, app: await builtApp() })).toBe(1);
+    expect(io.out()).toMatch(/FAIL {2}\.openboard\/config\.json: config file is invalid: /);
+    expect(io.out()).toContain('remove it to use the default policy');
+  });
+
   it('fails for an old Node.js and an unbuilt app', async () => {
     const dir = await tempDir();
     await initCommand(captureIo(dir));

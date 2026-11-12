@@ -4,8 +4,10 @@
  *
  * Positions are one sequence per board: every item gets the next `seq`, and an
  * actor's position is the `seq` of the newest item it has seen. Stored in
- * `.local/<id>.inbox.jsonl` as `{"to", "item"}` and `{"seen", "position"}`
- * lines, compacted when the file is opened.
+ * `.local/<id>.inbox.jsonl` as `{"to", "item"}`, `{"seen", "position"}` and
+ * `{"dismissed", "seqs"}` lines, compacted when the file is opened. A
+ * dismissed item already reached its actor another way (an answer returned by
+ * a long-poll) and is skipped by reads that do not pass `since`.
  */
 import { appendFile, readFile } from 'node:fs/promises';
 import type { InboxItem } from '@openboard/core';
@@ -23,6 +25,7 @@ export class Inbox {
   private items: Stored[] = [];
   private seq = 0;
   private readonly seen = new Map<string, number>();
+  private readonly dismissed = new Set<number>();
   private writes: Promise<void> = Promise.resolve();
   private linesOnDisk = 0;
 
@@ -47,7 +50,9 @@ export class Inbox {
     for (const line of lines) {
       try {
         const raw = JSON.parse(line) as Record<string, unknown>;
-        if (typeof raw.seen === 'string' && typeof raw.position === 'number') {
+        if (typeof raw.dismissed === 'string' && Array.isArray(raw.seqs)) {
+          for (const seq of raw.seqs) if (typeof seq === 'number') inbox.dismissed.add(seq);
+        } else if (typeof raw.seen === 'string' && typeof raw.position === 'number') {
           inbox.seen.set(raw.seen, Math.max(inbox.seen.get(raw.seen) ?? 0, raw.position));
         } else if (
           typeof raw.to === 'string' &&
@@ -67,7 +72,10 @@ export class Inbox {
       }
     }
     inbox.items = inbox.items.slice(-inbox.retain);
-    const compactLines = inbox.items.length + inbox.seen.size + 1;
+    const kept = new Set(inbox.items.map((stored) => stored.item.seq));
+    for (const seq of [...inbox.dismissed]) if (!kept.has(seq)) inbox.dismissed.delete(seq);
+    const compactLines =
+      inbox.items.length + inbox.seen.size + 1 + (inbox.dismissed.size > 0 ? 1 : 0);
     if (lines.length > compactLines) await inbox.compact();
     else inbox.linesOnDisk = lines.length;
     return inbox;
@@ -90,7 +98,29 @@ export class Inbox {
   /** Items for `actor` after `since` (default: after what it has seen), oldest first. */
   unread(actor: string, since?: number): InboxItem[] {
     const from = since ?? this.seen.get(actor) ?? 0;
-    return this.items.filter((s) => s.to === actor && s.item.seq > from).map((s) => s.item);
+    return this.items
+      .filter(
+        (stored) =>
+          stored.to === actor &&
+          stored.item.seq > from &&
+          (since !== undefined || !this.dismissed.has(stored.item.seq)),
+      )
+      .map((stored) => stored.item);
+  }
+
+  /** Items for `actor` that match `test`, read or not. */
+  find(actor: string, test: (item: InboxItem) => boolean): InboxItem[] {
+    return this.items
+      .filter((stored) => stored.to === actor && test(stored.item))
+      .map((stored) => stored.item);
+  }
+
+  /** Leave these items of `actor` out of later unread reads: they reached it another way. */
+  dismiss(actor: string, seqs: number[]): void {
+    const fresh = seqs.filter((seq) => !this.dismissed.has(seq));
+    if (fresh.length === 0) return;
+    for (const seq of fresh) this.dismissed.add(seq);
+    this.append(`${JSON.stringify({ dismissed: actor, seqs: fresh })}\n`);
   }
 
   /** Remember that `actor` has seen everything up to `position`. Positions never move back. */
@@ -108,6 +138,9 @@ export class Inbox {
     const lines = this.items.map((s) => JSON.stringify({ to: s.to, item: s.item }));
     for (const [actor, position] of this.seen)
       lines.push(JSON.stringify({ seen: actor, position }));
+    if (this.dismissed.size > 0) {
+      lines.push(JSON.stringify({ dismissed: '*', seqs: [...this.dismissed] }));
+    }
     // Keeps the sequence when the newest items were dropped.
     lines.push(JSON.stringify({ seq: this.seq }));
     return `${lines.join('\n')}\n`;
@@ -115,7 +148,7 @@ export class Inbox {
 
   private compact(): Promise<void> {
     const text = this.snapshot();
-    const count = this.items.length + this.seen.size + 1;
+    const count = this.items.length + this.seen.size + 1 + (this.dismissed.size > 0 ? 1 : 0);
     this.writes = this.writes.then(async () => {
       try {
         await writeFileAtomic(this.file, text);

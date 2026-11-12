@@ -16,6 +16,7 @@ import { markdownToPlainText } from '../lib/plainText.js';
 import { useSession } from '../state/context.js';
 import { Icon } from '../ui/Icon.js';
 import { NodeDecorations } from './NodeDecorations.js';
+import { useReviewClass } from './reviewClass.js';
 import { StatusPill } from './StatusPill.js';
 import { TitleEditor, useIsEditing } from './TitleEditor.js';
 
@@ -40,23 +41,29 @@ function CardNodeView({ id, data, selected }: NodeProps<FlowNode>) {
   const hasMeta = node.status !== undefined || tags.length > 0 || links.length > 0;
   const custom = meta.tone === 'custom';
   const focus = useNodeFocus(id, ghost);
+  const review = useReviewClass(id, ghost);
 
   return (
     <article
-      className={`card tone-${meta.tone}${selected ? ' is-selected' : ''}${ghost ? ' is-ghost' : ''}`}
-      aria-label={`${meta.name}: ${node.title}`}
+      className={`card tone-${meta.tone}${selected ? ' is-selected' : ''}${ghost ? ' is-ghost' : ''}${review}`}
+      aria-label={
+        ghost
+          ? `Proposed ${meta.name.toLowerCase()}: ${node.title}. Open the review`
+          : `${meta.name}: ${node.title}`
+      }
       {...focus}
     >
-      {!ghost &&
-        HANDLES.map((position) => (
-          <Handle
-            key={position}
-            id={position}
-            type="source"
-            position={position}
-            className="card-handle"
-          />
-        ))}
+      {/* Ghosts keep hidden anchors so proposed edges can attach to them; they cannot be connected. */}
+      {HANDLES.map((position) => (
+        <Handle
+          key={position}
+          id={position}
+          type="source"
+          position={position}
+          isConnectable={!ghost}
+          className={ghost ? 'frame-anchor' : 'card-handle'}
+        />
+      ))}
       <div className="card-inner">
         <header className="card-head">
           <span className="type-dot" aria-hidden="true" />

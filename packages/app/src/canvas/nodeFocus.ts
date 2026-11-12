@@ -10,7 +10,7 @@
  * React Flow's own keyboard handling stays off: it moves nodes with the
  * arrow keys, which the board already uses for nudging.
  */
-import { type FocusEvent, type KeyboardEvent, useCallback } from 'react';
+import { type FocusEvent, type KeyboardEvent, type MouseEvent, useCallback } from 'react';
 import type { PlacementMap } from '../lib/geometry.js';
 import {
   type Direction,
@@ -21,6 +21,7 @@ import {
 import type { BoardStore, Selection } from '../state/boardStore.js';
 import { useSession } from '../state/context.js';
 import { useStoreValue } from '../state/emitter.js';
+import { openReview } from '../state/review.js';
 
 const orderCache = new WeakMap<PlacementMap, string[]>();
 
@@ -69,8 +70,39 @@ export function focusNodeElement(id: string, tries = 12): void {
     requestAnimationFrame(() => focusNodeElement(id, tries - 1));
 }
 
+/**
+ * Ghosts are not part of the board's tab order, but each is its own stop
+ * (proposals are few and are what needs attention): Enter, Space or a click
+ * opens the review of the proposal that adds it.
+ */
+function useGhostFocus(id: string, ghost: boolean) {
+  const session = useSession();
+  const open = useCallback(() => {
+    const owner = session.store.review().ghostOwner.get(id);
+    openReview(session, owner);
+  }, [session, id]);
+  if (!ghost) return null;
+  return {
+    tabIndex: 0,
+    role: 'button',
+    'data-ghost-focus': '',
+    onClick: (event: MouseEvent) => {
+      event.stopPropagation();
+      open();
+    },
+    onKeyDown: (event: KeyboardEvent<HTMLElement>) => {
+      if (event.target !== event.currentTarget) return;
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        open();
+      }
+    },
+  };
+}
+
 /** Props that make a card or frame focusable as part of the canvas's single tab stop. */
 export function useNodeFocus(id: string, ghost: boolean) {
+  const ghostProps = useGhostFocus(id, ghost);
   const { store } = useSession();
   const isStop = useStoreValue(store, () => !ghost && tabStopOf(store) === id);
   const onFocus = useCallback(
@@ -88,7 +120,7 @@ export function useNodeFocus(id: string, ghost: boolean) {
     },
     [store, id],
   );
-  if (ghost) return {};
+  if (ghostProps) return ghostProps;
   return { tabIndex: isStop ? 0 : -1, 'data-node-focus': '', onFocus };
 }
 

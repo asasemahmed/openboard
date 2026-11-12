@@ -16,6 +16,8 @@ import type {
   AnswerInput,
   Ask,
   AskInput,
+  AsksOptions,
+  AsksResult,
   CommentInput,
   Decision,
   HistoryOptions,
@@ -220,6 +222,8 @@ export interface ApplyResult {
   /** Real ids for the `ref`s declared in the batch. */
   refs: Record<string, string>;
   applied?: AppliedOps;
+  /** When `applied`: the history batch it became (see `history` and `undo`). */
+  batchId?: string;
   errors?: OpError[];
   proposalId?: string;
   /**
@@ -305,6 +309,8 @@ export interface BoardApi {
 
   // Questions for a human.
   ask(boardId: string, input: AskInput): Promise<Ask>;
+  /** Questions on the board, open ones by default, oldest first. */
+  asks(boardId: string, options?: AsksOptions): Promise<AsksResult>;
   /**
    * The current state of a question. With `waitMs`, the call returns as soon as
    * the question is answered or cancelled, or when the time is up.

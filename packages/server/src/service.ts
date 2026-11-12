@@ -19,6 +19,9 @@ import {
   type Ask,
   type AskInput,
   AskInputSchema,
+  type AsksOptions,
+  AsksOptionsSchema,
+  type AsksResult,
   applyOps,
   type Board,
   type BoardApi,
@@ -38,6 +41,7 @@ import {
   classifyOps,
   type Decision,
   DecisionSchema,
+  explainVerdicts,
   type HistoryOptions,
   HistoryOptionsSchema,
   type HistoryResult,
@@ -62,6 +66,7 @@ import {
   type Proposal,
   type ProposalItem,
   type ProposalsResult,
+  policyModeFor,
   previewOf,
   proposalOps,
   proposalRefs,
@@ -69,6 +74,7 @@ import {
   ReadQuerySchema,
   type ReadResult,
   type RestoreItems,
+  renderAsks,
   renderChanges,
   renderHistory,
   renderInbox,
@@ -148,14 +154,6 @@ export function patchToMoves(board: Board, patch: LayoutPatch): Op[] {
 
 function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? '' : 's'}`;
-}
-
-/** One sentence from the reasons of several operations. */
-function joinReasons(entries: Array<{ index: number; why?: string }>): string {
-  const parts = entries.slice(0, 3).map((e) => `op ${e.index} ${e.why ?? 'needs review'}`);
-  if (entries.length > 3) parts.push(`and ${entries.length - 3} more`);
-  const text = parts.join('; ');
-  return `${text.charAt(0).toUpperCase()}${text.slice(1)}.`;
 }
 
 type Conflict = UndoResult['conflicts'][number];
@@ -286,7 +284,7 @@ export class LocalBoardApi implements BoardApi {
       const needsReview = verdicts.filter((v) => v.verdict === 'review');
       const review =
         needsReview.length > 0
-          ? { indexes: needsReview.map((v) => v.index), why: joinReasons(needsReview) }
+          ? { indexes: needsReview.map((v) => v.index), why: explainVerdicts(needsReview) }
           : undefined;
 
       if (req.dryRun) {
@@ -318,6 +316,7 @@ export class LocalBoardApi implements BoardApi {
         );
         if (after.ok)
           proposal.preview = await placePreview(after.board, proposal.preview, this.log);
+        room.doc.registerActor(this.actor, this.origin(room));
         room.doc.putProposal(proposal, this.origin(room));
         return {
           status: 'proposed',
@@ -336,12 +335,15 @@ export class LocalBoardApi implements BoardApi {
         return { status: 'invalid', cursor: room.cursor, refs: {}, errors: outcome.errors };
       }
       if (req.layout !== 'none') await this.placeNew(room, this.actor, batchId);
-      return {
+      const result: ApplyResult = {
         status: 'applied',
         cursor: room.cursor,
         refs: outcome.applied.refs,
         applied: outcome.applied,
       };
+      // A batch that changed nothing is not in the history.
+      if (room.history.get(batchId)) result.batchId = batchId;
+      return result;
     };
     return req.dryRun ? run() : room.lock.run(run);
   }
@@ -455,6 +457,7 @@ export class LocalBoardApi implements BoardApi {
           `proposal "${proposal.id}" has no item ${unknown.join(', ')}; its items are 0-${proposal.items.length - 1}`,
         );
       }
+      room.doc.registerActor(this.actor, this.origin(room));
       const { accept, reject } = selectItems(proposal, input);
       const items = new Map(proposal.items.map((item) => [item.index, { ...item }]));
       for (const index of reject) (items.get(index) as ProposalItem).status = 'rejected';
@@ -629,6 +632,12 @@ export class LocalBoardApi implements BoardApi {
     const room = await this.room(boardId);
     return room.lock.run(async () => {
       const agent = this.actor.kind === 'agent';
+      if (agent && policyModeFor(this.actor, room.config.config) === 'locked') {
+        throw new OpenBoardError(
+          'forbidden',
+          'this agent is locked by the review policy: it may read the board but not change it, undo included',
+        );
+      }
       let targets: BatchRecord[];
       if ('batchId' in req) {
         const record = room.history.get(req.batchId);
@@ -658,17 +667,21 @@ export class LocalBoardApi implements BoardApi {
             `an agent can only undo its own batches, not those of ${req.actorId}`,
           );
         }
-        const candidates = [...room.history.all()]
-          .reverse()
-          .filter(
-            (r) => r.batch.actor === req.actorId && !r.batch.undoneBy && r.batch.source !== 'undo',
-          );
+        const candidates = [...room.history.all()].reverse().filter(
+          (r) =>
+            r.batch.actor === req.actorId &&
+            !r.batch.undoneBy &&
+            r.batch.source !== 'undo' &&
+            // Comment-only batches (a reply, resolving a thread) are undone by id only.
+            r.batch.nodeIds.length + r.batch.edgeIds.length > 0,
+        );
         targets = req.scope === 'last' ? candidates.slice(0, 1) : candidates;
       }
 
       const undone: string[] = [];
       const conflicts: Conflict[] = [];
       const titles: Record<string, string> = {};
+      if (targets.length > 0) room.doc.registerActor(this.actor, this.origin(room));
       for (const record of targets) {
         const result = this.undoOne(room, record, titles);
         conflicts.push(...result.conflicts);
@@ -679,7 +692,11 @@ export class LocalBoardApi implements BoardApi {
         cursor: room.cursor,
         undone,
         conflicts,
-        text: renderUndo(room.id, { cursor: room.cursor, undone, conflicts }, { titles }),
+        text: renderUndo(
+          room.id,
+          { cursor: room.cursor, undone, conflicts },
+          { titles, batches: targets.map((record) => record.batch) },
+        ),
       };
     });
   }
@@ -731,6 +748,8 @@ export class LocalBoardApi implements BoardApi {
           reason: current ? 'edited after this batch' : 'removed after this batch',
         });
     }
+
+    if (this.actor.kind === 'agent') this.applyUndoPolicy(room, record, plan, conflicts);
 
     // Never leave dangling references: drop restores that would need what stays as it is.
     const nodePresent = (id: string) =>
@@ -801,6 +820,77 @@ export class LocalBoardApi implements BoardApi {
       });
     }
     return { undoneBy: undoId, conflicts };
+  }
+
+  /**
+   * An agent restores only what it could change freely right now: each restore
+   * is classified as the operation it amounts to, and anything that is not
+   * `free` stays as it is. Reviewed items of an accepted proposal are for
+   * people to undo. See `UndoRequestSchema` in core.
+   */
+  private applyUndoPolicy(
+    room: Room,
+    record: BatchRecord,
+    plan: Required<RestoreItems>,
+    conflicts: Conflict[],
+  ): void {
+    const doc = room.doc;
+    const board = doc.toJSON();
+    const config = room.config.config;
+    const reviewed = reviewedIds(doc.getProposal(record.batch.proposalId ?? ''), record);
+    const allowed = (kind: 'node' | 'edge', id: string, op: Op): boolean => {
+      if (reviewed === 'all' || reviewed.has(id)) {
+        conflicts.push({
+          kind,
+          id,
+          reason: 'was applied through a reviewed proposal; ask a person to undo it',
+        });
+        return false;
+      }
+      const [verdict] = classifyOps(board, [op], { actor: this.actor, config });
+      if (!verdict || verdict.verdict === 'free') return true;
+      const label = verdict.verdict === 'denied' ? 'not allowed' : 'needs review';
+      conflicts.push({ kind, id, reason: `${label}: ${verdict.rule ?? verdict.why ?? ''}` });
+      return false;
+    };
+    for (const [id, target] of Object.entries(plan.nodes)) {
+      const current = doc.storedNode(id);
+      let op: Op | null = null;
+      if (target === null) {
+        if (current) op = { op: 'remove_node', id };
+      } else if (!current) {
+        const node = { type: target.type, title: target.title };
+        op = {
+          op: 'add_node',
+          id,
+          node: target.parent !== undefined ? { ...node, parent: target.parent } : node,
+        };
+      } else {
+        const { view: _a, ...a } = current;
+        const { view: _b, ...b } = target;
+        if (jsonEqual(a, b)) op = { op: 'move_node', id, view: target.view ?? { x: 0, y: 0 } };
+        else {
+          const patch: Extract<Op, { op: 'update_node' }>['patch'] = { title: target.title };
+          if (current.parent !== target.parent) patch.parent = target.parent ?? null;
+          op = { op: 'update_node', id, patch };
+        }
+      }
+      if (op && !allowed('node', id, op)) delete plan.nodes[id];
+    }
+    for (const [id, target] of Object.entries(plan.edges)) {
+      const current = doc.storedEdge(id);
+      let op: Op | null = null;
+      if (target === null) {
+        if (current) op = { op: 'remove_edge', id };
+      } else if (!current) {
+        op = {
+          op: 'add_edge',
+          id,
+          edge: { type: target.type, source: target.source, target: target.target },
+        };
+      } else op = { op: 'update_edge', id, patch: { label: target.label ?? null } };
+      if (op && !allowed('edge', id, op)) delete plan.edges[id];
+    }
   }
 
   // ── Comments and inbox ─────────────────────────────────────────────────────
@@ -908,8 +998,21 @@ export class LocalBoardApi implements BoardApi {
     };
     if (parsed.options?.length) ask.options = parsed.options;
     if (parsed.nodeIds?.length) ask.nodeIds = [...new Set(parsed.nodeIds)];
+    room.doc.registerActor(this.actor, this.origin(room));
     room.doc.putAsk(ask, this.origin(room));
     return ask;
+  }
+
+  async asks(boardId: string, options?: AsksOptions): Promise<AsksResult> {
+    const opts = parseInput(AsksOptionsSchema, options ?? {}, 'questions options');
+    const room = await this.room(boardId);
+    const status = opts.status ?? 'open';
+    const list = room.doc.asks().filter((ask) => status === 'all' || ask.status === 'open');
+    return renderAsks(room.id, list, {
+      actors: { [SYSTEM_ACTOR.id]: SYSTEM_ACTOR, ...room.actors() },
+      status,
+      ...(opts.maxTokens !== undefined ? { maxTokens: opts.maxTokens } : {}),
+    });
   }
 
   /**
@@ -925,9 +1028,23 @@ export class LocalBoardApi implements BoardApi {
     const { waitMs } = parseInput(AskWaitSchema, { waitMs: options?.waitMs }, 'wait options');
     const room = await this.room(boardId);
     const ask = this.askOf(room, askId);
-    if (!waitMs || ask.status !== 'open') return ask;
-    await room.waitForAsk(ask.id, Math.min(waitMs, MAX_ASK_WAIT_MS), options?.signal);
-    return room.doc.getAsk(ask.id) ?? ask;
+    let result = ask;
+    if (waitMs && ask.status === 'open') {
+      await room.waitForAsk(ask.id, Math.min(waitMs, MAX_ASK_WAIT_MS), options?.signal);
+      result = room.doc.getAsk(ask.id) ?? ask;
+    }
+    // The author now has the answer; its inbox should not deliver it again.
+    if (result.status === 'answered' && result.author === this.actor.id) {
+      const items = room.inbox.find(
+        this.actor.id,
+        (item) => item.kind === 'answer' && item.askId === result.id,
+      );
+      room.inbox.dismiss(
+        this.actor.id,
+        items.map((item) => item.seq),
+      );
+    }
+    return result;
   }
 
   async answerAsk(boardId: string, askId: string, answer: AnswerInput): Promise<Ask> {
@@ -945,6 +1062,7 @@ export class LocalBoardApi implements BoardApi {
         `"${parsed.option}" is not one of the options (${ask.options.map((o) => JSON.stringify(o)).join(', ')}); answer in text instead`,
       );
     }
+    room.doc.registerActor(this.actor, this.origin(room));
     const next: Ask = {
       ...ask,
       status: 'answered',
@@ -986,4 +1104,31 @@ export class LocalBoardApi implements BoardApi {
     this.requirePerson('changing the project settings');
     return this.boards.config.set(config);
   }
+}
+
+/**
+ * Ids in `record` that a person approved as reviewed items of `proposal`
+ * (with what their removals took along), or `all` when the batch came from a
+ * proposal that is no longer kept.
+ */
+function reviewedIds(proposal: Proposal | undefined, record: BatchRecord): Set<string> | 'all' {
+  if (!record.batch.proposalId) return new Set();
+  if (!proposal) return 'all';
+  const ids = new Set<string>();
+  const removed: string[] = [];
+  for (const item of proposal.items) {
+    if (!item.needsReview || item.status !== 'accepted') continue;
+    const op = item.op;
+    if (op.id !== undefined) ids.add(op.id);
+    if (op.op === 'remove_node') removed.push(op.id);
+  }
+  for (const [id, snap] of Object.entries(record.edges)) {
+    const edge = snap.before;
+    if (edge && (removed.includes(edge.source) || removed.includes(edge.target))) ids.add(id);
+  }
+  for (const [id, snap] of Object.entries(record.nodes)) {
+    const parent = snap.before?.parent;
+    if (parent !== undefined && removed.includes(parent) && !snap.after?.parent) ids.add(id);
+  }
+  return ids;
 }

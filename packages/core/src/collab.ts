@@ -10,7 +10,7 @@
  */
 import { z } from 'zod';
 import { OpSchema } from './ops.js';
-import { CommentSchema, EdgeSchema, IdSchema, NodeSchema } from './schema.js';
+import { CommentSchema, EdgeSchema, IdSchema, NodeSchema, ViewSchema } from './schema.js';
 
 // ── Policy ───────────────────────────────────────────────────────────────────
 
@@ -128,6 +128,14 @@ export const ProposalPreviewSchema = z.object({
   updated: z.record(IdSchema, z.object({ fields: z.array(z.string()) })),
   removedNodes: z.array(IdSchema),
   removedEdges: z.array(IdSchema),
+  /**
+   * New views of existing nodes that the layout would change if the proposal
+   * were accepted: frames that grow to hold what is added (keeping their
+   * position), unpinned siblings they push aside, and nodes moved to another
+   * frame. Complete views, relative to the parent as usual. Absent when
+   * nothing would move.
+   */
+  views: z.record(IdSchema, ViewSchema).optional(),
 });
 export type ProposalPreview = z.infer<typeof ProposalPreviewSchema>;
 
@@ -273,7 +281,17 @@ export interface HistoryResult {
 
 /**
  * What to undo: one batch, an actor's most recent batch, or everything an actor
- * did that is still in place. An agent may only undo its own batches.
+ * did that is still in place. `last` and `all` consider only batches that
+ * changed nodes or edges (not comment-only ones such as resolving a thread);
+ * name a batch id to undo anything else.
+ *
+ * People may undo anything. An agent:
+ * - may undo only its own batches, and not at all in `locked` mode;
+ * - restores an item only where doing so would be `free` for it under the
+ *   current policy (`classifyOps` on the restoring change); anything else is
+ *   left as it is and reported as a conflict ("needs review: ...");
+ * - never undoes the reviewed items of a batch that came from an accepted
+ *   proposal: a person accepted them, so a person undoes them.
  */
 export const UndoRequestSchema = z.union([
   z.object({ batchId: IdSchema }),
@@ -292,6 +310,24 @@ export interface UndoResult {
    */
   conflicts: Array<{ kind: 'node' | 'edge' | 'comment'; id: string; reason: string }>;
   text: string;
+}
+
+// ── Questions, listed ────────────────────────────────────────────────────────
+
+export const AsksOptionsSchema = z.object({
+  /** `open` (default) or every question still kept. */
+  status: z.enum(['open', 'all']).optional(),
+  maxTokens: z.number().int().min(100).max(50_000).optional(),
+});
+export type AsksOptions = z.infer<typeof AsksOptionsSchema>;
+
+export interface AsksResult {
+  boardId: string;
+  /** Oldest first. */
+  asks: Ask[];
+  text: string;
+  tokens: number;
+  truncated: boolean;
 }
 
 // ── Inbox ────────────────────────────────────────────────────────────────────

@@ -60,6 +60,7 @@ export function toFlowNode(node: BoardNode, opts: FlowNodeOptions = {}): FlowNod
   if (opts.ghost) {
     flow.draggable = false;
     flow.connectable = false;
+    flow.selectable = false;
     flow.className = 'is-ghost';
   }
   return flow;

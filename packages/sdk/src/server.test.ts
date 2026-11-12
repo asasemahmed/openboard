@@ -79,6 +79,12 @@ describe('against a real server', () => {
     await bot.apply('plan', { ops: [{ op: 'update_node', id: 'h1', patch: { title: 'X' } }] });
     const history = await ada.history('plan', { actor: 'bot' });
     expect(history.batches).toHaveLength(1);
+    const applied = await bot.apply('plan', {
+      layout: 'none',
+      ops: [{ op: 'add_node', node: { type: 'note', title: 'Y' } }],
+    });
+    expect(applied.batchId).toMatch(/^b_/);
+    await bot.undo('plan', { batchId: applied.batchId as string });
     const undone = await bot.undo('plan', { batchId: history.batches[0]?.id as string });
     expect(undone.undone).toEqual([history.batches[0]?.id]);
     expect((await ada.getBoard('plan')).nodes.h1?.title).toBe('Payment API');
@@ -106,6 +112,10 @@ describe('against a real server', () => {
     const answered = await waiting;
     expect(answered.status).toBe('answered');
     expect(await code(ada.answerAsk('plan', ask.id, { option: 'no' }))).toBe('conflict');
+
+    expect((await ada.asks('plan')).asks).toEqual([]);
+    expect((await ada.asks('plan', { status: 'all' })).asks.map((a) => a.id)).toEqual([ask.id]);
+    expect((await ada.getBoard('plan')).actors.ada?.name).toBe('Ada');
 
     const other = await bot.ask('plan', { question: 'Later?' });
     expect((await bot.askResult('plan', other.id, { waitMs: 100 })).status).toBe('open');

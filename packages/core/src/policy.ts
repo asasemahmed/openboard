@@ -20,8 +20,14 @@ import type { Actor, Board, BoardEdge, BoardNode } from './schema.js';
 export interface OpClassification {
   index: number;
   verdict: OpVerdict;
-  /** A short sentence for a person, set unless the verdict is `free`. */
+  /** A short sentence for a person about this operation, set unless the verdict is `free`. */
   why?: string;
+  /**
+   * The rule behind the verdict, without naming the operation (e.g. `every
+   * change by this agent waits for review`), so reasons can be grouped. Set
+   * unless the verdict is `free`.
+   */
+  rule?: string;
 }
 
 export interface PolicyContext {
@@ -49,6 +55,7 @@ const RANK: Record<OpVerdict, number> = { free: 0, review: 1, denied: 2 };
 interface Judgement {
   verdict: OpVerdict;
   why?: string;
+  rule?: string;
 }
 
 const FREE: Judgement = { verdict: 'free' };
@@ -120,6 +127,7 @@ class Classifier {
       const judgement = this.step(op, index);
       const out: OpClassification = { index, verdict: judgement.verdict };
       if (judgement.verdict !== 'free' && judgement.why) out.why = judgement.why;
+      if (judgement.verdict !== 'free' && judgement.rule) out.rule = judgement.rule;
       return out;
     });
   }
@@ -296,11 +304,13 @@ class Classifier {
         judgements.push({
           verdict: 'denied',
           why: `would move ${title} into the locked frame ${q(zone.title)}`,
+          rule: `nothing may be moved into or out of the locked frame ${q(zone.title)}`,
         });
       else if (zone.policy === 'review')
         judgements.push({
           verdict: 'review',
           why: `moves ${title} into the review frame ${q(zone.title)}`,
+          rule: `moving into or out of the review frame ${q(zone.title)} waits for review`,
         });
     }
     for (const zone of before) {
@@ -309,11 +319,13 @@ class Classifier {
         judgements.push({
           verdict: 'denied',
           why: `would move ${title} out of the locked frame ${q(zone.title)}`,
+          rule: `nothing may be moved into or out of the locked frame ${q(zone.title)}`,
         });
       else if (zone.policy === 'review')
         judgements.push({
           verdict: 'review',
           why: `moves ${title} out of the review frame ${q(zone.title)}`,
+          rule: `moving into or out of the review frame ${q(zone.title)} waits for review`,
         });
     }
     // A node added in this batch is judged as if it were added where it ends up.
@@ -352,29 +364,82 @@ class Classifier {
       return {
         verdict: 'denied',
         why: `this agent is locked: it may read the board but not change it (${what})`,
+        rule: 'this agent is locked: it may read the board but not change it',
       };
     }
     if (zone?.policy === 'locked') {
       return {
         verdict: 'denied',
         why: `${what} inside the locked frame ${q(zone.title)}, which agents may not change`,
+        rule: `agents may not change anything inside the locked frame ${q(zone.title)}`,
       };
     }
     if (zone?.policy === 'review') {
-      return { verdict: 'review', why: `${what} inside the review frame ${q(zone.title)}` };
+      return {
+        verdict: 'review',
+        why: `${what} inside the review frame ${q(zone.title)}`,
+        rule: `changes inside the review frame ${q(zone.title)} wait for review`,
+      };
     }
     const mode: PolicyMode = zone?.policy === 'auto' ? 'auto' : this.mode;
     if (mode === 'auto') return FREE;
     if (mode === 'review_all')
-      return { verdict: 'review', why: `${what}; every change by this agent waits for review` };
+      return {
+        verdict: 'review',
+        why: `${what}; every change by this agent waits for review`,
+        rule: 'every change by this agent waits for review',
+      };
     // review_destructive
     if (action === 'add' || action === 'move') return FREE;
-    if (action === 'move_pinned') return { verdict: 'review', why: what };
+    if (action === 'move_pinned') {
+      return {
+        verdict: 'review',
+        why: what,
+        rule: 'moving a node a person pinned waits for review',
+      };
+    }
     if (item && item.createdBy === this.actor.id && item.updatedBy === this.actor.id) return FREE;
     if (!item) return FREE;
     const by = item.createdBy !== this.actor.id ? item.createdBy : item.updatedBy;
     const label = this.board.actors[by]?.name ?? by;
     const role = item.createdBy !== this.actor.id ? 'created' : 'edited last';
-    return { verdict: 'review', why: `${what}, which ${label} ${role}` };
+    return {
+      verdict: 'review',
+      why: `${what}, which ${label} ${role}`,
+      rule: `changing what ${label} ${role === 'created' ? 'created' : 'edited'} waits for review`,
+    };
   }
+}
+
+/**
+ * One sentence on why some operations of a batch are not free, grouping
+ * operations that share a rule: `Ops 0, 1 and 2: every change by this agent
+ * waits for review.` At most three rules and six indexes per rule are named.
+ */
+export function explainVerdicts(entries: readonly OpClassification[]): string {
+  const groups = new Map<string, number[]>();
+  const whys = new Map<number, string>();
+  for (const entry of entries) {
+    if (entry.verdict === 'free') continue;
+    const rule = entry.rule ?? entry.why ?? 'needs review';
+    if (entry.why) whys.set(entry.index, entry.why);
+    const list = groups.get(rule);
+    if (list) list.push(entry.index);
+    else groups.set(rule, [entry.index]);
+  }
+  const indexes = (list: number[]) => {
+    const shown = list.slice(0, 6).map(String);
+    if (list.length > 6) shown.push(`${list.length - 6} more`);
+    const text =
+      shown.length === 1 ? shown[0] : `${shown.slice(0, -1).join(', ')} and ${shown.at(-1)}`;
+    return `${list.length === 1 ? 'op' : 'ops'} ${text}`;
+  };
+  // A rule that applies to one operation is said about that operation.
+  const parts = [...groups].slice(0, 3).map(([rule, list]) => {
+    const why = list.length === 1 ? whys.get(list[0] as number) : undefined;
+    return why ? `op ${list[0]} ${why}` : `${indexes(list)}: ${rule}`;
+  });
+  if (groups.size > 3) parts.push(`and ${groups.size - 3} more reasons`);
+  const text = parts.join('; ');
+  return text ? `${text.charAt(0).toUpperCase()}${text.slice(1)}.` : '';
 }

@@ -327,7 +327,7 @@ describe('ActivityStore', () => {
     expect(resolveRemovals).toHaveBeenCalledTimes(1);
     expect(activity.get().removals[0]).toMatchObject({ actorId: AGENT.id, nodes: 1 });
 
-    await advance(HIGHLIGHT_MS);
+    await advance(Math.max(HIGHLIGHT_MS, REMOVAL_MS));
     expect(activity.get().highlights.size).toBe(0);
     expect(activity.get().removals).toHaveLength(0);
     activity.destroy();

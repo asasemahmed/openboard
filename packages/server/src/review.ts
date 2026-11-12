@@ -22,7 +22,6 @@ export async function placePreview(
   preview: ProposalPreview,
   log: (line: string) => void,
 ): Promise<ProposalPreview> {
-  if (Object.keys(preview.nodes).length === 0) return preview;
   try {
     const patch = await layoutIncremental(after);
     const nodes: ProposalPreview['nodes'] = {};
@@ -30,7 +29,14 @@ export async function placePreview(
       const view = patch.get(id);
       nodes[id] = view ? { ...node, view } : node;
     }
-    return { ...preview, nodes };
+    // Existing nodes the layout would move or resize: growing frames and what they push aside.
+    const views: NonNullable<ProposalPreview['views']> = {};
+    for (const [id, view] of patch) {
+      if (id in preview.nodes || !after.nodes[id]) continue;
+      views[id] = view;
+    }
+    const { views: _old, ...rest } = preview;
+    return Object.keys(views).length > 0 ? { ...rest, nodes, views } : { ...rest, nodes };
   } catch (error) {
     log(`layout for a proposal preview failed: ${errorMessage(error)}`);
     return preview;

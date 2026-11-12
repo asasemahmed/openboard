@@ -316,6 +316,17 @@ export function createHttpApp(ctx: HttpContext): Hono<{ Variables: { actor: Acto
     ),
   );
 
+  app.get('/api/boards/:id/asks', async (c) => {
+    const status = c.req.query('status');
+    const maxTokens = c.req.query('maxTokens');
+    const options: Record<string, unknown> = {};
+    if (status !== undefined) options.status = status;
+    if (maxTokens !== undefined) options.maxTokens = Number(maxTokens);
+    return c.json(
+      await api(c).asks(c.req.param('id'), options as Parameters<LocalBoardApi['asks']>[1]),
+    );
+  });
+
   /**
    * Long-poll with `?waitMs=`. Node's request timeout only covers receiving the
    * request, so it never cuts the wait; a client that disconnects aborts the

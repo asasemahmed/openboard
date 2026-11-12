@@ -453,6 +453,20 @@ export class BoardDoc {
     this.putPlain(this.proposalsMap, ProposalSchema, proposal, 'proposal', origin);
   }
 
+  /**
+   * Add `actor` to the board's actor registry (or update its name), so readers
+   * can label what it did. Returns false when it was already there as is.
+   */
+  registerActor(actor: Actor, origin: TxOrigin): boolean {
+    const parsed = ActorSchema.safeParse(actor);
+    if (!parsed.success) {
+      throw new OpenBoardError('invalid_request', `invalid actor: ${formatIssues(parsed.error)}`);
+    }
+    if (jsonEqual(this.actorsMap.get(parsed.data.id), parsed.data)) return false;
+    this.ydoc.transact(() => this.actorsMap.set(parsed.data.id, cloneJson(parsed.data)), origin);
+    return true;
+  }
+
   /** Remove a proposal. Returns false when there was none. */
   deleteProposal(id: string, origin: TxOrigin): boolean {
     return this.deletePlain(this.proposalsMap, id, origin);

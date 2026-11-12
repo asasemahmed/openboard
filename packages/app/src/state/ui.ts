@@ -15,6 +15,8 @@ export type ConfirmRequest = {
  */
 export type FollowState = 'off' | 'on' | 'paused';
 
+const NONE: readonly string[] = Object.freeze([]);
+
 /** Below this width the inspector overlays the canvas, so it starts closed. */
 const NARROW_WIDTH = 960;
 
@@ -32,6 +34,18 @@ export class UiStore {
   readonly follow = new Value<FollowState>(readStored('follow', isBoolean) ? 'on' : 'off');
   /** Open panel id per side; the panel registry decides what can go there. */
   readonly leftPanel = new Value<string | null>(null);
+  /** The tab shown in the right panel (the inspector, or a registered right panel). */
+  readonly rightPanel = new Value<string>('inspector');
+  readonly settings = new Value(false);
+  /**
+   * Nodes a panel is pointing at (a hovered review item or history row); the
+   * canvas outlines them, ghosts included.
+   */
+  readonly highlight = new Value<readonly string[]>(NONE);
+  /** The proposal the review panel should bring into view (a ghost was clicked). */
+  readonly focusProposal = new Value<{ id: string; at: number } | null>(null);
+  /** The question stack folded to a count in the top bar. */
+  readonly asksCollapsed = new Value(false);
   readonly inspectorOpen = new Value(
     typeof window === 'undefined' || window.innerWidth >= NARROW_WIDTH,
   );
@@ -49,6 +63,19 @@ export class UiStore {
     if (this.follow.get() === 'on') this.follow.set('paused');
   }
 
+  /** Show a right panel tab, opening the right panel if it is closed. Never moves focus. */
+  showRightPanel(id: string): void {
+    this.rightPanel.set(id);
+    this.inspectorOpen.set(true);
+  }
+
+  /** Point at these nodes on the canvas, or stop pointing with an empty list. */
+  pointAt(nodeIds: readonly string[]): void {
+    const current = this.highlight.get();
+    if (current.length === nodeIds.length && current.every((id, i) => id === nodeIds[i])) return;
+    this.highlight.set(nodeIds.length === 0 ? NONE : [...nodeIds]);
+  }
+
   openPalette(query = ''): void {
     this.palette.set({ open: true, query });
   }
@@ -64,7 +91,8 @@ export class UiStore {
       this.shortcuts.get() ||
       this.confirm.get() !== null ||
       this.newBoard.get() ||
-      this.connectAgent.get()
+      this.connectAgent.get() ||
+      this.settings.get()
     );
   }
 }

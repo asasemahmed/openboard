@@ -28,12 +28,14 @@ import { FrameNode } from '../nodes/FrameNode.js';
 import { useSession } from '../state/context.js';
 import { useStoreValue, useValue } from '../state/emitter.js';
 import { ActivityLayer } from './ActivityLayer.js';
+import { AskStack } from './AskStack.js';
 import { applyOrReport, type BoardActions, reducedMotion } from './actions.js';
 import { BoardEdge } from './BoardEdge.js';
 import { Cursors } from './Cursors.js';
 import { EdgeMarkers } from './EdgeMarkers.js';
 import { EmptyBoard } from './EmptyBoard.js';
 import { useNodeKeyboard } from './nodeFocus.js';
+import { ProposalLayer } from './ProposalLayer.js';
 import { ZoomControls } from './ZoomControls.js';
 
 const nodeTypes = { card: CardNode, frame: FrameNode };
@@ -226,6 +228,7 @@ export function Canvas({ actions, onlyRenderVisibleElements = true }: CanvasProp
         />
         <Cursors />
         <ZoomControls actions={actions} />
+        <ProposalLayer />
         <ActivityLayer />
         {minimap && (
           <MiniMap<FlowNode>
@@ -240,6 +243,7 @@ export function Canvas({ actions, onlyRenderVisibleElements = true }: CanvasProp
           />
         )}
       </ReactFlow>
+      <AskStack />
       {nodes.length === 0 && <EmptyBoard actions={actions} />}
     </div>
   );

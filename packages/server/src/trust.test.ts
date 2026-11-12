@@ -114,7 +114,11 @@ describe('apply under the review policy', () => {
     expect(result.review?.why).toBe('Op 1 changes "Payment API", which Ada created.');
     expect(result.refs.q).toMatch(/^n_/);
     expect(result.cursor).toBe(before && (await ada().changes('plan', { since: 0 })).cursor);
-    expect(await ada().getBoard('plan')).toEqual(before);
+    // Nothing changed but the actor registry, which now names the proposer.
+    const after = await ada().getBoard('plan');
+    expect(after.nodes).toEqual(before.nodes);
+    expect(after.edges).toEqual(before.edges);
+    expect(after.actors).toEqual({ ...before.actors, bot: BOT });
 
     const { proposals } = await ada().proposals('plan');
     expect(proposals).toHaveLength(1);
@@ -737,8 +741,10 @@ describe('questions', () => {
       status: 'answered',
       answer: { by: 'ada', option: 'no', text: 'Keep them' },
     });
-    const inbox = await bot().inbox('plan');
-    expect(inbox.items).toEqual([
+    // The long-poll delivered the answer; the inbox does not deliver it again,
+    // but keeps it for a re-read.
+    expect((await bot().inbox('plan')).items).toEqual([]);
+    expect((await bot().inbox('plan', { since: 0 })).items).toEqual([
       expect.objectContaining({ kind: 'answer', askId: ask.id, body: 'no — Keep them' }),
     ]);
   });
@@ -826,5 +832,187 @@ describe('project settings', () => {
     await writeFile(file, '{ broken');
     await sleep(1300);
     expect((await bot().getConfig()).policy.default).toBe('auto');
+  });
+});
+
+// ── Follow-ups: undo under policy, batch ids, questions listed, actors ──────
+
+describe('undo under the review policy', () => {
+  it('refuses a locked agent', async () => {
+    await bot().apply('plan', { ops: [{ op: 'add_node', node: { type: 'note', title: 'B' } }] });
+    await ada().setConfig({ version: 1, policy: { default: 'locked', agents: {} } });
+    const error = await failure(bot().undo('plan', { actorId: 'bot', scope: 'last' }));
+    expect(error.code).toBe('forbidden');
+    expect(error.message).toContain('locked');
+  });
+
+  it('leaves what is no longer free for the agent, and reports why', async () => {
+    const result = await bot().apply('plan', {
+      ops: [
+        { op: 'add_node', ref: 'a', node: { type: 'note', title: 'A' } },
+        { op: 'add_node', ref: 'b', node: { type: 'note', title: 'B' } },
+      ],
+    });
+    const a = result.refs.a as string;
+    const b = result.refs.b as string;
+    // A person moves A into a review frame; B stays where it was.
+    await ada().apply('plan', {
+      ops: [
+        { op: 'update_node', id: 'f', patch: { props: { [FRAME_POLICY_PROP]: 'review' } } },
+        { op: 'update_node', id: a, patch: { parent: 'f' } },
+      ],
+    });
+    const undo = await bot().undo('plan', { batchId: result.batchId as string });
+    expect(undo.undone).toEqual([result.batchId]);
+    expect(undo.conflicts).toEqual([expect.objectContaining({ kind: 'node', id: a })]);
+    const board = await ada().getBoard('plan');
+    expect(board.nodes[a]).toBeDefined();
+    expect(board.nodes[b]).toBeUndefined();
+  });
+
+  it('marks an item that only policy holds back as needing review', async () => {
+    await ada().setConfig({ version: 1, policy: { default: 'auto', agents: {} } });
+    const result = await bot().apply('plan', {
+      ops: [{ op: 'add_node', ref: 'a', node: { type: 'note', title: 'A' } }],
+    });
+    await ada().setConfig({ version: 1, policy: { default: 'review_all', agents: {} } });
+    const undo = await bot().undo('plan', { actorId: 'bot', scope: 'last' });
+    expect(undo.undone).toEqual([]);
+    expect(undo.conflicts).toEqual([
+      {
+        kind: 'node',
+        id: result.refs.a,
+        reason: 'needs review: every change by this agent waits for review',
+      },
+    ]);
+    // A person is never restricted.
+    expect((await ada().undo('plan', { batchId: result.batchId as string })).undone).toEqual([
+      result.batchId,
+    ]);
+  });
+
+  it('leaves the reviewed items of an accepted proposal to people', async () => {
+    const proposed = await propose();
+    await ada().decideProposal('plan', proposed.proposalId as string, { action: 'accept' });
+    const [batch] = (await ada().history('plan', { actor: 'bot' })).batches;
+    const undo = await bot().undo('plan', { batchId: batch?.id as string });
+    const reasons = new Map(undo.conflicts.map((c) => [c.id, c.reason]));
+    const reviewed = 'was applied through a reviewed proposal; ask a person to undo it';
+    expect(reasons.get('h1')).toBe(reviewed);
+    expect(reasons.get('h2')).toBe(reviewed);
+    const board = await ada().getBoard('plan');
+    // The free items (the new question and its edge) were undone.
+    expect(board.nodes[proposed.refs.q as string]).toBeUndefined();
+    expect(board.nodes.h1?.status).toBe('done');
+    expect(board.nodes.h2).toBeUndefined();
+  });
+
+  it('skips comment-only batches for last and all, but undoes them by id', async () => {
+    await ada().setConfig({ version: 1, policy: { default: 'auto', agents: {} } });
+    const applied = await bot().apply('plan', {
+      ops: [{ op: 'add_node', node: { type: 'note', title: 'Edit' } }],
+    });
+    const c = await bot().comment('plan', { body: 'A note' });
+    await bot().resolveThread('plan', c.id);
+    const last = await bot().undo('plan', { actorId: 'bot', scope: 'last' });
+    expect(last.undone).toEqual([applied.batchId]);
+    expect(last.text).toContain(`${applied.batchId}: Added 1 node`);
+    const resolve = (await ada().history('plan', { actor: 'bot' })).batches.find(
+      (batch) => batch.source === 'ops' && batch.commentIds !== undefined,
+    );
+    expect(resolve?.commentIds).toEqual([c.id]);
+    const byId = await bot().undo('plan', { batchId: resolve?.id as string });
+    expect(byId.undone).toEqual([resolve?.id]);
+  });
+});
+
+describe('batch ids, listed questions and the actor registry', () => {
+  it('returns the batch an apply became', async () => {
+    const result = await bot().apply('plan', {
+      ops: [{ op: 'add_node', node: { type: 'note', title: 'N' } }],
+    });
+    const [batch] = (await ada().history('plan')).batches;
+    expect(result.batchId).toBe(batch?.id);
+    const proposed = await propose();
+    expect(proposed.batchId).toBeUndefined();
+  });
+
+  it('lists open questions, or all of them', async () => {
+    const first = await bot().ask('plan', { question: 'One?' });
+    await sleep(5); // oldest first is by creation time
+    const second = await other().ask('plan', { question: 'Two?' });
+    await ada().answerAsk('plan', first.id, { text: 'Yes' });
+    const open = await ada().asks('plan');
+    expect(open.asks.map((a) => a.id)).toEqual([second.id]);
+    expect(open.text).toContain('1 open question');
+    const all = await ada().asks('plan', { status: 'all' });
+    expect(all.asks.map((a) => a.id)).toEqual([first.id, second.id]);
+    expect(all.text).toContain('answered by Ada (human)');
+    expect((await failure(ada().asks('plan', { status: 'nope' as never }))).code).toBe(
+      'invalid_request',
+    );
+  });
+
+  it('registers everyone who answers, decides, comments or undoes', async () => {
+    const people = ['bea', 'cy', 'dan', 'eve'].map(
+      (id): Actor => ({ id, kind: 'human', name: id.toUpperCase() }),
+    );
+    const [bea, cy, dan, eve] = people.map((actor) => server.api(actor)) as BoardApi[];
+    const ask = await bot().ask('plan', { question: 'Q?' });
+    await bea?.answerAsk('plan', ask.id, { text: 'A' });
+    const proposed = await propose();
+    await cy?.decideProposal('plan', proposed.proposalId as string, { action: 'reject' });
+    await dan?.comment('plan', { body: 'Hi' });
+    const applied = await bot().apply('plan', {
+      ops: [{ op: 'add_node', node: { type: 'note', title: 'N' } }],
+    });
+    await eve?.undo('plan', { batchId: applied.batchId as string });
+    const board = await ada().getBoard('plan');
+    for (const actor of [...people, BOT]) expect(board.actors[actor.id]).toEqual(actor);
+  });
+
+  it('does not deliver an answer again once the long-poll returned it', async () => {
+    const ask = await bot().ask('plan', { question: 'Q?' });
+    await ada().answerAsk('plan', ask.id, { text: 'A' });
+    expect((await bot().askResult('plan', ask.id)).status).toBe('answered');
+    expect((await bot().inbox('plan')).items).toEqual([]);
+    await restart();
+    expect((await bot().inbox('plan')).items).toEqual([]);
+    expect((await bot().inbox('plan', { since: 0 })).items.map((i) => i.kind)).toEqual(['answer']);
+  });
+});
+
+describe('proposal previews and authors', () => {
+  it('registers the author of a proposal and of a question', async () => {
+    await propose(other());
+    await server.api({ id: 'asker', kind: 'agent', name: 'Asker' }).ask('plan', { question: 'Q?' });
+    const board = await ada().getBoard('plan');
+    expect(board.actors.other).toEqual(OTHER);
+    expect(board.actors.asker?.name).toBe('Asker');
+  });
+
+  it('shows how existing frames would grow to hold the ghosts', async () => {
+    const frame = (await ada().getBoard('plan')).nodes.f;
+    const result = await bot().apply('plan', {
+      ops: [
+        ...['One', 'Two', 'Three', 'Four', 'Five'].map((title) => ({
+          op: 'add_node' as const,
+          node: { type: 'task' as const, title, parent: 'f' },
+        })),
+        { op: 'update_node', id: 'h1', patch: { status: 'done' } },
+      ],
+    });
+    expect(result.status).toBe('proposed');
+    const [proposal] = (await ada().proposals('plan')).proposals;
+    const grown = proposal?.preview.views?.f;
+    expect(grown).toBeDefined();
+    expect((grown?.w ?? 0) * (grown?.h ?? 0)).toBeGreaterThan(
+      (frame?.view?.w ?? 0) * (frame?.view?.h ?? 0),
+    );
+    expect(grown?.x).toBe(frame?.view?.x);
+    for (const ghost of Object.values(proposal?.preview.nodes ?? {})) {
+      expect(ghost.view).toBeDefined();
+      expect((ghost.view?.x ?? 0) + (ghost.view?.w ?? 0)).toBeLessThanOrEqual(grown?.w ?? 0);
+    }
   });
 });

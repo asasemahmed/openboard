@@ -20,8 +20,8 @@ import { Emitter } from './emitter.js';
 
 /** How long a change stays highlighted. */
 export const HIGHLIGHT_MS = 8000;
-/** How long a removal notice stays up. */
-export const REMOVAL_MS = 6000;
+/** How long a removal notice stays up (long enough to reach its Undo). */
+export const REMOVAL_MS = 12_000;
 /** A removal by the same actor within this window joins the notice already shown. */
 export const REMOVAL_MERGE_MS = 4000;
 /** At most this many removal notices are shown at once; older ones give way. */
@@ -33,7 +33,7 @@ export const MAX_REMOVALS = 3;
 export const MAX_AGE_MS = 2 * 60_000;
 
 export type ItemKind = 'node' | 'edge';
-export type ChangeVerb = 'added' | 'updated';
+export type ChangeVerb = 'added' | 'updated' | 'commented';
 
 /** One change made by someone else, attributed as well as it can be. */
 export interface RemoteChange {
@@ -44,6 +44,8 @@ export interface RemoteChange {
   actorId: string | null;
   /** Title before removal, for removal notices. */
   title?: string;
+  /** The history batch the change belongs to, when known (to undo a removal). */
+  batchId?: string;
 }
 
 export interface Highlight {
@@ -64,6 +66,10 @@ export interface RemovalNotice {
   edges: number;
   /** Titles of the removed nodes, first ones first. */
   titles: readonly string[];
+  /** History batches that made the removals, when the change feed named them. */
+  batchIds?: readonly string[];
+  /** Ids of what was removed, for finding the batch through the history. */
+  itemIds?: readonly string[];
   at: number;
   until: number;
 }
@@ -147,6 +153,15 @@ export function classify(event: DocEvent, ctx: ClassifyContext): RemoteChange[] 
     if (actorId === ctx.me || !fresh(entry.updatedAt)) continue;
     out.push({ kind, id: change.id, verb: 'updated', actorId });
   }
+  // A new comment by someone else on a card highlights the card.
+  for (const id of event.comments ?? []) {
+    const state = event.states?.comments[id];
+    const comment = state?.after;
+    if (!state || state.before !== null || !comment || comment.nodeId === undefined) continue;
+    const actorId = origin?.actorId ?? comment.author;
+    if (actorId === ctx.me || !fresh(comment.createdAt) || !ctx.node(comment.nodeId)) continue;
+    out.push({ kind: 'node', id: comment.nodeId, verb: 'commented', actorId });
+  }
   return out;
 }
 
@@ -173,14 +188,26 @@ export function receive(
   let nextId = state.nextId;
 
   // Removals are grouped per actor within this batch, then merged into a live notice.
-  const removedBy = new Map<string | null, { nodes: number; edges: number; titles: string[] }>();
+  const removedBy = new Map<
+    string | null,
+    { nodes: number; edges: number; titles: string[]; batchIds: string[]; itemIds: string[] }
+  >();
 
   for (const change of changes) {
     const key = itemKey(change.kind, change.id);
     if (change.verb === 'removed') {
       if (current().has(key)) writable().delete(key);
       if (change.actorId === me) continue;
-      const group = removedBy.get(change.actorId) ?? { nodes: 0, edges: 0, titles: [] };
+      const group = removedBy.get(change.actorId) ?? {
+        nodes: 0,
+        edges: 0,
+        titles: [],
+        batchIds: [],
+        itemIds: [],
+      };
+      group.itemIds.push(change.id);
+      if (change.batchId && !group.batchIds.includes(change.batchId))
+        group.batchIds.push(change.batchId);
       if (change.kind === 'node') {
         group.nodes++;
         if (change.title) group.titles.push(change.title);
@@ -212,7 +239,7 @@ export function receive(
       );
       const existing = index >= 0 ? removals[index] : undefined;
       if (existing) {
-        removals[index] = {
+        const merged: RemovalNotice = {
           ...existing,
           nodes: existing.nodes + group.nodes,
           edges: existing.edges + group.edges,
@@ -220,16 +247,23 @@ export function receive(
           at: now,
           until: now + REMOVAL_MS,
         };
+        const batchIds = [...new Set([...(existing.batchIds ?? []), ...group.batchIds])];
+        if (batchIds.length > 0) merged.batchIds = batchIds;
+        merged.itemIds = [...(existing.itemIds ?? []), ...group.itemIds];
+        removals[index] = merged;
       } else {
-        removals.push({
+        const notice: RemovalNotice = {
           id: nextId++,
           actorId,
           nodes: group.nodes,
           edges: group.edges,
           titles: group.titles,
+          itemIds: group.itemIds,
           at: now,
           until: now + REMOVAL_MS,
-        });
+        };
+        if (group.batchIds.length > 0) notice.batchIds = group.batchIds;
+        removals.push(notice);
       }
     }
     if (removals.length > MAX_REMOVALS) removals = removals.slice(-MAX_REMOVALS);
@@ -346,10 +380,13 @@ export const systemClock: Clock = {
   clearTimeout: (handle) => globalThis.clearTimeout(handle as ReturnType<typeof setTimeout>),
 };
 
-/** Who removed these entries; ids missing from the answer stay unattributed. */
+/**
+ * Who removed these entries (an actor id, or the actor and the history batch);
+ * ids missing from the answer stay unattributed.
+ */
 export type RemovalResolver = (
   items: ReadonlyArray<{ kind: ItemKind; id: string }>,
-) => Promise<ReadonlyMap<string, string>>;
+) => Promise<ReadonlyMap<string, string | { actorId: string; batchId?: string }>>;
 
 export interface ActivityOptions {
   me: () => string;
@@ -503,17 +540,23 @@ export class ActivityStore extends Emitter {
     this.pendingRemovals = [];
     const resolver = this.opts.resolveRemovals;
     if (batch.length === 0 || !resolver) return;
-    let actors: ReadonlyMap<string, string> = new Map();
+    let actors: Awaited<ReturnType<RemovalResolver>> = new Map();
     try {
       actors = await resolver(batch.map(({ kind, id }) => ({ kind, id })));
     } catch {
       // Without the feed the notice still appears, just without a name.
     }
     if (this.destroyed) return;
-    const attributed = batch.map((change) => ({
-      ...change,
-      actorId: actors.get(itemKey(change.kind, change.id)) ?? null,
-    }));
+    const attributed = batch.map((change): RemoteChange => {
+      const found = actors.get(itemKey(change.kind, change.id));
+      if (found === undefined) return { ...change, actorId: null };
+      if (typeof found === 'string') return { ...change, actorId: found };
+      return {
+        ...change,
+        actorId: found.actorId,
+        ...(found.batchId ? { batchId: found.batchId } : {}),
+      };
+    });
     this.dispatch(receive(this.state, attributed, this.opts.me(), this.clock.now()));
   }
 }

@@ -167,7 +167,8 @@ export function buildProposal(
 
   const createdAt = new Map<string, number>();
   const after = outcome.board;
-  const titleOf = (id: string) => after.nodes[id]?.title ?? board.nodes[id]?.title ?? id;
+  // Existing nodes are named as they are now, before the batch; new ones by their new title.
+  const titleOf = (id: string) => board.nodes[id]?.title ?? after.nodes[id]?.title ?? id;
   const items: ProposalItem[] = resolved.map((op, index) => {
     const dependsOn = new Set<number>();
     for (const id of referencedIds(op)) {

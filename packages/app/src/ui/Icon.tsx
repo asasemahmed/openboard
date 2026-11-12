@@ -162,6 +162,66 @@ const PATHS = {
   arrowLeft: <path d="M13 8H3M7 4L3 8l4 4" />,
   arrowRight: <path d="M3 8h10M9 4l4 4-4 4" />,
   edit: <path d="M10.5 2.5l3 3L6 13H3v-3z" />,
+  /** A frame agents may only read. */
+  lock: (
+    <>
+      <rect x="3.5" y="7" width="9" height="6.5" rx="1.5" />
+      <path d="M5.5 7V5a2.5 2.5 0 015 0v2" />
+    </>
+  ),
+  /** A frame agents change freely. */
+  unlock: (
+    <>
+      <rect x="3.5" y="7" width="9" height="6.5" rx="1.5" />
+      <path d="M5.5 7V5a2.5 2.5 0 014.8-1" />
+    </>
+  ),
+  /** Agent changes here wait for a person to look. */
+  eye: (
+    <>
+      <path d="M1.75 8S4 3.75 8 3.75 14.25 8 14.25 8 12 12.25 8 12.25 1.75 8 1.75 8z" />
+      <circle cx="8" cy="8" r="1.75" />
+    </>
+  ),
+  comment: (
+    <path d="M3 3.25h10a1 1 0 011 1v6a1 1 0 01-1 1H8l-3 2.5v-2.5H3a1 1 0 01-1-1v-6a1 1 0 011-1z" />
+  ),
+  /** A question waiting for an answer. */
+  ask: (
+    <>
+      <circle cx="8" cy="8" r="5.75" />
+      <path d="M6.4 6.3a1.7 1.7 0 113 1.1c-.6.5-1.4.8-1.4 1.6" />
+      <path d="M8 11.1v.15" />
+    </>
+  ),
+  /** Proposals waiting for review: a checklist. */
+  review: (
+    <>
+      <path d="M2.5 4.25l1.25 1.25 2-2.25M2.5 10.25l1.25 1.25 2-2.25" />
+      <path d="M8 4.5h5.5M8 10.5h5.5" />
+    </>
+  ),
+  /** History: a clock with a hand turning back. */
+  history: (
+    <>
+      <path d="M2.75 8a5.25 5.25 0 101.55-3.7" />
+      <path d="M2.5 2.5v2.25h2.25" />
+      <path d="M8 5.25V8l1.75 1.25" />
+    </>
+  ),
+  settings: (
+    <>
+      <circle cx="8" cy="8" r="2" />
+      <path d="M8 1.75v1.5M8 12.75v1.5M1.75 8h1.5M12.75 8h1.5M3.6 3.6l1.05 1.05M11.35 11.35l1.05 1.05M3.6 12.4l1.05-1.05M11.35 4.65l1.05-1.05" />
+    </>
+  ),
+  /** Pan the view to something. */
+  locate: (
+    <>
+      <circle cx="8" cy="8" r="2.25" />
+      <path d="M8 1.75v2.5M8 11.75v2.5M1.75 8h2.5M11.75 8h2.5" />
+    </>
+  ),
   // status shapes; filled parts use a nested element with fill
   statusTodo: <circle cx="8" cy="8" r="5" />,
   statusProgress: (

@@ -4,11 +4,20 @@
  */
 import type {
   Actor,
+  AnswerInput,
+  Ask,
   BoardSummary,
   ChangesOptions,
   ChangesResult,
+  Decision,
+  HistoryOptions,
+  HistoryResult,
   LayoutRequest,
   LayoutResult,
+  ProjectConfig,
+  Proposal,
+  UndoRequest,
+  UndoResult,
 } from '@openboard/core';
 
 export class ApiError extends Error {
@@ -35,6 +44,52 @@ export interface ApiClient {
   changes(boardId: string, options: ChangesOptions): Promise<ChangesResult>;
   /** What this server is and how agents reach it; null when the server does not say. */
   info(): Promise<ServerInfo | null>;
+  decideProposal(boardId: string, proposalId: string, decision: Decision): Promise<Proposal>;
+  answerAsk(boardId: string, askId: string, answer: AnswerInput): Promise<Ask>;
+  cancelAsk(boardId: string, askId: string): Promise<Ask>;
+  history(boardId: string, options: HistoryOptions): Promise<HistoryResult>;
+  undo(boardId: string, request: UndoRequest): Promise<UndoResult>;
+  getConfig(): Promise<ProjectConfig>;
+  setConfig(config: ProjectConfig): Promise<ProjectConfig>;
+}
+
+/** What a failed request was about, for wording its message. */
+export type ApiSubject = 'proposal' | 'question' | 'batch' | 'settings' | 'request';
+
+const SUBJECT_NAME: Record<ApiSubject, string> = {
+  proposal: 'This proposal',
+  question: 'This question',
+  batch: 'This change',
+  settings: 'The settings',
+  request: 'This',
+};
+
+/**
+ * A calm, plain sentence for a failed request, to show inline next to the
+ * control that made it. The server's own message is kept for the cases where
+ * it says something the person can act on (validation, an existing decision).
+ */
+export function calmMessage(error: unknown, subject: ApiSubject = 'request'): string {
+  if (!(error instanceof ApiError)) {
+    return error instanceof Error ? error.message : 'Something went wrong. Try again.';
+  }
+  const name = SUBJECT_NAME[subject];
+  if (error.unreachable) return 'The server is not reachable right now. Try again in a moment.';
+  switch (error.status) {
+    case 403:
+      return 'Only people can do this, and the server did not see this browser as a person.';
+    case 404:
+      return `${name} no longer exists. It may have been withdrawn or removed.`;
+    case 409:
+      if (subject === 'proposal') return 'Someone already decided on this proposal.';
+      if (subject === 'question') return 'This question was already answered or withdrawn.';
+      if (subject === 'batch') return 'This change was already undone.';
+      return error.message;
+    case 400:
+      return error.message;
+    default:
+      return `${name} could not be completed: ${error.message}`;
+  }
 }
 
 /** How an agent reaches this project's board server over MCP. */
@@ -131,6 +186,8 @@ export function createApiClient(getActor: () => Actor, base = ''): ApiClient {
     return json as T;
   }
 
+  const board = (boardId: string) => `/api/boards/${encodeURIComponent(boardId)}`;
+
   return {
     listBoards: async () => {
       const result = await request<BoardSummary[] | { boards: BoardSummary[] }>(
@@ -148,6 +205,22 @@ export function createApiClient(getActor: () => Actor, base = ''): ApiClient {
       ),
     changes: (boardId, options) =>
       request<ChangesResult>('POST', `/api/boards/${encodeURIComponent(boardId)}/changes`, options),
+    decideProposal: (boardId, proposalId, decision) =>
+      request<Proposal>(
+        'POST',
+        `${board(boardId)}/proposals/${encodeURIComponent(proposalId)}/decide`,
+        decision,
+      ),
+    answerAsk: (boardId, askId, answer) =>
+      request<Ask>('POST', `${board(boardId)}/asks/${encodeURIComponent(askId)}/answer`, answer),
+    cancelAsk: (boardId, askId) =>
+      request<Ask>('POST', `${board(boardId)}/asks/${encodeURIComponent(askId)}/cancel`, {}),
+    history: (boardId, options) =>
+      request<HistoryResult>('POST', `${board(boardId)}/history`, options),
+    undo: (boardId, undoRequest) =>
+      request<UndoResult>('POST', `${board(boardId)}/undo`, undoRequest),
+    getConfig: () => request<ProjectConfig>('GET', '/api/config'),
+    setConfig: (config) => request<ProjectConfig>('PUT', '/api/config', config),
     info: async () => {
       try {
         return parseServerInfo(await request<unknown>('GET', '/api/info'));

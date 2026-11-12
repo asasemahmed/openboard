@@ -95,16 +95,24 @@ The agent's changes appear on the canvas as it makes them, already laid out. Mov
 
 Clients that support MCP prompts also offer `map_codebase` and `plan_work`, which carry the first two requests with more detailed instructions.
 
+## Stay in control
+
+- By default an agent adds to the board freely, but changing or removing what you made waits for your review as a proposal: ghosts on the canvas, and items in the **Review** panel to accept or reject, with a note the agent reads. From the terminal, `openboard proposals`, `openboard accept` and `openboard reject` do the same. **Settings** (or `openboard policy`) sets how strict this is, for all agents or one; a frame's **Agent access** in the inspector does it for what is inside the frame.
+- Every change is recorded: the **Activity** panel (or `openboard history`) lists them, and undo takes one back exactly, leaving later changes alone. Agents undo their own mistakes, answer your comments, and ask you questions on the canvas when they need an answer before going on.
+
+[Staying in control](agents.md#staying-in-control) explains the details.
+
 ## Where boards live
 
 ```text
 your-project/
   .openboard/
     main.board.json     the board: readable, deterministic JSON
-    .local/             runtime state: change feed, document history, server info
+    config.json         the review policy, once you change it
+    .local/             runtime state: change feed, history, inboxes, server info
 ```
 
-Commit the `*.board.json` files. They are written with a stable layout so that a change on the board is a small diff, and the running server picks up changes to them from a checkout, merge or editor. `.openboard/.local/` is runtime state: `openboard init` and the server create it with a `.gitignore` of its own so git skips it. The format is described in [board-format.md](board-format.md).
+Commit the `*.board.json` files and `config.json`. They are written with a stable layout so that a change on the board is a small diff, and the running server picks up changes to them from a checkout, merge or editor. `.openboard/.local/` is runtime state: `openboard init` and the server create it with a `.gitignore` of its own so git skips it. The format is described in [board-format.md](board-format.md).
 
 More boards: `openboard new "Release plan"` creates `.openboard/release-plan.board.json`. `openboard boards` lists them.
 
@@ -120,6 +128,6 @@ More boards: `openboard new "Release plan"` creates `.openboard/release-plan.boa
 openboard doctor
 ```
 
-checks the Node.js version, the project root, that `.openboard/` exists and every board file parses, that the web app is built, that the MCP server loads, whether the server runs and answers, and, in a git repository, that `.openboard/.local` is ignored. Each problem comes with a fix. It exits with status 1 when a check fails.
+checks the Node.js version, the project root, that `.openboard/` exists and every board file (and `config.json`, if there is one) parses, that the web app is built, that the MCP server loads, whether the server runs and answers, and, in a git repository, that `.openboard/.local` is ignored. Each problem comes with a fix. It exits with status 1 when a check fails.
 
 Next: [how agents work with a board](agents.md), [the tool reference](tools.md), [the CLI reference](cli.md).

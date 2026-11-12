@@ -89,8 +89,9 @@ An excerpt of a real board file: a frame, a task in it, and one of the task's ed
 | `actors`                 | object of actors by id          | Everyone who authored something on the board |
 | `nodes`                  | object of nodes by id           |                                              |
 | `edges`                  | object of edges by id           |                                              |
+| `comments`               | object of comments by id        | Optional; left out when the board has none   |
 
-Ids are letters, digits and `_ . : -`, starting with a letter or digit, at most 64 characters. Generated ids are `n_` (nodes) or `e_` (edges) followed by ten lowercase letters and digits. Every key in `actors`, `nodes` and `edges` equals the `id` inside it, and no id is used by both a node and an edge.
+Ids are letters, digits and `_ . : -`, starting with a letter or digit, at most 64 characters. Generated ids are `n_` (nodes), `e_` (edges) or `c_` (comments) followed by ten lowercase letters and digits. Every key in `actors`, `nodes`, `edges` and `comments` equals the `id` inside it, and no id is used by both a node and an edge.
 
 ### Actor
 
@@ -130,6 +131,39 @@ Ids are letters, digits and `_ . : -`, starting with a letter or digit, at most 
 | `label`                                            | string, at most 120 characters | Optional                                                                                             |
 | `createdBy`, `createdAt`, `updatedBy`, `updatedAt` |                                | As for nodes                                                                                         |
 
+### Comment
+
+Comments are grouped in threads: the first comment of a thread is its root, and every comment carries the root's id in `thread`.
+
+| Field                      | Type                         | Meaning                                                                                   |
+| -------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------- |
+| `id`                       | id                           |                                                                                           |
+| `thread`                   | comment id                   | The first comment of the thread; equal to `id` for that comment                           |
+| `nodeId`                   | node id                      | Optional: the node the thread is attached to; without it, the thread belongs to the board |
+| `author`                   | actor id                     | Who wrote it                                                                              |
+| `createdAt`                | timestamp                    |                                                                                           |
+| `mentions`                 | string[], at most 20         | Optional: actor ids addressed, or `agents` for every agent                                |
+| `resolvedAt`, `resolvedBy` | timestamp, actor id          | Optional, on the first comment of a thread: when and by whom the thread was resolved      |
+| `body`                     | string, 1 to 4000 characters | Markdown                                                                                  |
+
+```json
+"comments": {
+  "c_2lpslewl6t": {
+    "id": "c_2lpslewl6t",
+    "thread": "c_2lpslewl6t",
+    "nodeId": "n_0coexs6ces",
+    "author": "ada",
+    "createdAt": "2026-11-12T06:08:35.859Z",
+    "mentions": [
+      "claude-code"
+    ],
+    "body": "Can you also cover the CSV header row?"
+  }
+}
+```
+
+A comment may name a node that no longer exists: it stays in the file, and the thread is shown as detached. Restoring the node attaches it again.
+
 ## Rules
 
 A file that breaks any of these is invalid:
@@ -144,8 +178,8 @@ A file that breaks any of these is invalid:
 The same board always produces byte-identical output, so a small change on the board is a small diff:
 
 - Two-space indentation, and a newline at the end of the file.
-- Known fields always appear in the order of the tables above: board fields, then `actors`, `nodes`, `edges`; within a node, `id`, `type`, `title`, `status`, `parent`, `tags`, `body`, `links`, `props`, `view`, then the four bookkeeping fields. Within a link: `kind`, `target`, `line`, `endLine`, `hash`, `stale`. Within a view: `x`, `y`, `w`, `h`, `pinned`, `collapsed`, `color`.
-- `actors`, `nodes` and `edges` are sorted by id, in plain code-unit order, independent of locale.
+- Known fields always appear in the order of the tables above: board fields, then `actors`, `nodes`, `edges`, and `comments` when there are any; within a node, `id`, `type`, `title`, `status`, `parent`, `tags`, `body`, `links`, `props`, `view`, then the four bookkeeping fields. Within a link: `kind`, `target`, `line`, `endLine`, `hash`, `stale`. Within a view: `x`, `y`, `w`, `h`, `pinned`, `collapsed`, `color`.
+- `actors`, `nodes`, `edges` and `comments` are sorted by id, in plain code-unit order, independent of locale.
 - Keys inside `props` are sorted at every depth.
 - Optional fields that carry nothing are left out: no empty `body`, `tags`, `links`, `props` or `label`, and no `null`s. Absent has exactly one representation.
 - Every scalar field sits on its own line, so changing one field changes one line.
@@ -158,19 +192,37 @@ What that means in a review:
 
 ## What is stored, and what is not
 
-Stored in the board file: the board's metadata, its actors, and every node and edge with their content, presentation and authorship.
+Stored in the board file: the board's metadata, its actors, every node and edge with their content, presentation and authorship, and the comments.
 
-Not stored in the board file:
+Next to the board files, `.openboard/config.json` holds the project's [review policy](agents.md#review-policy): how much agents may change without a person's review. Commit it with the boards. It is written in one stable layout too:
 
-| Kept elsewhere                                     | Where                                        |
-| -------------------------------------------------- | -------------------------------------------- |
-| The change feed behind `board_changes` and cursors | `.openboard/.local/<board id>.changes.jsonl` |
-| Document state with history, for fast restarts     | `.openboard/.local/<board id>.ydoc`          |
-| The running server's address and process id        | `.openboard/.local/server.json`              |
+```json
+{
+  "version": 1,
+  "policy": {
+    "default": "review_destructive",
+    "agents": {
+      "claude-code": "review_all"
+    }
+  }
+}
+```
 
-Not stored anywhere: who is connected, their pointers and selections (these travel live between browsers and the server), the `reason` of an agent's batch, and MCP session state.
+`default` is the mode for agents without an entry of their own; `agents` maps actor ids to modes. The modes are `auto`, `review_destructive`, `review_all` and `locked`. Without the file, every agent uses `review_destructive`. Change it with [`openboard policy`](cli.md#policy) or by hand; a running server picks up the change, and while the file does not parse it keeps the last settings that did (`openboard doctor` names the problem).
 
-`.openboard/.local/` holds a `.gitignore` containing `*`, so git ignores it without changes to your own `.gitignore`. Deleting `.local/` loses the change history and resets cursors; the boards themselves are safe in their files.
+Runtime state lives in `.openboard/.local/`, which is not committed:
+
+| Kept in `.openboard/.local/`                                                    | File                       |
+| ------------------------------------------------------------------------------- | -------------------------- |
+| The change feed behind `board_changes` and cursors, with each batch's reason    | `<board id>.changes.jsonl` |
+| History: the last 2000 batches, with the exact state before and after, for undo | `<board id>.history.jsonl` |
+| Inbox items and how far each actor has read                                     | `<board id>.inbox.jsonl`   |
+| Document state with history, including pending proposals and open questions     | `<board id>.ydoc`          |
+| The running server's address and process id                                     | `server.json`              |
+
+Not stored anywhere: who is connected, their pointers and selections (these travel live between browsers and the server), and MCP session state.
+
+`.openboard/.local/` holds a `.gitignore` containing `*`, so git ignores it without changes to your own `.gitignore`. Deleting `.local/` loses the change feed, the history (so earlier changes can no longer be undone), inboxes, pending proposals and open questions, and resets cursors; the boards, their comments and the policy are safe in their files.
 
 ## Editing the file
 

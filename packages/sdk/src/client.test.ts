@@ -198,6 +198,12 @@ describe('routes', () => {
       body: { question: 'Which?', options: ['a', 'b'] },
     },
     {
+      name: 'asks',
+      call: (a) => a.asks('main', { status: 'all' }),
+      method: 'GET',
+      path: '/api/boards/main/asks?status=all',
+    },
+    {
       name: 'askResult',
       call: (a) => a.askResult('main', 'a_1', { waitMs: 1000 }),
       method: 'GET',

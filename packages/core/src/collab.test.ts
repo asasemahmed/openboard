@@ -8,16 +8,21 @@ import {
   buildProposal,
   type Comment,
   checkItems,
+  classifyOps,
   DEFAULT_CONFIG,
   type DocEvent,
   diffBoards,
+  explainVerdicts,
   type Op,
   parseBoard,
   parseConfig,
   proposalOps,
   proposalRefs,
+  renderAsks,
+  renderChanges,
   renderHistory,
   renderInbox,
+  renderOutline,
   renderProposals,
   renderUndo,
   rollupStatus,
@@ -410,5 +415,145 @@ describe('rendering', () => {
     );
     expect(text).toContain('undid 1 batch (b_1)');
     expect(text).toContain('node n "Note": changed');
+  });
+});
+
+describe('review follow-ups', () => {
+  it('names existing nodes by their title before the change', () => {
+    const doc = seeded();
+    const proposal = buildProposal(
+      doc.toJSON(),
+      [{ op: 'update_node', id: 'api', patch: { title: 'Payments API' } }],
+      { actor: bot, verdicts: ['review'], now: T1, newId: counter() },
+    );
+    expect(proposal.items[0]?.summary).toBe(
+      'Update "Payment API": title "Payment API" → "Payments API"',
+    );
+  });
+
+  it('pluralises counts', () => {
+    const doc = seeded();
+    doc.apply([{ op: 'add_edge', edge: { type: 'relates_to', source: 'api', target: 'n' } }], {
+      actor: ada,
+    });
+    const outline = renderOutline(doc.toJSON(), 3);
+    expect(outline.text.split('\n')[0]).toContain('3 nodes, 1 edge, 1 frame.');
+    const item = (seq: number, body: string) => ({
+      seq,
+      at: T1.toISOString(),
+      kind: 'mention' as const,
+      from: 'ada',
+      summary: 'Ada mentioned you',
+      body,
+    });
+    const inbox = renderInbox('main', [item(1, 'short'), item(2, 'x'.repeat(2000))], 2, {
+      maxTokens: 200,
+    });
+    expect(inbox.text).toContain('[Truncated: 1 more inbox item not shown. To see it:');
+  });
+
+  it('tags the items of a decided proposal with what became of them', () => {
+    const doc = seeded();
+    const proposal = buildProposal(doc.toJSON(), [{ op: 'remove_node', id: 'n' }], {
+      actor: bot,
+      verdicts: ['review'],
+      now: T1,
+      newId: counter(),
+    });
+    const withdrawn = renderProposals('main', [{ ...proposal, status: 'withdrawn' }], {
+      status: 'all',
+    });
+    expect(withdrawn.text).toContain('#0 [pending] Remove note "Note"');
+    expect(withdrawn.text).not.toContain('[review]');
+  });
+
+  it('renders the batch and reason of changes once per batch', () => {
+    const at = T1.toISOString();
+    const result = renderChanges(
+      'main',
+      [
+        { seq: 1, at, actor: 'bot', kind: 'node_added', id: 'a', batchId: 'b_1', reason: 'Plan' },
+        { seq: 2, at, actor: 'bot', kind: 'node_added', id: 'b', batchId: 'b_1', reason: 'Plan' },
+        { seq: 3, at, actor: 'bot', kind: 'node_added', id: 'c', batchId: 'b_2' },
+      ],
+      0,
+      3,
+      { resync: false, actors: { bot } },
+    );
+    const lines = result.text.split('\n');
+    expect(lines.filter((line) => line.startsWith('  batch '))).toEqual([
+      '  batch b_1, reason "Plan":',
+      '  batch b_2:',
+    ]);
+  });
+
+  it('says what each undone batch was', () => {
+    const text = renderUndo(
+      'main',
+      { cursor: 5, undone: ['b_1'], conflicts: [] },
+      { batches: [{ id: 'b_1', summary: 'Added 2 nodes', reason: 'Plan' }] },
+    );
+    expect(text).toBe(
+      'Board main, cursor 5: undid 1 batch (b_1).\n  b_1: Added 2 nodes; reason "Plan"',
+    );
+  });
+
+  it('explains verdicts once per rule', () => {
+    const verdicts = classifyOps(
+      seeded().toJSON(),
+      [
+        { op: 'add_node', node: { type: 'note', title: 'A' } },
+        { op: 'add_node', node: { type: 'note', title: 'B' } },
+        { op: 'update_node', id: 'api', patch: { status: 'done' } },
+      ],
+      { actor: bot, config: { version: 1, policy: { default: 'review_all', agents: {} } } },
+    );
+    expect(explainVerdicts(verdicts)).toBe(
+      'Ops 0, 1 and 2: every change by this agent waits for review.',
+    );
+    const single = classifyOps(
+      seeded().toJSON(),
+      [{ op: 'update_node', id: 'api', patch: { status: 'done' } }],
+      { actor: bot, config: DEFAULT_CONFIG },
+    );
+    expect(explainVerdicts(single)).toBe('Op 0 changes "Payment API", which Ada created.');
+    const many = Array.from({ length: 9 }, (_, index) => ({
+      index,
+      verdict: 'review' as const,
+      rule: 'every change by this agent waits for review',
+    }));
+    expect(explainVerdicts(many)).toBe(
+      'Ops 0, 1, 2, 3, 4, 5 and 3 more: every change by this agent waits for review.',
+    );
+  });
+
+  it('renders questions with answers behind a gutter', () => {
+    const asks: Ask[] = [
+      {
+        id: 'a_2',
+        author: 'bot',
+        kind: 'approval',
+        question: 'Delete?',
+        options: ['yes', 'no'],
+        status: 'answered',
+        createdAt: T1.toISOString(),
+        answer: { by: 'ada', at: T1.toISOString(), option: 'no', text: 'Keep it' },
+      },
+      {
+        id: 'a_1',
+        author: 'bot',
+        kind: 'question',
+        question: 'Which?',
+        status: 'open',
+        createdAt: T0.toISOString(),
+      },
+    ];
+    const result = renderAsks('main', asks, { actors: { ada, bot }, status: 'all' });
+    expect(result.asks.map((a) => a.id)).toEqual(['a_1', 'a_2']);
+    expect(result.text).toContain('Board main: 2 questions, oldest first.');
+    expect(result.text).toContain('a_2 approval request by Bot (agent)');
+    expect(result.text).toContain('answered by Ada (human) at');
+    expect(result.text).toContain('  | Keep it');
+    expect(renderAsks('main', []).text).toBe('Board main: no open questions.');
   });
 });

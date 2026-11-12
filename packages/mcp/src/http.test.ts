@@ -57,7 +57,7 @@ describe('MCP over Streamable HTTP', () => {
     expect(alpha.transport.sessionId).not.toBe(beta.transport.sessionId);
 
     const { tools } = await alpha.client.listTools();
-    expect(tools).toHaveLength(8);
+    expect(tools).toHaveLength(12);
 
     await alpha.client.callTool({ name: 'board_outline', arguments: {} });
     await beta.client.callTool({ name: 'board_outline', arguments: {} });

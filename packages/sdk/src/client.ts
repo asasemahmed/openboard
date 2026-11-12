@@ -13,6 +13,8 @@ import {
   type ApplyResult,
   type Ask,
   type AskInput,
+  type AsksOptions,
+  type AsksResult,
   type Board,
   type BoardApi,
   type BoardSummary,
@@ -353,6 +355,19 @@ export class OpenBoardClient implements BoardApi {
       path: boardPath(boardId, 'asks'),
       body: input,
       idempotent: false,
+      expect: 'object',
+    });
+  }
+
+  asks(boardId: string, options: AsksOptions = {}): Promise<AsksResult> {
+    const query = new URLSearchParams();
+    if (options.status !== undefined) query.set('status', options.status);
+    if (options.maxTokens !== undefined) query.set('maxTokens', String(options.maxTokens));
+    const qs = query.toString();
+    return this.#request({
+      method: 'GET',
+      path: `${boardPath(boardId, 'asks')}${qs ? `?${qs}` : ''}`,
+      idempotent: true,
       expect: 'object',
     });
   }
