@@ -4,9 +4,19 @@
  */
 import { Command, CommanderError, InvalidArgumentError, Option } from 'commander';
 import { boardsCommand, newBoardCommand } from './commands/boards.js';
+import { linksCommand, revisionsCommand } from './commands/code.js';
 import { AGENTS, connectCommand } from './commands/connect.js';
+import { diffCommand } from './commands/diff.js';
 import { doctorCommand } from './commands/doctor.js';
 import { exportCommand } from './commands/export.js';
+import {
+  gitRemoveCommand,
+  gitSetupCommand,
+  gitStatusCommand,
+  mergeDriverCommand,
+  textconvCommand,
+} from './commands/git.js';
+import { importCommand } from './commands/import.js';
 import { initCommand } from './commands/init.js';
 import { activityCommand, snapshotCommand } from './commands/live.js';
 import { mcpCommand } from './commands/mcp.js';
@@ -15,7 +25,7 @@ import { decideCommand, historyCommand, proposalsCommand, undoCommand } from './
 import { startCommand } from './commands/start.js';
 import { statusCommand } from './commands/status.js';
 import { stopCommand } from './commands/stop.js';
-import { EXPORTERS } from './exporters.js';
+import { FORMAT_NAMES } from './exporters.js';
 import { runHook } from './hook.js';
 import { CliError, reportError } from './lib/errors.js';
 import type { CliIo } from './lib/io.js';
@@ -31,6 +41,9 @@ Examples:
   $ openboard proposals                what agents are waiting to have reviewed
   $ openboard policy set review_all    hold every agent change for review
   $ openboard activity                 what agents are doing right now
+  $ openboard import flow.mmd          add a Mermaid flowchart to the main board
+  $ openboard diff --format markdown   what changed on the boards since HEAD
+  $ openboard git setup --diff         merge and diff board files by meaning in git
 `;
 
 function parseLimit(value: string): number {
@@ -148,18 +161,184 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
 
   program
     .command('export')
-    .description('write a board as JSON or text')
+    .description('write a board as JSON, Markdown, Mermaid, JSON Canvas, SVG or text')
     .argument('[board]', 'board id (default: the only board, or "main")')
     .addOption(rootOption())
     .addOption(
       new Option('-f, --format <format>', 'output format (default: from --out, else json)').choices(
-        EXPORTERS.map((exporter) => exporter.name),
+        FORMAT_NAMES,
       ),
     )
     .option('-o, --out <file>', 'write to a file instead of stdout')
+    .addOption(
+      new Option('--theme <theme>', 'svg colours (default: light)').choices(['light', 'dark']),
+    )
     .action(
-      action((board: string | undefined, opts: { root?: string; format?: string; out?: string }) =>
-        exportCommand(io, board, opts),
+      action(
+        (
+          board: string | undefined,
+          opts: { root?: string; format?: string; out?: string; theme?: 'light' | 'dark' },
+        ) => exportCommand(io, board, opts),
+      ),
+    );
+
+  program
+    .command('import')
+    .description('add a Mermaid flowchart or a JSON Canvas to a board')
+    .argument('<file>', 'the file to import, or - for standard input')
+    .argument('[board]', 'board id (default: the only board, or "main")')
+    .addOption(rootOption())
+    .addOption(
+      new Option('--format <format>', 'input format (default: recognized from the file)').choices([
+        'mermaid',
+        'canvas',
+      ]),
+    )
+    .option('--frame <id>', 'put everything that has no frame of its own into this frame')
+    .option('--new <name>', 'create a board with this name and import into it')
+    .option('--dry-run', 'check the import and say what it would add; change nothing')
+    .action(
+      action(
+        (
+          file: string,
+          board: string | undefined,
+          opts: { root?: string; format?: string; frame?: string; new?: string; dryRun?: boolean },
+        ) => importCommand(io, file, board, opts),
+      ),
+    );
+
+  program
+    .command('diff')
+    .description(
+      'what changed on a board between two git revisions; exits 0 when equal, 1 when different, 2 on error',
+    )
+    .argument('[board]', 'board id (default: every board)')
+    .addOption(rootOption())
+    .option('--from <rev>', 'revision to compare from (default: HEAD)')
+    .option('--to <rev>', 'revision to compare to (default: the working tree)')
+    .addOption(
+      new Option('-f, --format <format>', 'output format (default: text)').choices([
+        'text',
+        'markdown',
+        'svg',
+        'json',
+      ]),
+    )
+    .addOption(
+      new Option('--theme <theme>', 'svg colours (default: light)').choices(['light', 'dark']),
+    )
+    .option('-o, --out <file>', 'write to a file instead of stdout')
+    .action(
+      action(
+        (
+          board: string | undefined,
+          opts: {
+            root?: string;
+            from?: string;
+            to?: string;
+            format?: 'text' | 'markdown' | 'svg' | 'json';
+            theme?: 'light' | 'dark';
+            out?: string;
+          },
+        ) => diffCommand(io, board, opts),
+      ),
+    );
+
+  const gitCommand = program
+    .command('git')
+    .description('set up git to merge and diff board files by meaning')
+    .enablePositionalOptions();
+  gitCommand
+    .command('setup')
+    .description(
+      'add the merge driver to .gitattributes and the git configuration (safe to run again)',
+    )
+    .addOption(rootOption())
+    .option('--global', 'write the git settings to your global configuration')
+    .option('--diff', 'also make git diff and git log -p show board files as readable text')
+    .action(
+      action((opts: { root?: string; global?: boolean; diff?: boolean }) =>
+        gitSetupCommand(io, opts),
+      ),
+    );
+  gitCommand
+    .command('status')
+    .description('show whether the merge driver and readable diffs are set up')
+    .addOption(rootOption())
+    .option('--json', 'print JSON')
+    .action(action((opts: { root?: string; json?: boolean }) => gitStatusCommand(io, opts)));
+  gitCommand
+    .command('remove')
+    .description('undo exactly what setup added')
+    .addOption(rootOption())
+    .option('--global', 'remove the git settings from your global configuration')
+    .action(action((opts: { root?: string; global?: boolean }) => gitRemoveCommand(io, opts)));
+
+  program
+    .command('merge-driver')
+    .description(
+      'merge three versions of a board file (git calls this; see openboard git setup). The result is always a valid board: conflicts are resolved, reported on stderr and in .openboard/.local/last-merge.txt, and the exit code is 0 unless --strict',
+    )
+    .argument('<base>', 'the common ancestor (%O); missing or empty when there is none')
+    .argument('<ours>', 'our version (%A); the merged board is written here')
+    .argument('<theirs>', 'their version (%B)')
+    .argument('[path]', 'the path of the board in the repository (%P)')
+    .option('--strict', 'exit 1 when a conflict was resolved, so git stops and marks the file')
+    .addOption(
+      new Option('--prefer <side>', 'which side wins a conflict (default: ours)').choices([
+        'ours',
+        'theirs',
+      ]),
+    )
+    .action(
+      action(
+        (
+          base: string,
+          ours: string,
+          theirs: string,
+          file: string | undefined,
+          opts: { strict?: boolean; prefer?: 'ours' | 'theirs' },
+        ) => mergeDriverCommand(io, base, ours, theirs, file, opts),
+      ),
+    );
+
+  program
+    .command('textconv')
+    .description(
+      'print a board file as readable text, for git diff (see openboard git setup --diff)',
+    )
+    .argument('<file>', 'a board file')
+    .action(action((file: string) => textconvCommand(io, file)));
+
+  program
+    .command('links')
+    .description(
+      "list the board's code links whose code changed or is gone, or refresh nodes checked against the code (needs the running server)",
+    )
+    .usage('[board] [--all] | refresh <nodeId...> [board] | refresh --all [board]')
+    .argument(
+      '[args...]',
+      '[board], or refresh and the node ids (a last argument naming a board is the board)',
+    )
+    .addOption(rootOption())
+    .option('--all', 'list every link; with refresh, refresh every node')
+    .option('--json', 'print JSON')
+    .action(
+      action((args: string[], opts: { root?: string; all?: boolean; json?: boolean }) =>
+        linksCommand(io, args, opts),
+      ),
+    );
+
+  program
+    .command('revisions')
+    .description('the git history of a board file, newest first')
+    .argument('[board]', 'board id (default: the only board, or "main")')
+    .addOption(rootOption())
+    .option('--limit <n>', 'how many revisions, 1 to 200 (default: 20)', parseLimit)
+    .option('--json', 'print JSON')
+    .action(
+      action((board: string | undefined, opts: { root?: string; limit?: number; json?: boolean }) =>
+        revisionsCommand(io, board, opts),
       ),
     );
 
@@ -314,7 +493,7 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
     .addOption(rootOption())
     .addOption(
       new Option('-f, --format <format>', 'output format (default: from --out, else json)').choices(
-        EXPORTERS.map((exporter) => exporter.name),
+        FORMAT_NAMES,
       ),
     )
     .option('-o, --out <file>', 'write to a file instead of stdout')

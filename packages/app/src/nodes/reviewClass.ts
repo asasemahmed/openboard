@@ -12,3 +12,14 @@ export function useReviewClass(id: string, ghost: boolean): string {
     return kind ? CLASS[kind] : '';
   });
 }
+
+/** In a compare view: removed ghosts are drawn as removed; with "only changes", the rest dims. */
+export function useDiffClass(id: string, ghost: boolean): string {
+  const { ui } = useSession();
+  const diff = useStoreValue(ui.diff, ui.diff.get);
+  const only = useStoreValue(ui.onlyChanges, ui.onlyChanges.get);
+  if (!diff) return '';
+  let out = ghost && diff.removed.has(id) ? ' is-diff-removed' : '';
+  if (only && !diff.touched.has(id)) out += ' is-unchanged';
+  return out;
+}

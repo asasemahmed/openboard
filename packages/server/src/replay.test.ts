@@ -118,6 +118,19 @@ describe('snapshotAt', () => {
     }
   });
 
+  it('gives changes to the actor registry alone their own cursor', async () => {
+    const ada = server.api(ADA);
+    const before = (await ada.outline('plan')).cursor;
+    const beforeText = serializeBoard(await ada.getBoard('plan'));
+    await server.api({ id: 'asker', kind: 'agent', name: 'Asker' }).ask('plan', { question: 'Q?' });
+    const after = (await ada.outline('plan')).cursor;
+    expect(after).toBe(before + 1);
+    expect(serializeBoard(await ada.snapshotAt('plan', before))).toBe(beforeText);
+    expect((await ada.snapshotAt('plan', after)).actors.asker?.name).toBe('Asker');
+    // Such a cursor shows no entry in the change feed.
+    expect((await ada.changes('plan', { since: before, includeOwn: true })).changes).toEqual([]);
+  });
+
   it('says how far back history reaches', async () => {
     await server.api(BOT).apply('plan', {
       ops: [{ op: 'add_node', node: { type: 'note', title: 'One' } }],

@@ -290,6 +290,9 @@ describe('claims', () => {
       t0,
     );
     expect(working.label).toBe('Planner agent · working');
+    const long = { planner: { ...actors.planner, name: 'Repository planning assistant' } };
+    expect(claimChip(c, long, [], t0).label).toBe('RA · claimed');
+    expect(claimChip(c, long, [], t0).tooltip).toContain('Repository planning assistant');
   });
 
   it('drops a claim when it runs out, and keeps no timer without claims', async () => {
@@ -419,6 +422,15 @@ describe('replay', () => {
     replay.pause();
     replay.close();
     expect(replay.get().status).toBe('off');
+  });
+
+  it('grows the timeline with batches that land meanwhile, without moving the position', async () => {
+    const { replay, answer } = setup(3);
+    await replay.open(1);
+    await answer(20);
+    replay.append([batch(30), batch(40), batch(50)]);
+    expect(replay.get().ticks.map((b) => b.cursor)).toEqual([10, 20, 30, 40, 50]);
+    expect(replay.get()).toMatchObject({ index: 1, shownIndex: 1 });
   });
 
   it('pages the history back to the earliest point it can rebuild', async () => {

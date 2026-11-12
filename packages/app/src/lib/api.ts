@@ -5,6 +5,7 @@
 import type {
   Actor,
   AnswerInput,
+  ApplyResult,
   Ask,
   Board,
   BoardSummary,
@@ -13,12 +14,19 @@ import type {
   ClaimRequest,
   ClaimResult,
   Decision,
+  DiffResult,
   HistoryOptions,
   HistoryResult,
+  ImportIntoResult,
+  ImportRequest,
   LayoutRequest,
   LayoutResult,
+  LinksOptions,
+  LinksResult,
   ProjectConfig,
   Proposal,
+  RefreshLinksRequest,
+  RevisionsResult,
   UndoRequest,
   UndoResult,
 } from '@openboard/core';
@@ -27,12 +35,15 @@ export class ApiError extends Error {
   /** Server error code, or `unreachable` when the request never got an answer. */
   readonly code: string;
   readonly status: number;
+  /** The server's `details`, when it sent any (for example an importer's warnings). */
+  readonly details: unknown;
 
-  constructor(code: string, message: string, status: number) {
+  constructor(code: string, message: string, status: number, details?: unknown) {
     super(message);
     this.name = 'ApiError';
     this.code = code;
     this.status = status;
+    this.details = details;
   }
 
   get unreachable(): boolean {
@@ -62,6 +73,31 @@ export interface ApiClient {
   claim(boardId: string, request: ClaimRequest): Promise<ClaimResult>;
   /** The board as it was right after `cursor`; aborted when `signal` fires. */
   snapshotAt(boardId: string, cursor: number, signal?: AbortSignal): Promise<Board>;
+  links(boardId: string, options?: LinksOptions): Promise<LinksResult>;
+  refreshLinks(boardId: string, request: RefreshLinksRequest): Promise<ApplyResult>;
+  revisions(boardId: string, limit?: number): Promise<RevisionsResult>;
+  boardAtRevision(boardId: string, rev: string): Promise<Board>;
+  diff(boardId: string, from: string, to?: string): Promise<DiffResult>;
+  importInto(boardId: string, request: ImportRequest): Promise<ImportIntoResult>;
+  /** An export as the server renders it, ready to save. */
+  exportBoard(
+    boardId: string,
+    options: { format: string; theme?: 'light' | 'dark'; diffFrom?: string },
+  ): Promise<ExportFile>;
+}
+
+export interface ExportFile {
+  blob: Blob;
+  filename: string;
+}
+
+/** The file name from a `content-disposition` header, or `fallback`. */
+export function dispositionName(header: string | null, fallback: string): string {
+  const match = header?.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
+  const name = match?.[1] ? decodeURIComponent(match[1]).trim() : '';
+  // Never let a server-chosen name walk into folders.
+  const clean = name.replace(/[\\/]/g, '_').replace(/^\.+/, '');
+  return clean || fallback;
 }
 
 /** What a failed request was about, for wording its message. */
@@ -185,6 +221,34 @@ export function createApiClient(getActor: () => Actor, base = ''): ApiClient {
     }
   }
 
+  function parse(text: string): unknown {
+    try {
+      return text ? JSON.parse(text) : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Throw the error a failed response describes. */
+  function fail(response: Response, json: unknown): never {
+    const error = (
+      json as { error?: { code?: unknown; message?: unknown; details?: unknown } } | undefined
+    )?.error;
+    // A proxy answering for a server that is not running reports a gateway error.
+    if (!error && (response.status === 502 || response.status === 503 || response.status === 504))
+      throw new ApiError('unreachable', 'The OpenBoard server could not be reached.', 0);
+    throw new ApiError(
+      typeof error?.code === 'string' ? error.code : 'http_error',
+      typeof error?.message === 'string' ? error.message : `Request failed (${response.status}).`,
+      response.status,
+      error?.details,
+    );
+  }
+
+  async function failure(response: Response): Promise<never> {
+    fail(response, parse(await response.text()));
+  }
+
   async function request<T>(
     method: string,
     path: string,
@@ -192,24 +256,8 @@ export function createApiClient(getActor: () => Actor, base = ''): ApiClient {
     signal?: AbortSignal,
   ): Promise<T> {
     const response = await send(method, path, body, signal);
-    const text = await response.text();
-    let json: unknown;
-    try {
-      json = text ? JSON.parse(text) : undefined;
-    } catch {
-      json = undefined;
-    }
-    if (!response.ok) {
-      const error = (json as { error?: { code?: unknown; message?: unknown } } | undefined)?.error;
-      // A proxy answering for a server that is not running reports a gateway error.
-      if (!error && (response.status === 502 || response.status === 503 || response.status === 504))
-        throw new ApiError('unreachable', 'The OpenBoard server could not be reached.', 0);
-      throw new ApiError(
-        typeof error?.code === 'string' ? error.code : 'http_error',
-        typeof error?.message === 'string' ? error.message : `Request failed (${response.status}).`,
-        response.status,
-      );
-    }
+    const json = parse(await response.text());
+    if (!response.ok) fail(response, json);
     if (json === undefined)
       throw new ApiError('bad_response', 'The server sent an empty response.', response.status);
     return json as T;
@@ -260,6 +308,32 @@ export function createApiClient(getActor: () => Actor, base = ''): ApiClient {
         if (b.id === boardId) return typeof b.lineage === 'string' ? b.lineage : null;
       }
       throw new ApiError('board_not_found', `There is no board "${boardId}".`, 404);
+    },
+    links: (boardId, options = {}) =>
+      request<LinksResult>('POST', `${board(boardId)}/links`, { maxTokens: 50_000, ...options }),
+    refreshLinks: (boardId, refresh) =>
+      request<ApplyResult>('POST', `${board(boardId)}/links/refresh`, refresh),
+    revisions: (boardId, limit = 50) =>
+      request<RevisionsResult>('GET', `${board(boardId)}/revisions?limit=${limit}`),
+    boardAtRevision: (boardId, rev) =>
+      request<Board>('GET', `${board(boardId)}/revisions/${encodeURIComponent(rev)}`),
+    diff: (boardId, from, to) =>
+      request<DiffResult>('POST', `${board(boardId)}/diff`, to ? { from, to } : { from }),
+    importInto: (boardId, importRequest) =>
+      request<ImportIntoResult>('POST', `${board(boardId)}/import`, importRequest),
+    exportBoard: async (boardId, options) => {
+      const query = new URLSearchParams({ format: options.format });
+      if (options.theme) query.set('theme', options.theme);
+      if (options.diffFrom) query.set('diffFrom', options.diffFrom);
+      const response = await send('GET', `${board(boardId)}/export?${query}`);
+      if (!response.ok) await failure(response);
+      return {
+        blob: await response.blob(),
+        filename: dispositionName(
+          response.headers.get('content-disposition'),
+          `${boardId}.${options.format}`,
+        ),
+      };
     },
     claim: (boardId, claimRequest) =>
       request<ClaimResult>('POST', `${board(boardId)}/claims`, claimRequest),

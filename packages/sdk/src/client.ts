@@ -27,12 +27,20 @@ import {
   type CommentInput,
   type CreateBoardInput,
   type Decision,
+  type DiffRequest,
+  type DiffResult,
+  type ExportOptions,
+  type ExportResult,
   type HistoryOptions,
   type HistoryResult,
+  type ImportIntoResult,
+  type ImportRequest,
   type InboxOptions,
   type InboxResult,
   type LayoutRequest,
   type LayoutResult,
+  type LinksOptions,
+  type LinksResult,
   OpenBoardError,
   type OpenBoardErrorCode,
   type Outline,
@@ -42,6 +50,9 @@ import {
   type ProposalsResult,
   type ReadQuery,
   type ReadResult,
+  type RefreshLinksRequest,
+  type RevisionsOptions,
+  type RevisionsResult,
   type SelectionResult,
   type Session,
   type SessionsOptions,
@@ -117,8 +128,8 @@ interface RequestSpec {
   body?: unknown;
   /** Safe to send twice. Only idempotent reads are retried, and only once. */
   idempotent: boolean;
-  /** The JSON shape a successful response must have. */
-  expect: 'object' | 'array';
+  /** The JSON shape a successful response must have; `text` returns the raw body and its headers. */
+  expect: 'object' | 'array' | 'text';
   /** Overrides the client's timeout for this request (long-polls). */
   timeoutMs?: number;
 }
@@ -470,6 +481,82 @@ export class OpenBoardClient implements BoardApi {
     });
   }
 
+  // ── Code and git ──────────────────────────────────────────────────────────
+
+  links(boardId: string, options: LinksOptions = {}): Promise<LinksResult> {
+    return this.#request({
+      method: 'POST',
+      path: boardPath(boardId, 'links'),
+      body: options,
+      idempotent: true,
+      expect: 'object',
+    });
+  }
+
+  refreshLinks(boardId: string, request: RefreshLinksRequest): Promise<ApplyResult> {
+    return this.#request({
+      method: 'POST',
+      path: boardPath(boardId, 'links/refresh'),
+      body: request,
+      idempotent: false,
+      expect: 'object',
+    });
+  }
+
+  revisions(boardId: string, options: RevisionsOptions = {}): Promise<RevisionsResult> {
+    const qs = options.limit !== undefined ? `?limit=${options.limit}` : '';
+    return this.#request({
+      method: 'GET',
+      path: `${boardPath(boardId, 'revisions')}${qs}`,
+      idempotent: true,
+      expect: 'object',
+    });
+  }
+
+  boardAtRevision(boardId: string, rev: string): Promise<Board> {
+    return this.#request({
+      method: 'GET',
+      path: boardPath(boardId, `revisions/${segment(rev, 'revision')}`),
+      idempotent: true,
+      expect: 'object',
+    });
+  }
+
+  diffRevisions(boardId: string, request: DiffRequest): Promise<DiffResult> {
+    return this.#request({
+      method: 'POST',
+      path: boardPath(boardId, 'diff'),
+      body: request,
+      idempotent: true,
+      expect: 'object',
+    });
+  }
+
+  importInto(boardId: string, request: ImportRequest): Promise<ImportIntoResult> {
+    return this.#request({
+      method: 'POST',
+      path: boardPath(boardId, 'import'),
+      body: request,
+      idempotent: false,
+      expect: 'object',
+    });
+  }
+
+  async exportBoard(boardId: string, options: ExportOptions): Promise<ExportResult> {
+    const query = new URLSearchParams({ format: options.format });
+    if (options.theme !== undefined) query.set('theme', options.theme);
+    if (options.diffFrom !== undefined) query.set('diffFrom', options.diffFrom);
+    const raw = await this.#request<RawBody>({
+      method: 'GET',
+      path: `${boardPath(boardId, 'export')}?${query}`,
+      idempotent: true,
+      expect: 'text',
+    });
+    const filename =
+      /filename="([^"]+)"/.exec(raw.disposition)?.[1] ?? `${boardId}.${options.format}`;
+    return { text: raw.text, mime: raw.contentType.split(';')[0]?.trim() ?? '', filename };
+  }
+
   // ── Settings ──────────────────────────────────────────────────────────────
 
   getConfig(): Promise<ProjectConfig> {
@@ -537,6 +624,14 @@ export class OpenBoardClient implements BoardApi {
 
       const parsed = parseJson(text);
       if (!response.ok) throw toError(response.status, parsed, where);
+      if (spec.expect === 'text') {
+        const raw: RawBody = {
+          text,
+          contentType: response.headers.get('content-type') ?? '',
+          disposition: response.headers.get('content-disposition') ?? '',
+        };
+        return raw as T;
+      }
       if (parsed === undefined) {
         throw new OpenBoardError(
           'internal',
@@ -571,6 +666,12 @@ export function connect(options: ConnectOptions): OpenBoardClient {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+interface RawBody {
+  text: string;
+  contentType: string;
+  disposition: string;
+}
 
 /** Marks a dropped connection so the caller may retry an idempotent read. */
 class ConnectionReset extends Error {}

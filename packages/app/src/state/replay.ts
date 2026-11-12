@@ -102,6 +102,21 @@ export class ReplayController extends Emitter {
   }
 
   /** Leave replay. Cached snapshots are dropped; the next visit reads the history again. */
+  /**
+   * Add batches that landed while replaying, quietly: the timeline grows and
+   * the position stays where the person left it.
+   */
+  append(batches: readonly Batch[]): void {
+    if (this.state.status !== 'ready') return;
+    const last = this.state.ticks[this.state.ticks.length - 1]?.cursor ?? -1;
+    const known = new Set(this.state.ticks.map((b) => b.id));
+    const fresh = batches
+      .filter((b) => b.cursor > last && !known.has(b.id))
+      .sort((a, b) => a.cursor - b.cursor);
+    if (fresh.length === 0) return;
+    this.set({ ...this.state, ticks: [...this.state.ticks, ...fresh] });
+  }
+
   close(): void {
     this.session++;
     this.stopTimer();

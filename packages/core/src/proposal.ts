@@ -207,6 +207,10 @@ export function buildProposal(
  */
 export function itemFingerprint(item: BoardNode | BoardEdge): string {
   const { view: _view, ...rest } = item as BoardNode;
+  // The server keeps code links current (hash, moved lines, stale); that is not an edit.
+  if (rest.links) {
+    rest.links = rest.links.map(({ hash: _h, stale: _s, line: _l, endLine: _e, ...link }) => link);
+  }
   const text = stableJson(rest);
   // FNV-1a, 32 bits: enough to tell "changed" from "unchanged".
   let hash = 0x811c9dc5;

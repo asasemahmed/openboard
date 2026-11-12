@@ -55,7 +55,7 @@ export function useShortcuts(actions: BoardActions): void {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || replay.active) return;
+      if (event.defaultPrevented || replay.active || ui.compare.get() !== null) return;
       const target = event.target as HTMLElement | null;
       const is = (spec: string) => matchesShortcut(event, spec);
 

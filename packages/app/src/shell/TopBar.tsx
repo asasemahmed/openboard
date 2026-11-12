@@ -10,6 +10,7 @@ import { AddMenu } from './AddMenu.js';
 import { ConnectAgentButton, FollowToggle } from './AgentControls.js';
 import { BoardName } from './BoardName.js';
 import { BoardSwitcher } from './BoardSwitcher.js';
+import { CodeStatus } from './CodeStatus.js';
 import { ConnectionStatus } from './ConnectionStatus.js';
 import { OverflowMenu } from './OverflowMenu.js';
 import { AgentsWorking, Participants } from './Participants.js';
@@ -81,6 +82,7 @@ export function TopBar() {
           </span>
           <FollowToggle />
         </div>
+        <CodeStatus />
         <AgentsWorking />
         <AskIndicator />
         <PanelToggles />

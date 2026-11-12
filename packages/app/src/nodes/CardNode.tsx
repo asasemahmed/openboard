@@ -16,7 +16,7 @@ import { markdownToPlainText } from '../lib/plainText.js';
 import { useSession } from '../state/context.js';
 import { Icon } from '../ui/Icon.js';
 import { NodeDecorations } from './NodeDecorations.js';
-import { useReviewClass } from './reviewClass.js';
+import { useDiffClass, useReviewClass } from './reviewClass.js';
 import { StatusPill } from './StatusPill.js';
 import { TitleEditor, useIsEditing } from './TitleEditor.js';
 
@@ -41,7 +41,7 @@ function CardNodeView({ id, data, selected }: NodeProps<FlowNode>) {
   const hasMeta = node.status !== undefined || tags.length > 0 || links.length > 0;
   const custom = meta.tone === 'custom';
   const focus = useNodeFocus(id, ghost);
-  const review = useReviewClass(id, ghost);
+  const review = useReviewClass(id, ghost) + useDiffClass(id, ghost);
 
   return (
     <article

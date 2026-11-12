@@ -81,6 +81,12 @@ People decide how much you may change without asking. Work with that, never arou
 - **Undo your own mistakes** with `board_undo` (your last batch by default, or `batchId`). It never overwrites what someone changed afterwards; leave the conflicts it reports as they are. Other people's changes are not yours to undo: ask.
 - **Reply where you were addressed.** Answer a mention or a reply in its thread with `board_comment` and `thread`, and resolve the thread with `board_comment` and `resolve` once it is handled. Use `board_comment` for notes that need no answer, and `board_ask` when you need one to go on.
 
+## Keeping the board true to the code
+
+- Link `code` nodes, and tasks that touch code, to the files they are about: `links: [{"kind": "file", "target": "src/api/auth.ts", "line": 40, "endLine": 72}]`, with a line range for a specific function. The server records what the code looked like and watches the file, following the range when the code just moves.
+- Call `board_links` at the start of a session and after you change code. It lists the nodes whose linked code changed or is gone, and what changed.
+- For each one, re-read the code, update the node (title, body, status, the link's range) with `board_apply`, then `board_links` with `refresh: [its id]` to mark it current. Never refresh a node you have not actually re-read against the code: refreshing says "I checked this".
+
 ## Sharing the board with other agents
 
 - When several agents work on the same board, claim the nodes you are about to work on with `board_claim`, and release them (`release: true`) when you finish. A quick single edit needs no claim. Claims expire on their own and renew while you keep working.

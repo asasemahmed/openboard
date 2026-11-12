@@ -5,6 +5,7 @@ import { useSession } from '../state/context.js';
 import { Icon } from '../ui/Icon.js';
 import { MenuHeading, MenuItem, MenuList, MenuSeparator } from '../ui/Menu.js';
 import { Popover } from '../ui/Popover.js';
+import { copyBoardAs, EXPORT_CHOICES, exportBoard } from './boardActions.js';
 
 const SHOWN = 12;
 
@@ -21,8 +22,8 @@ export function BoardSwitcher() {
         ref={anchor}
         type="button"
         className="icon-btn icon-btn-sm"
-        aria-label="Switch board"
-        title="Switch board"
+        aria-label="Board menu"
+        title="Boards, import and export"
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => {
@@ -52,6 +53,57 @@ export function BoardSwitcher() {
             <p className="menu-note">Loading boards…</p>
           )}
           {list.status === 'error' && <p className="menu-note">Could not load boards.</p>}
+          <MenuSeparator />
+          <MenuHeading>This board</MenuHeading>
+          <MenuItem
+            icon="plus"
+            hint="Mermaid or JSON Canvas"
+            onSelect={() => {
+              close();
+              session.ui.importDialog.set({});
+            }}
+          >
+            Import…
+          </MenuItem>
+          {EXPORT_CHOICES.map(({ label, choice }) => (
+            <MenuItem
+              key={label}
+              icon="file"
+              onSelect={() => {
+                close();
+                void exportBoard(session, choice);
+              }}
+            >
+              Export as {label}
+            </MenuItem>
+          ))}
+          <MenuItem
+            icon="copy"
+            onSelect={() => {
+              close();
+              void copyBoardAs(session, 'mermaid');
+            }}
+          >
+            Copy as Mermaid
+          </MenuItem>
+          <MenuItem
+            icon="copy"
+            onSelect={() => {
+              close();
+              void copyBoardAs(session, 'markdown');
+            }}
+          >
+            Copy as Markdown
+          </MenuItem>
+          <MenuItem
+            icon="history"
+            onSelect={() => {
+              close();
+              session.ui.comparePicker.set(true);
+            }}
+          >
+            Compare with a git revision…
+          </MenuItem>
           <MenuSeparator />
           <MenuItem
             icon="plus"

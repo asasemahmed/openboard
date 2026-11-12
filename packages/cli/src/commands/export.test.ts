@@ -71,7 +71,15 @@ describe('export', () => {
   });
 
   it('keeps a registry with one entry per format', () => {
-    expect(EXPORTERS.map((e) => e.name)).toEqual(['json', 'outline', 'text']);
+    expect(EXPORTERS.map((e) => e.name)).toEqual([
+      'json',
+      'markdown',
+      'mermaid',
+      'canvas',
+      'svg',
+      'outline',
+      'text',
+    ]);
     expect(exporterForFile('x.json')?.name).toBe('json');
     expect(exporterForFile('x.outline.txt')?.name).toBe('outline');
     expect(exporterForFile('x.txt')?.name).toBe('text');

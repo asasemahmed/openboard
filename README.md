@@ -21,7 +21,9 @@ OpenBoard is an open canvas that AI agents read and edit over MCP while you edit
 - **You stay in control.** Decide per project and per agent what agents may change on their own; changes to your work wait as proposals you accept or reject, in whole or in part. Every change is recorded and can be undone exactly, without overwriting later work.
 - **See agents at work.** Agents appear on the canvas next to the people: what they are reading, writing or running, including work outside the board reported by their hooks. Agents claim the nodes they work on so they do not collide, and you can replay how the board came to be.
 - **Agents ask instead of guessing.** Agents put questions to you on the board and wait for the answer, read your comments and mentions in their inbox, and reply in the thread.
-- **Boards in git.** Each board is a deterministic JSON file in `.openboard/`. It diffs and merges like code, and the server picks up changes from a checkout or a merge.
+- **Boards in git.** Each board is a deterministic JSON file in `.openboard/`. A merge driver merges boards by meaning, never leaving conflict markers; `openboard diff` summarizes board changes for review, as text, Markdown or SVG; and the server picks up changes from a checkout or a merge.
+- **Import and export.** Bring in Mermaid flowcharts and JSON Canvas files, and export boards as Markdown, Mermaid, JSON Canvas or SVG.
+- **Boards that notice when code changes.** Link a node to a file or a range of lines; when that code changes, the board marks the node, so agents know which parts of the map to re-check.
 
 ## Quick start
 
@@ -75,6 +77,7 @@ Three ideas carry the design:
 - [Tool reference](docs/tools.md): every tool, operation, validation error and type
 - [CLI reference](docs/cli.md): every command and flag
 - [Board file format](docs/board-format.md): the `.board.json` file and `config.json`, for reviewers and tool authors
+- [Boards in git](docs/git.md): merging, readable diffs, reviewing board changes in pull requests
 - [Integrations](integrations/README.md): Claude Code, Cursor, Codex and generic MCP setups
 - [Architecture](docs/ARCHITECTURE.md): how the packages fit together
 

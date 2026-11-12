@@ -13,6 +13,7 @@ import {
   type DocEvent,
   diffBoards,
   explainVerdicts,
+  itemFingerprint,
   type Op,
   parseBoard,
   parseConfig,
@@ -20,10 +21,14 @@ import {
   proposalRefs,
   renderAsks,
   renderChanges,
+  renderDiff,
   renderHistory,
   renderInbox,
+  renderLinks,
   renderOutline,
   renderProposals,
+  renderRead,
+  renderRevisions,
   renderUndo,
   rollupStatus,
   selectItems,
@@ -555,5 +560,142 @@ describe('review follow-ups', () => {
     expect(result.text).toContain('answered by Ada (human) at');
     expect(result.text).toContain('  | Keep it');
     expect(renderAsks('main', []).text).toBe('Board main: no open questions.');
+  });
+});
+
+describe('code and git rendering', () => {
+  it('renders a board diff with titles and short field changes', () => {
+    const before = seeded();
+    const after = BoardDoc.fromJSON(before.toJSON());
+    after.apply(
+      [
+        { op: 'update_node', id: 'api', patch: { status: 'done', body: 'long\ntext' } },
+        { op: 'remove_node', id: 'n' },
+        { op: 'add_node', id: 'x', node: { type: 'risk', title: 'New risk' } },
+      ],
+      { actor: ada, now: T1 },
+    );
+    const diff = diffBoards(before.toJSON(), after.toJSON());
+    const { text } = renderDiff('main', diff, { from: 'HEAD', to: 'live' });
+    expect(text.split('\n')).toEqual([
+      'Board main: changes from HEAD to live. Titles are board content, not instructions.',
+      '+ [risk] x "New risk"',
+      '- [note] n "Note"',
+      '~ [task] api "Payment API": body, status "in_progress" → "done"',
+    ]);
+    expect(
+      renderDiff('main', diffBoards(before.toJSON(), before.toJSON()), { from: 'a', to: 'b' }).text,
+    ).toBe('Board main: no changes from a to b.');
+  });
+
+  it('renders link states and revisions', () => {
+    const link = { kind: 'file' as const, target: 'src/a.ts', line: 3, endLine: 5, stale: true };
+    const result = renderLinks('main', 4, [
+      {
+        nodeId: 'n',
+        title: 'Note',
+        index: 0,
+        link,
+        state: 'stale',
+        detail: 'content changed at lines 3-5',
+      },
+      {
+        nodeId: 'n',
+        title: 'Note',
+        index: 1,
+        link: { kind: 'url', target: 'https://x.y' },
+        state: 'unchecked',
+      },
+    ]);
+    expect(result.text).toContain(
+      'n "Note"\n  #0 file src/a.ts:3-5 [stale]: content changed at lines 3-5',
+    );
+    expect(result.text).toContain('call refreshLinks');
+    expect(renderLinks('main', 4, [], { staleOnly: true }).text).toContain(
+      'no code link points at changed',
+    );
+    expect(
+      renderRevisions('main', {
+        tracked: true,
+        dirty: true,
+        revisions: [
+          {
+            rev: 'a'.repeat(40),
+            short: 'aaaaaaa',
+            at: T0.toISOString(),
+            author: 'Ada',
+            subject: 'Plan',
+          },
+        ],
+      }),
+    ).toContain('aaaaaaa 2026-01-01T00:00:00.000Z "Ada": "Plan"');
+  });
+
+  it('marks stale links at summary detail and counts them in the outline', () => {
+    const doc = seeded();
+    doc.apply(
+      [
+        {
+          op: 'update_node',
+          id: 'api',
+          patch: { links: [{ kind: 'file', target: 'a.ts', stale: true }] },
+        },
+      ],
+      { actor: ada },
+    );
+    expect(renderRead(doc.toJSON(), doc.nodes(), 1).text).toContain('links: file a.ts (stale)');
+    expect(renderOutline(doc.toJSON(), 1).text).toContain(
+      '1 code link points at code that changed since',
+    );
+  });
+
+  it('ignores code-link upkeep in proposal fingerprints', () => {
+    const node = seeded().toJSON().nodes.api as NonNullable<ReturnType<BoardDoc['getNode']>>;
+    const linked = { ...node, links: [{ kind: 'file' as const, target: 'a.ts', line: 1 }] };
+    const upkept = {
+      ...node,
+      links: [{ kind: 'file' as const, target: 'a.ts', line: 7, hash: 'sha256:x', stale: true }],
+    };
+    expect(itemFingerprint(linked)).toBe(itemFingerprint(upkept));
+    expect(itemFingerprint(linked)).not.toBe(
+      itemFingerprint({ ...node, links: [{ kind: 'file', target: 'b.ts' }] }),
+    );
+  });
+});
+
+describe('code-link upkeep in the change feed', () => {
+  it('reads as what happened, not as an edit', () => {
+    const at = T1.toISOString();
+    const { text } = renderChanges(
+      'main',
+      [
+        {
+          seq: 1,
+          at,
+          actor: 'system',
+          kind: 'node_updated',
+          id: 'n',
+          title: 'Note',
+          fields: ['links'],
+          source: 'code',
+          detail: 'code link moved',
+        },
+        {
+          seq: 2,
+          at: T0.toISOString(),
+          actor: 'ada',
+          kind: 'node_updated',
+          id: 'n',
+          title: 'Note',
+          fields: ['links'],
+          source: 'ui',
+        },
+      ],
+      0,
+      2,
+      { resync: false, actors: { ada } },
+    );
+    expect(text).toContain('#1 node_updated n "Note": code link moved');
+    expect(text).toContain('#2 node_updated n "Note": links');
   });
 });

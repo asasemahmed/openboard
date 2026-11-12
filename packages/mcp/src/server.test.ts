@@ -20,7 +20,7 @@ import { createMcpServer, type McpServerOptions } from './server.js';
 import { OP_KINDS, TOOL_NAMES } from './tools.js';
 
 /** Total size of `tools/list` may not grow past this without a deliberate decision. */
-const TOOLS_LIST_TOKEN_CEILING = 3500;
+const TOOLS_LIST_TOKEN_CEILING = 3700;
 
 const ADA: Actor = { id: 'ada', kind: 'human', name: 'Ada' };
 
@@ -69,7 +69,7 @@ async function open(
 const human = () => server.api(ADA);
 
 describe('tools/list', () => {
-  it('lists the thirteen tools with titles, honest annotations and compact schemas', async () => {
+  it('lists the fourteen tools with titles, honest annotations and compact schemas', async () => {
     const { client } = await open();
     const { tools } = await client.listTools();
     expect(tools.map((tool) => tool.name)).toEqual([...TOOL_NAMES]);
@@ -94,7 +94,7 @@ describe('tools/list', () => {
     });
     expect(byName.board_create?.annotations?.readOnlyHint).toBe(false);
     expect(byName.board_layout?.annotations?.readOnlyHint).toBe(false);
-    expect(tools).toHaveLength(13);
+    expect(tools).toHaveLength(14);
     expect(byName.board_inbox?.annotations).toMatchObject({
       readOnlyHint: true,
       idempotentHint: false,

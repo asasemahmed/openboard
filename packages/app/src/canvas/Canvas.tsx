@@ -17,10 +17,11 @@ import {
   useReactFlow,
   useStoreApi,
 } from '@xyflow/react';
-import { type MouseEvent, useCallback } from 'react';
+import { type DragEvent, type MouseEvent, useCallback } from 'react';
 import { moveOps } from '../lib/commands.js';
 import type { FlowEdge, FlowNode } from '../lib/flow.js';
 import { absoluteRect, center, frameAt } from '../lib/geometry.js';
+import { droppableImport } from '../lib/importFlow.js';
 import { typeMeta } from '../lib/nodeTypes.js';
 import { useTheme } from '../lib/theme.js';
 import { CardNode } from '../nodes/CardNode.js';
@@ -179,13 +180,33 @@ export function Canvas({
     [toCanvas, ui, presence],
   );
 
+  // A Mermaid or JSON Canvas file dropped on the board opens the import dialog with it.
+  const onFileDragOver = useCallback((event: DragEvent) => {
+    if ([...event.dataTransfer.items].some((item) => item.kind === 'file')) event.preventDefault();
+  }, []);
+  const onFileDrop = useCallback(
+    (event: DragEvent) => {
+      const file = event.dataTransfer.files[0];
+      if (!file || !droppableImport(file.name)) return;
+      event.preventDefault();
+      if (file.size > 1_500_000) return;
+      void file.text().then((text) => ui.importDialog.set({ text, filename: file.name }));
+    },
+    [ui],
+  );
+
   const onMouseLeave = useCallback(() => {
     ui.lastPointer = null;
     presence.setCursor(null);
   }, [ui, presence]);
 
   return (
-    <div className="canvas-root" onKeyDown={onKeyDown}>
+    <div
+      className="canvas-root"
+      onKeyDown={onKeyDown}
+      onDragOver={readOnly ? undefined : onFileDragOver}
+      onDrop={readOnly ? undefined : onFileDrop}
+    >
       <EdgeMarkers />
       <ReactFlow<FlowNode, FlowEdge>
         nodes={nodes}

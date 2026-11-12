@@ -7,6 +7,7 @@
 import type { PolicyMode, ProjectConfig } from '@openboard/core';
 import { useEffect, useId, useState } from 'react';
 import { calmMessage } from '../lib/api.js';
+import { EDITORS, type EditorScheme, readEditorScheme, writeEditorScheme } from '../lib/editor.js';
 import {
   type AgentChoice,
   configFromForm,
@@ -16,6 +17,7 @@ import {
   type PolicyForm,
   policyForm,
 } from '../lib/policy.js';
+import { serverInfo } from '../state/boards.js';
 import { useSession } from '../state/context.js';
 import { useStoreValue, useValue } from '../state/emitter.js';
 import { toasts } from '../state/toasts.js';
@@ -93,6 +95,7 @@ export function SettingsDialog() {
       size="md"
       description="These apply to every board in this project and are saved in .openboard/config.json, so commit them with your code."
     >
+      <EditorSettings />
       <section className="settings-section" aria-labelledby={`${defaultId}-h`}>
         <h3 id={`${defaultId}-h`}>Review policy</h3>
         <p className="muted small">
@@ -209,5 +212,52 @@ function AgentRow({
       </label>
       <ModeSelect id={id} value={value} withDefault={fallback} onChange={onChange} />
     </div>
+  );
+}
+
+/** Where "Open in editor" opens files; a choice for this browser, saved at once. */
+function EditorSettings() {
+  const info = useValue(serverInfo);
+  const [scheme, setScheme] = useState<EditorScheme>(readEditorScheme);
+  const id = useId();
+  return (
+    <section className="settings-section" aria-labelledby={`${id}-h`}>
+      <h3 id={`${id}-h`}>Editor</h3>
+      <div className="policy-row">
+        <label htmlFor={id} className="policy-who">
+          <span>
+            <strong>Open linked code in</strong>
+            <span className="muted small">Saved in this browser</span>
+          </span>
+        </label>
+        <select
+          id={id}
+          className="input input-sm"
+          value={scheme}
+          onChange={(event) => {
+            const next = event.target.value as EditorScheme;
+            setScheme(next);
+            writeEditorScheme(next);
+          }}
+        >
+          {EDITORS.map((e) => (
+            <option key={e.id} value={e.id}>
+              {e.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="policy-row">
+        <span className="policy-who">
+          <span>
+            <strong>Project root</strong>
+            <span className="muted small">Link paths are relative to it</span>
+          </span>
+        </span>
+        <code className="settings-root" title={info?.root}>
+          {info?.root || 'Not known yet'}
+        </code>
+      </div>
+    </section>
   );
 }

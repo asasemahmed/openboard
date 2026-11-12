@@ -11,7 +11,7 @@ import { type Actor, OpenBoardError } from '@openboard/core';
 import { type Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
-import { actorFromHeaders } from './actor.js';
+import { ANONYMOUS_AGENT, actorFromHeaders } from './actor.js';
 import { type Boards, listing } from './boards.js';
 import { errorMessage } from './fsutil.js';
 import { checkRequest, type SecurityConfig } from './security.js';
@@ -158,7 +158,12 @@ export function createHttpApp(ctx: HttpContext): Hono<{ Variables: { actor: Acto
   // `x-openboard-session` names the agent session a call belongs to (see live.ts).
   const api = (c: Context<{ Variables: { actor: Actor } }>) => {
     const session = c.req.header('x-openboard-session');
-    return new LocalBoardApi(ctx.boards, c.get('actor'), ctx.log, session ? { session } : {});
+    const actor = c.get('actor');
+    return new LocalBoardApi(ctx.boards, actor, ctx.log, {
+      ...(session ? { session } : {}),
+      // No actor headers at all: no presence, not remembered (see SessionOptions).
+      ...(actor === ANONYMOUS_AGENT ? { anonymous: true } : {}),
+    });
   };
 
   app.get('/api/health', (c) =>
@@ -260,6 +265,71 @@ export function createHttpApp(ctx: HttpContext): Hono<{ Variables: { actor: Acto
       throw new OpenBoardError('invalid_request', 'the cursor must be a whole number');
     }
     return c.json(await api(c).snapshotAt(c.req.param('id'), Number(raw)));
+  });
+
+  // ── Code and git ───────────────────────────────────────────────────────────
+
+  app.post('/api/boards/:id/links', async (c) =>
+    c.json(await api(c).links(c.req.param('id'), await jsonBody(c))),
+  );
+
+  app.post('/api/boards/:id/links/refresh', async (c) =>
+    c.json(
+      await api(c).refreshLinks(
+        c.req.param('id'),
+        (await jsonBody(c)) as unknown as Parameters<LocalBoardApi['refreshLinks']>[1],
+      ),
+    ),
+  );
+
+  app.get('/api/boards/:id/revisions', async (c) => {
+    const limit = c.req.query('limit');
+    return c.json(
+      await api(c).revisions(
+        c.req.param('id'),
+        limit === undefined ? {} : { limit: Number(limit) },
+      ),
+    );
+  });
+
+  app.get('/api/boards/:id/revisions/:rev', async (c) =>
+    c.json(await api(c).boardAtRevision(c.req.param('id'), c.req.param('rev'))),
+  );
+
+  app.post('/api/boards/:id/diff', async (c) =>
+    c.json(
+      await api(c).diffRevisions(
+        c.req.param('id'),
+        (await jsonBody(c)) as unknown as Parameters<LocalBoardApi['diffRevisions']>[1],
+      ),
+    ),
+  );
+
+  app.post('/api/boards/:id/import', async (c) =>
+    c.json(
+      await api(c).importInto(
+        c.req.param('id'),
+        (await jsonBody(c)) as unknown as Parameters<LocalBoardApi['importInto']>[1],
+      ),
+    ),
+  );
+
+  /** The exporter's output as a download, not JSON. */
+  app.get('/api/boards/:id/export', async (c) => {
+    const options: Record<string, unknown> = { format: c.req.query('format') ?? '' };
+    const theme = c.req.query('theme');
+    const diffFrom = c.req.query('diffFrom');
+    if (theme !== undefined) options.theme = theme;
+    if (diffFrom !== undefined) options.diffFrom = diffFrom;
+    const result = await api(c).exportBoard(
+      c.req.param('id'),
+      options as Parameters<LocalBoardApi['exportBoard']>[1],
+    );
+    return c.body(result.text, 200, {
+      'content-type': `${result.mime}; charset=utf-8`,
+      'content-disposition': `attachment; filename="${result.filename}"`,
+      'x-content-type-options': 'nosniff',
+    });
   });
 
   // ── Settings ───────────────────────────────────────────────────────────────

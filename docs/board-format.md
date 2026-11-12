@@ -1,6 +1,6 @@
 # Board file format
 
-Each board is one file, `.openboard/<board id>.board.json`, in the project it belongs to. The file is the source of truth: the running server keeps it up to date, and it picks up changes made to it from outside (a checkout, a merge, an editor). This page is for people who review board diffs in pull requests and for anyone writing tools that read or write the file.
+Each board is one file, `.openboard/<board id>.board.json`, in the project it belongs to. The file is the source of truth: the running server keeps it up to date, and it picks up changes made to it from outside (a checkout, a merge, an editor). This page is for people who review board diffs in pull requests and for anyone writing tools that read or write the file. How to merge boards, get readable diffs and review board changes is in [Boards in git](git.md).
 
 The schema is defined in [`packages/core/src/schema.ts`](../packages/core/src/schema.ts) and the writer in [`packages/core/src/serialize.ts`](../packages/core/src/serialize.ts).
 
@@ -119,6 +119,8 @@ Ids are letters, digits and `_ . : -`, starting with a letter or digit, at most 
 | `createdBy`, `createdAt` | actor id, timestamp         | Who created it, and when                                                                                                            |
 | `updatedBy`, `updatedAt` | actor id, timestamp         | Who last changed its meaning, and when                                                                                              |
 
+On `file` and `symbol` links, `hash` and `stale` are written by the server, not by people or agents: `hash` (`sha256:` and 32 hex digits) records the linked text when the link was made or last refreshed, `stale: true` says that text has changed since, and `line`/`endLine` move with the code when it shifts. Such writes keep the node's `updatedBy` and `updatedAt`. See [boards that know about code](agents.md#boards-that-know-about-code).
+
 `view.x` and `view.y` are relative to the top-left corner of the parent frame, or to the canvas origin for a node without a parent, so moving a frame does not rewrite its children. `pinned: true` means a person placed the node and automatic layout leaves it alone. A node without `view` has not been placed yet; the server places it.
 
 ### Edge
@@ -228,11 +230,11 @@ The document in `.local/` carries a random lineage id, made when it is created o
 
 ## Editing the file
 
-You can edit a board file by hand, or let git change it through a checkout, merge or rebase. While a server runs, it notices the change and reconciles the live board to match the file; browsers update on their own. Agents see such changes in `board_changes`, attributed to the actor `system`. The node keeps whatever `updatedBy` and `updatedAt` the file says.
+You can edit a board file by hand, or let git change it through a checkout, merge or rebase. With the [OpenBoard merge driver](git.md#merging-boards), git merges board files by meaning and never leaves conflict markers in them. While a server runs, it notices the change and reconciles the live board to match the file; browsers update on their own. Agents see such changes in `board_changes`, attributed to the actor `system`. The node keeps whatever `updatedBy` and `updatedAt` the file says.
 
 If the file stops parsing, for example because a merge left conflict markers in it, the server keeps serving the board as it was and does not overwrite the file until it parses again. Fix the file, or check out a good version; `openboard doctor` names a file that does not parse and why.
 
-To create a board without the server, write a file with an empty `actors`, `nodes` and `edges`, or run `openboard new`. To produce the canonical form of a board, run `openboard export <board> --format json`.
+To create a board without the server, write a file with an empty `actors`, `nodes` and `edges`, or run `openboard new`. To produce the canonical form of a board, run `openboard export <board> --format json`; the same command writes Markdown, Mermaid, JSON Canvas or SVG, and `openboard import` adds a Mermaid flowchart or a JSON Canvas to a board (see the [CLI reference](cli.md#export)).
 
 ## Schema version
 

@@ -39,6 +39,11 @@ Working with a person in control
 - Undo your own mistakes with `board_undo`; other people's changes are not yours to undo.
 - Reply in threads where you were mentioned (`board_comment` with `thread`) and resolve them (`resolve`) when done.
 
+Keeping the board true to the code
+
+- Link `code` nodes to files, with line ranges for specific functions: `links: [{"kind": "file", "target": "src/x.ts", "line": 40, "endLine": 72}]`.
+- Call `board_links` at the start of a session and after changing code; re-read what it lists, update those nodes, then `board_links` with `refresh: [ids]`. Never refresh a node you have not re-read against the code.
+
 Sharing the board with other agents
 
 - When several agents share the board, `board_claim` the nodes you are about to work on and release them (`release: true`) when done; a quick single edit needs no claim.

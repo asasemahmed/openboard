@@ -128,7 +128,11 @@ export function NodeInspector({ node }: { node: BoardNode }) {
       </Section>
 
       <Section title="Links">
-        <LinksEditor links={node.links ?? []} onChange={(links) => patch({ links })} />
+        <LinksEditor
+          nodeId={node.id}
+          links={node.links ?? []}
+          onChange={(links) => patch({ links })}
+        />
       </Section>
 
       {props.length > 0 && (

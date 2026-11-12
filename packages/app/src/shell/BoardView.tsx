@@ -15,6 +15,7 @@ import { SessionProvider, useMeta, useSession } from '../state/context.js';
 import { useStoreValue } from '../state/emitter.js';
 import { identity } from '../state/identity.js';
 import type { BoardSession } from '../state/session.js';
+import { CompareView } from './CompareView.js';
 import { ConfirmHost } from './ConfirmHost.js';
 import { LazyDialogs } from './LazyDialogs.js';
 import { ReplayView } from './ReplayView.js';
@@ -45,11 +46,14 @@ function Workspace({ onlyRenderVisibleElements }: { onlyRenderVisibleElements: b
   );
 
   const replaying = useStoreValue(session.replay, () => session.replay.active);
+  const comparing = useStoreValue(session.ui.compare, () => session.ui.compare.get() !== null);
+  const away = replaying || comparing;
 
   return (
     <ActionsProvider value={actions}>
       {replaying && <ReplayView />}
-      <div className="workspace" inert={replaying || undefined}>
+      {comparing && !replaying && <CompareView />}
+      <div className="workspace" inert={away || undefined}>
         <TopBar />
         <div className="workspace-body">
           <LeftPanel />

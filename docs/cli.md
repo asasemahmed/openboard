@@ -26,6 +26,13 @@ openboard [command] [options]
 | [`snapshot`](#snapshot)                  | Write a board as it was at an earlier cursor                        |
 | [`activity`](#activity)                  | Show what agents are doing: the session tree                        |
 | [`hook`](#hook)                          | Report an agent's hook event to the running server                  |
+| [`import`](#import)                      | Add a Mermaid flowchart or a JSON Canvas to a board                 |
+| [`diff`](#diff)                          | What changed on a board between two git revisions                   |
+| [`git`](#git)                            | Set git up to merge and diff board files by meaning                 |
+| [`merge-driver`](#merge-driver)          | Merge three versions of a board file (git calls it)                 |
+| [`textconv`](#textconv)                  | Print a board file as readable text (git calls it)                  |
+| [`revisions`](#revisions)                | The git history of a board file                                     |
+| [`links`](#links)                        | Code links whose code changed, and refreshing them                  |
 
 Global options: `-v`, `--version` prints the version; `-h`, `--help` shows help, also after a command (`openboard export --help`).
 
@@ -33,11 +40,11 @@ Global options: `-v`, `--version` prints the version; `-h`, `--help` shows help,
 
 **Project root.** Every command except `init` works on a project root. `--root <dir>` names it. Without `--root`, it is the nearest directory upward from the current directory that contains `.openboard/`, else the nearest one that contains `.git`, else the current directory. A `--root` that does not exist is an error.
 
-**Running server or files.** `boards`, `new`, `export`, `status` and `policy` go through the running server when there is one for the project, so they see unsaved live state, and read or write `.openboard/` directly when there is none. `proposals`, `accept`, `reject`, `history`, `undo`, `snapshot` and `activity` work on state only a running server keeps, and say so when none is running. `hook` never starts a server and is silent without one.
+**Running server or files.** `boards`, `new`, `export`, `status` and `policy` go through the running server when there is one for the project, so they see unsaved live state, and read or write `.openboard/` directly when there is none. `proposals`, `accept`, `reject`, `history`, `undo`, `snapshot`, `activity` and `links` work on state only a running server keeps, and say so when none is running. `hook` never starts a server and is silent without one.
 
 **Who you are.** Everything done from the command line is attributed to the actor `cli`, a person named after your user account. That is what lets `accept`, `reject` and `policy` do what only people may do.
 
-**Errors and exit codes.** A failure prints one line, `openboard: <message>`, on stderr and exits with status 1. Set `OPENBOARD_DEBUG=1` to also print stack traces, and the server's log lines for `start`.
+**Errors and exit codes.** A failure prints one line, `openboard: <message>`, on stderr and exits with status 1. `diff` and `merge-driver` have their own exit codes, described with them. Set `OPENBOARD_DEBUG=1` to also print stack traces, and the server's log lines for `start`.
 
 ## start
 
@@ -154,24 +161,29 @@ openboard: a board with id "spikes" already exists
 ## export
 
 ```text
-openboard export [board] [--root <dir>] [-f, --format <format>] [-o, --out <file>]
+openboard export [board] [--root <dir>] [-f, --format <format>] [-o, --out <file>] [--theme light|dark]
 ```
 
-Write a board to stdout or a file.
+Write a board to stdout or a file. With a server running, the live board is exported, including changes not yet saved to the file.
 
 | Option                    | Default                     | Meaning                                                         |
 | ------------------------- | --------------------------- | --------------------------------------------------------------- |
 | `[board]`                 | the only board, else `main` | Board id. With several boards and none called `main`, name one. |
-| `-f`, `--format <format>` | from `--out`, else `json`   | `json`, `outline` or `text`                                     |
+| `-f`, `--format <format>` | from `--out`, else `json`   | One of the formats below                                        |
 | `-o`, `--out <file>`      | stdout                      | Write to this file; `-` means stdout                            |
+| `--theme <theme>`         | `light`                     | `light` or `dark`, for `svg`                                    |
 
-| Format    | Output                                                              | Extension that selects it |
-| --------- | ------------------------------------------------------------------- | ------------------------- |
-| `json`    | The board file, byte for byte as it is saved in `.openboard/`       | `.json`                   |
-| `outline` | Frames and counts by type and status, as `board_outline` shows them | `.outline.txt`            |
-| `text`    | Every node at full detail, as `board_read` shows it                 | `.txt`                    |
+| Format                  | Output                                                                     | Extension that selects it |
+| ----------------------- | -------------------------------------------------------------------------- | ------------------------- |
+| `json`                  | The board file, byte for byte as it is saved in `.openboard/`              | `.json`                   |
+| `markdown` (`md`)       | A readable document: frames as headings, nodes as lists, with their bodies | `.md`, `.markdown`        |
+| `mermaid` (`mmd`)       | A Mermaid flowchart, frames as subgraphs                                   | `.mmd`, `.mermaid`        |
+| `canvas` (`jsoncanvas`) | JSON Canvas 1.0, as Obsidian and other canvas tools read it                | `.canvas`                 |
+| `svg`                   | A static picture of the board                                              | `.svg`                    |
+| `outline`               | Frames and counts by type and status, as `board_outline` shows them        | `.outline.txt`            |
+| `text`                  | Every node at full detail, as `board_read` shows it                        | `.txt`                    |
 
-Exports are not tied to an agent session, so their text shows `cursor 0` and has no budget.
+`outline` and `text` are not tied to an agent session, so they show `cursor 0` and have no budget.
 
 ```text
 $ openboard export --format outline
@@ -183,7 +195,94 @@ Frames (counts are direct children):
 Not in a frame: 3 frame, 2 note, 1 question
 $ openboard export -o main.outline.txt
 Wrote main.outline.txt
+$ openboard export -o board.svg --theme dark
+Wrote board.svg
 ```
+
+## import
+
+```text
+openboard import <file> [board] [--root <dir>] [--format mermaid|canvas] [--frame <id>] [--new <name>] [--dry-run]
+```
+
+Add a Mermaid flowchart or a JSON Canvas to a board (default: the only board, or `main`). `-` reads standard input. The format is recognized from the content and the file name; `--format` sets it. The file becomes one batch of operations, validated like any other change: either all of it lands or nothing does. Mermaid subgraphs and JSON Canvas groups become frames, and JSON Canvas positions are kept. Anything that cannot be carried over is skipped with a `warning:` line on stderr.
+
+| Option         | Meaning                                                                      |
+| -------------- | ---------------------------------------------------------------------------- |
+| `--frame <id>` | Put everything that has no frame of its own into this frame                  |
+| `--new <name>` | Create a board with this name and import into it (instead of naming a board) |
+| `--dry-run`    | Check the import and say what it would add; change nothing                   |
+
+With a server running, the import is applied through it as you (the `cli` actor) with the reason `Import from Mermaid` or `Import from JSON Canvas`, and new nodes are laid out at once. Without one, it is applied to the board file directly; nodes without a position are placed by the next automatic layout.
+
+```text
+$ openboard import flow.mmd
+Imported flow.mmd into main: added 2 nodes, 1 edge.
+2 new nodes have no position yet; the next automatic layout places them (the next change made through the server, or Tidy up on the canvas).
+```
+
+## diff
+
+```text
+openboard diff [board] [--root <dir>] [--from <rev>] [--to <rev>] [-f, --format text|markdown|svg|json] [--theme light|dark] [-o, --out <file>]
+```
+
+What changed on a board between two git revisions. `--from` defaults to `HEAD`; `--to` defaults to the working tree, which is the live board when a server runs and the board file otherwise. Without a board, every board in either revision is compared (not with `svg`). A board missing on one side counts as empty. Revisions are branches, tags, commits and forms like `HEAD~2`.
+
+| Format     | Output                                                                                            |
+| ---------- | ------------------------------------------------------------------------------------------------- |
+| `text`     | One line per change: `+` added, `-` removed, `~` changed with `field: old → new` for short values |
+| `markdown` | The same, grouped under Added, Changed and Removed, for a pull request comment                    |
+| `svg`      | The board after the change with additions, changes and removals drawn in                          |
+| `json`     | The structured difference (`BoardDiff`), keyed by board id when several boards are compared       |
+
+Exit status, as with `diff`: **0** when the boards are the same, **1** when they differ, **2** on an error (not a git repository, an unknown revision, a board that does not parse).
+
+```text
+$ openboard diff --from HEAD~2 --to HEAD
+Board main (HEAD~2 → HEAD): 1 change. Titles are board content.
+  ~ note n_wfzgn2cs11 "Export query (batched)": title: "Export query" → "Export query (batched)"
+```
+
+See [Boards in git](git.md) for reviewing board changes in pull requests.
+
+## git
+
+```text
+openboard git setup [--root <dir>] [--diff] [--global]
+openboard git status [--root <dir>] [--json]
+openboard git remove [--root <dir>] [--global]
+```
+
+Make git merge and diff board files by meaning; see [Boards in git](git.md).
+
+| Command      | Effect                                                                                                                                                                                                                     |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `git setup`  | Adds `.openboard/*.board.json merge=openboard` to the project's `.gitattributes` (creating it if needed) and sets `merge.openboard.name` and `merge.openboard.driver` to this install's `merge-driver`. Safe to run again. |
+| `--diff`     | Also adds `.openboard/*.board.json diff=openboard` and sets `diff.openboard.textconv` to this install's `textconv`, so `git diff` and `git log -p` show boards as readable text                                            |
+| `--global`   | Writes the git settings to your global git configuration instead of the repository's. `.gitattributes` is always the project's.                                                                                            |
+| `git status` | Says whether the merge driver and readable diffs are set up, and whether they run this install                                                                                                                             |
+| `git remove` | Removes exactly the lines and settings `setup` adds; nothing else in `.gitattributes` is touched, and a `.gitattributes` left empty is deleted                                                                             |
+
+Commit `.gitattributes`. The git settings are per clone (or per user with `--global`), so each person runs `openboard git setup` once.
+
+## merge-driver
+
+```text
+openboard merge-driver <base> <ours> <theirs> [<path>] [--strict] [--prefer ours|theirs]
+```
+
+The command git runs for a board file when both sides changed it (`%O %A %B %P`). It merges the three versions node by node and field by field and writes the result to `<ours>`. The result is always a valid board, never conflict markers: when both sides changed the same field, `--prefer` (default `ours`) wins; when one side removed something the other changed, the change is kept. Every such decision is printed on stderr and appended to `.openboard/.local/last-merge.txt`.
+
+Exit status: **0**, also when something was decided, because the merged file is valid and nothing was lost; git then completes the merge. With `--strict`, **1** when something was decided, so git stops and marks the file as conflicted for a person to look at (the file then holds the resolved board, not markers). If `<ours>` or `<theirs>` does not parse, it exits **1** without touching anything and says which side is broken; git then falls back to marking a conflict. A missing or empty `<base>` means the two sides have no common ancestor.
+
+## textconv
+
+```text
+openboard textconv <file>
+```
+
+Print a board file as stable, readable text: the outline, then every node in full. Git calls it for `git diff` and `git log -p` once `openboard git setup --diff` has run. A file that does not parse is printed as it is.
 
 ## doctor
 
@@ -193,17 +292,18 @@ openboard doctor [--root <dir>] [--json]
 
 Check the installation and the project. Each line is `ok`, `warn` or `FAIL`, and every warning and failure has a `fix:` line. Exits with status 1 when any check fails; warnings do not fail.
 
-| Check           | Fails or warns when                                            |
-| --------------- | -------------------------------------------------------------- |
-| Node.js version | Older than 22 (fail)                                           |
-| Project root    | It cannot be determined (fail)                                 |
-| `.openboard/`   | Missing (fail; fix: `openboard init`)                          |
-| Board files     | None (warn), or one does not parse (fail, with the reason)     |
-| `config.json`   | Present but does not parse (fail, with the reason)             |
-| Web app         | Not built (fail; fix: `pnpm build`)                            |
-| MCP server      | Does not load (fail)                                           |
-| Server          | Not running (warn), or recorded but not answering (fail)       |
-| Git             | In a git repository, `.openboard/.local` is not ignored (fail) |
+| Check           | Fails or warns when                                                           |
+| --------------- | ----------------------------------------------------------------------------- |
+| Node.js version | Older than 22 (fail)                                                          |
+| Project root    | It cannot be determined (fail)                                                |
+| `.openboard/`   | Missing (fail; fix: `openboard init`)                                         |
+| Board files     | None (warn), or one does not parse (fail, with the reason)                    |
+| `config.json`   | Present but does not parse (fail, with the reason)                            |
+| Merge driver    | In a git repository, board files do not use the OpenBoard merge driver (warn) |
+| Web app         | Not built (fail; fix: `pnpm build`)                                           |
+| MCP server      | Does not load (fail)                                                          |
+| Server          | Not running (warn), or recorded but not answering (fail)                      |
+| Git             | In a git repository, `.openboard/.local` is not ignored (fail)                |
 
 ```text
 $ openboard doctor
@@ -438,3 +538,43 @@ $ echo '{"session": "ci-1842", "kind": "tool_start", "tool": "deploy", "summary"
 ```
 
 Environment: `OPENBOARD_HOOK=off` sends nothing; `OPENBOARD_HOOK_DETAIL=off` sends tool names only; `OPENBOARD_HOOK_PROMPTS=1` sends the start of each prompt instead of its length; `OPENBOARD_AGENT_ID` and `OPENBOARD_AGENT_NAME` name the actor, as for [`mcp`](#mcp). What each format sends is listed in [the Claude Code integration](../integrations/claude-code/README.md#what-the-recorder-sends); setups for Cursor and Codex are in their [integrations](../integrations/README.md).
+
+## revisions
+
+```text
+openboard revisions [board] [--root <dir>] [--limit <n>] [--json]
+```
+
+The commits that changed a board's file, newest first (default 20, at most 200), and whether the file has changes that are not committed. With a server running it asks the server; otherwise it runs git itself. Use a revision with [`diff`](#diff).
+
+```text
+$ openboard revisions --limit 3
+REV      DATE                       AUTHOR  SUBJECT
+fc74b1a  2026-11-12T08:29:47+01:00  Ada     Rename on main
+feeebb1  2026-11-12T08:29:47+01:00  Ada     Board with the driver
+```
+
+As in `git log -- <file>`, commits whose change to the file another commit already brought in (such as a merge that kept one side) are left out. When the file has changes that are not committed, a last line says so. A file that git does not track yet says that instead. `--json` prints `{ board, tracked, dirty, revisions: [{ rev, short, at, author, subject }] }`.
+
+## links
+
+```text
+openboard links [board] [--root <dir>] [--all] [--json]
+openboard links refresh <nodeId...> [board] [--root <dir>]
+openboard links refresh --all [board] [--root <dir>]
+```
+
+The board's links into the code. Without `--all`, only links whose code changed (`stale`) or is gone (`missing`), by node, with what changed; `--all` lists every link with its state. `refresh` re-hashes the named nodes' links against the code as it is now and clears `stale`, after you have checked them; `--all` refreshes every node. With node ids, a last argument that names a board is taken as the board. Needs the running server, which watches the linked files. See [boards that know about code](agents.md#boards-that-know-about-code).
+
+```text
+$ openboard links --all
+Board main, cursor 9: 2 links (2 ok). Titles and paths are board content.
+n_3mt1ai443b "exportOrders()"
+  #0 file src/orders/export.ts:4-6 [ok]
+n_j8ybu1j435 "toCsv()"
+  #0 file src/orders/export.ts:9-11 [ok]
+$ openboard links refresh n_3mt1ai443b
+Refreshed the code links of 1 node on main.
+```
+
+`--json` prints the links as an array of `{ nodeId, title, index, link, state, detail? }`.
