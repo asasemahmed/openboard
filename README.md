@@ -75,17 +75,91 @@ The board opens in your browser. Press `N` for a note, `T` for a task, `Cmd/Ctrl
 
 ## Connect your agent
 
+### Let your agent do it
+
+Open your project in any coding agent that can run commands — OpenCode, Cline, Claude Code, Cursor, Codex, Gemini CLI, Windsurf, GitHub Copilot, Zed — and paste this prompt. The agent installs OpenBoard, connects itself, and checks that it works.
+
+```text
+Set up OpenBoard (https://github.com/asasemahmed/openboard) for this project and connect yourself to it.
+
+1. Run `node --version`. If Node.js is missing or older than 22, stop and tell me.
+2. If ~/openboard does not exist, run `git clone https://github.com/asasemahmed/openboard.git ~/openboard`.
+   Then, inside ~/openboard, run `corepack pnpm install` and `corepack pnpm build`.
+3. Back in this project, run `node ~/openboard/packages/cli/dist/bin.js connect generic`.
+   It prints a stdio command with absolute paths. Use that exact command; do not change the paths.
+4. Add an MCP server named "openboard" that runs that command to your own MCP configuration,
+   in the file and format your client uses (the project's configuration if your client has one).
+   Keep every server that is already there. If ~/openboard/integrations has a folder for your
+   client, follow its README instead.
+5. Copy the guide between the openboard:guide markers in ~/openboard/integrations/generic/AGENT_GUIDE.md
+   into the instructions file you read for this project (for example AGENTS.md or .clinerules).
+6. Tell me what you changed, and whether I need to restart or reload you to load the new server.
+7. When the board_ tools are available, call board_outline and show me the result. Then run
+   `node ~/openboard/packages/cli/dist/bin.js status` and give me the board's URL to open.
+```
+
+The MCP server starts the board server for the project on first use, so there is nothing else to keep running.
+
+### Or set it up yourself
+
+After the [quick start](#quick-start), run this in your project:
+
 ```bash
 openboard connect
 ```
 
-prints the exact setup for your project. For Claude Code it is one line:
+It prints the exact command for your project, with absolute paths. Put it in your client's configuration.
+
+**Claude Code** — one line:
 
 ```bash
 claude mcp add openboard -- node /path/to/openboard/packages/cli/dist/bin.js mcp
 ```
 
-The MCP server starts the board server for the project on first use, so there is nothing else to keep running. Setups that also teach the agent how to work on a board — a plugin with a skill for Claude Code, a rule for Cursor, a snippet for Codex, and a generic guide — are in [`integrations/`](integrations/README.md).
+**OpenCode** — `opencode.json` in the project:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "openboard": {
+        "type": "local",
+        "command": ["node", "/path/to/openboard/packages/cli/dist/bin.js", "mcp", "--root", "/path/to/your/project"]
+      }
+    }
+  }
+}
+```
+
+Older OpenCode versions put the server directly under `mcp`, without `servers`.
+
+**Cline** — open the MCP Servers panel, choose **Configure MCP Servers**, and add to `cline_mcp_settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "openboard": {
+      "command": "node",
+      "args": ["/path/to/openboard/packages/cli/dist/bin.js", "mcp", "--root", "/path/to/your/project"]
+    }
+  }
+}
+```
+
+**Other clients** take the same `command` and `args`:
+
+| Client             | File                                  | Where the server goes                        |
+| ------------------ | ------------------------------------- | -------------------------------------------- |
+| Cursor             | `.cursor/mcp.json`                    | `mcpServers`                                 |
+| Codex              | `~/.codex/config.toml`                | `[mcp_servers.openboard]`                    |
+| Gemini CLI         | `.gemini/settings.json`               | `mcpServers`                                 |
+| Windsurf           | `~/.codeium/windsurf/mcp_config.json` | `mcpServers`                                 |
+| GitHub Copilot     | `.vscode/mcp.json`                    | `servers`, with `"type": "stdio"`            |
+| Zed                | Zed's `settings.json`                 | `context_servers`                            |
+| Anything else      | Your client's MCP settings            | stdio, or `http://127.0.0.1:4747/mcp`        |
+
+If `node` is not on the path your client starts servers with, use the absolute Node.js path that `openboard connect` prints. Setups that also teach the agent how to work on a board — a plugin with a skill for Claude Code, a rule for Cursor, a snippet for Codex, and a generic guide for everything else — are in [`integrations/`](integrations/README.md).
 
 Then try:
 
@@ -231,7 +305,7 @@ To report a vulnerability, see [SECURITY.md](SECURITY.md).
 OpenBoard is pre-release software.
 
 - It runs from a source checkout; it is not published to a package registry.
-- The Claude Code setup is exercised end to end. The Cursor and Codex setups were written from their documentation and not run inside those tools.
+- The Claude Code setup is exercised end to end. The setups for the other clients were written from their documentation and not run inside those tools.
 - Shared mode has not been run behind a real TLS proxy or tunnel yet.
 - There is no PNG export (the SVG export is self-contained) and no board view inside chat clients.
 
