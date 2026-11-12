@@ -212,15 +212,17 @@ Next to the board files, `.openboard/config.json` holds the project's [review po
 
 Runtime state lives in `.openboard/.local/`, which is not committed:
 
-| Kept in `.openboard/.local/`                                                    | File                       |
-| ------------------------------------------------------------------------------- | -------------------------- |
-| The change feed behind `board_changes` and cursors, with each batch's reason    | `<board id>.changes.jsonl` |
-| History: the last 2000 batches, with the exact state before and after, for undo | `<board id>.history.jsonl` |
-| Inbox items and how far each actor has read                                     | `<board id>.inbox.jsonl`   |
-| Document state with history, including pending proposals and open questions     | `<board id>.ydoc`          |
-| The running server's address and process id                                     | `server.json`              |
+| Kept in `.openboard/.local/`                                                        | File                       |
+| ----------------------------------------------------------------------------------- | -------------------------- |
+| The change feed behind `board_changes` and cursors, with each batch's reason        | `<board id>.changes.jsonl` |
+| History: the last 2000 batches, with the exact state before and after, for undo     | `<board id>.history.jsonl` |
+| Inbox items and how far each actor has read                                         | `<board id>.inbox.jsonl`   |
+| Document state with history, including pending proposals, open questions and claims | `<board id>.ydoc`          |
+| The running server's address and process id                                         | `server.json`              |
 
-Not stored anywhere: who is connected, their pointers and selections (these travel live between browsers and the server), and MCP session state.
+Not stored anywhere: who is connected, their pointers and selections (these travel live between browsers and the server), what agents are doing (their presence and the activity their hooks report, kept in the server's memory), and MCP session state.
+
+The document in `.local/` carries a random lineage id, made when it is created or rebuilt from the board file. A browser tab must present it to sync, so a tab left open from an earlier server, or from before `.local/` was deleted, reloads the board instead of merging an old copy into it.
 
 `.openboard/.local/` holds a `.gitignore` containing `*`, so git ignores it without changes to your own `.gitignore`. Deleting `.local/` loses the change feed, the history (so earlier changes can no longer be undone), inboxes, pending proposals and open questions, and resets cursors; the boards, their comments and the policy are safe in their files.
 

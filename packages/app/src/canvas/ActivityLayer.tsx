@@ -257,8 +257,50 @@ function useFollow() {
   );
 }
 
+/**
+ * Follow mode for agents: when an agent session moves its focus, keep it in
+ * view. With a session picked in the agents panel, only that one is followed.
+ * Nothing moves while follow mode is off or paused.
+ */
+function useFollowAgents() {
+  const session = useSession();
+  const fitTo = useFitTo();
+  useEffect(() => {
+    const { presence, ui } = session;
+    const seen = new Map<string, string>();
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let pending: string[] = [];
+    const check = () => {
+      const only = ui.followSession.get();
+      for (const agent of presence.getAgents()) {
+        const focus = agent.focus.join(',');
+        const before = seen.get(agent.key);
+        seen.set(agent.key, focus);
+        if (focus === '' || focus === before || agent.status === 'idle') continue;
+        if (ui.follow.get() !== 'on') continue;
+        if (only && only !== agent.key) continue;
+        pending = [...agent.focus];
+      }
+      if (pending.length === 0 || timer) return;
+      timer = setTimeout(() => {
+        timer = null;
+        const ids = pending.filter((id) => session.store.node(id));
+        pending = [];
+        fitTo(ids);
+      }, 250);
+    };
+    check();
+    const off = presence.subscribe(check);
+    return () => {
+      off();
+      if (timer) clearTimeout(timer);
+    };
+  }, [session, fitTo]);
+}
+
 export function ActivityLayer() {
   useFollow();
+  useFollowAgents();
   const announcement = useAnnouncement();
   return (
     <>

@@ -31,6 +31,9 @@ describe('argument parsing and exit codes', () => {
       'reject',
       'history',
       'undo',
+      'hook',
+      'activity',
+      'snapshot',
     ]) {
       expect(io.out()).toContain(`  ${command} `);
     }

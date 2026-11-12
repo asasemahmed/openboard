@@ -8,6 +8,7 @@ import { AGENTS, connectCommand } from './commands/connect.js';
 import { doctorCommand } from './commands/doctor.js';
 import { exportCommand } from './commands/export.js';
 import { initCommand } from './commands/init.js';
+import { activityCommand, snapshotCommand } from './commands/live.js';
 import { mcpCommand } from './commands/mcp.js';
 import { policyCommand, policySetCommand, policyUnsetCommand } from './commands/policy.js';
 import { decideCommand, historyCommand, proposalsCommand, undoCommand } from './commands/review.js';
@@ -15,6 +16,7 @@ import { startCommand } from './commands/start.js';
 import { statusCommand } from './commands/status.js';
 import { stopCommand } from './commands/stop.js';
 import { EXPORTERS } from './exporters.js';
+import { runHook } from './hook.js';
 import { CliError, reportError } from './lib/errors.js';
 import type { CliIo } from './lib/io.js';
 import { cliVersion } from './lib/project.js';
@@ -28,6 +30,7 @@ Examples:
   $ openboard status --json            machine-readable status for scripts
   $ openboard proposals                what agents are waiting to have reviewed
   $ openboard policy set review_all    hold every agent change for review
+  $ openboard activity                 what agents are doing right now
 `;
 
 function parseLimit(value: string): number {
@@ -270,6 +273,58 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
       action(
         (args: string[], opts: { root?: string; actor?: string; all?: boolean; json?: boolean }) =>
           undoCommand(io, args, opts),
+      ),
+    );
+
+  program
+    .command('hook')
+    .description(
+      "report an agent's hook event (JSON on stdin) to the running server; silent, always exits 0",
+    )
+    .addOption(
+      new Option(
+        '--format <format>',
+        'event format (default: recognized from the JSON; generic is an ActivityEvent)',
+      ).choices(['claude-code', 'cursor', 'generic']),
+    )
+    .action(
+      action(async (opts: { format?: string }) => {
+        // Normally handled in bin.ts before this parser loads; kept here for --help and tests.
+        const args = opts.format ? ['--format', opts.format] : [];
+        await runHook(args, { stdin: process.stdin, env: io.env, cwd: io.cwd });
+        return 0;
+      }),
+    );
+
+  program
+    .command('activity')
+    .description('show what agents are doing: the session tree (needs the running server)')
+    .addOption(rootOption())
+    .option('--all', 'also list sessions that have ended')
+    .option('--json', 'print JSON')
+    .action(
+      action((opts: { root?: string; all?: boolean; json?: boolean }) => activityCommand(io, opts)),
+    );
+
+  program
+    .command('snapshot')
+    .description('write a board as it was at an earlier cursor (needs the running server)')
+    .argument('<cursor>', 'the cursor, as history and changes show it')
+    .argument('[board]', 'board id (default: the only board, or "main")')
+    .addOption(rootOption())
+    .addOption(
+      new Option('-f, --format <format>', 'output format (default: from --out, else json)').choices(
+        EXPORTERS.map((exporter) => exporter.name),
+      ),
+    )
+    .option('-o, --out <file>', 'write to a file instead of stdout')
+    .action(
+      action(
+        (
+          cursor: string,
+          board: string | undefined,
+          opts: { root?: string; format?: string; out?: string },
+        ) => snapshotCommand(io, cursor, board, opts),
       ),
     );
 

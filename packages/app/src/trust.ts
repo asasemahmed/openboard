@@ -4,18 +4,21 @@
  * cards. Call once at startup, before the board mounts.
  */
 import { registerBuiltinDecorations } from './nodes/builtinDecorations.js';
+import { registerLiveDecorations } from './nodes/liveDecorations.js';
 import { registerTrustDecorations } from './nodes/trustDecorations.js';
 import { ActivityPanel } from './panels/ActivityPanel.js';
+import { AgentsPanel } from './panels/AgentsPanel.js';
 import { CommentsPanel } from './panels/CommentsPanel.js';
 import { ReviewPanel } from './panels/ReviewPanel.js';
 import { registerPanel } from './panels/registry.js';
-import { ACTIVITY_PANEL, COMMENTS_PANEL, REVIEW_PANEL } from './state/review.js';
+import { ACTIVITY_PANEL, AGENTS_PANEL, COMMENTS_PANEL, REVIEW_PANEL } from './state/review.js';
 
 let registered = false;
 
 export function registerTrust(): void {
   registerBuiltinDecorations();
   registerTrustDecorations();
+  registerLiveDecorations();
   if (registered) return;
   registered = true;
   registerPanel({
@@ -43,5 +46,13 @@ export function registerTrust(): void {
     icon: 'history',
     order: 10,
     Component: ActivityPanel,
+  });
+  registerPanel({
+    id: AGENTS_PANEL,
+    side: 'left',
+    title: 'Agents',
+    icon: 'agent',
+    order: 20,
+    Component: AgentsPanel,
   });
 }

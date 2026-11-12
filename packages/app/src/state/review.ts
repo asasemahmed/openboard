@@ -12,6 +12,7 @@ import type { BoardSession } from './session.js';
 export const REVIEW_PANEL = 'review';
 export const COMMENTS_PANEL = 'comments';
 export const ACTIVITY_PANEL = 'activity';
+export const AGENTS_PANEL = 'agents';
 
 /** Show the review panel with this proposal in view. Focus stays where it is. */
 export function openReview(session: BoardSession, proposalId?: string): void {

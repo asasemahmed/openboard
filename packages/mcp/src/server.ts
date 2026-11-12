@@ -12,6 +12,7 @@
  * The same notice line also counts unseen inbox items; which items are seen
  * is tracked by the server, so it survives reconnects.
  */
+import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -22,6 +23,7 @@ import {
   type BoardApi,
   type BoardSummary,
   type ChangesOptions,
+  type ClaimRequest,
   type CommentInput,
   type CreateBoardInput,
   type InboxItem,
@@ -34,7 +36,7 @@ import {
   type UndoRequest,
 } from '@openboard/core';
 import { z } from 'zod';
-import type { ClientInfo } from './actor.js';
+import type { SessionInfo } from './actor.js';
 import {
   changeCount,
   formatApply,
@@ -60,7 +62,13 @@ export interface McpServerOptions {
    * The board session to serve. Called once, lazily, after the client has
    * initialized, with what the client reported about itself.
    */
-  resolveApi: (client: ClientInfo) => BoardApi | Promise<BoardApi>;
+  resolveApi: (client: SessionInfo) => BoardApi | Promise<BoardApi>;
+  /**
+   * The agent session id handed to `resolveApi`, or a function returning it
+   * (read when the API is first resolved). Defaults to a random id per server
+   * instance.
+   */
+  session?: string | (() => string | undefined);
   /** Board used when a tool call names none. Otherwise: the only board, else `main`. */
   defaultBoard?: string;
   /** Version reported to clients. Defaults to this package's version. */
@@ -131,6 +139,7 @@ class Session {
   #api: Promise<BoardApi> | undefined;
   #defaultBoard: string | undefined;
   readonly #cursors = new Map<string, number>();
+  readonly #fallbackSession = randomUUID();
 
   constructor(
     private readonly mcp: McpServer,
@@ -140,7 +149,11 @@ class Session {
   api(): Promise<BoardApi> {
     if (!this.#api) {
       const reported = this.mcp.server.getClientVersion();
-      const client: ClientInfo = { name: reported?.name ?? '' };
+      const session =
+        (typeof this.options.session === 'function'
+          ? this.options.session()
+          : this.options.session) ?? this.#fallbackSession;
+      const client: SessionInfo = { name: reported?.name ?? '', session };
       if (reported?.version) client.version = reported.version;
       const pending = Promise.resolve().then(() => this.options.resolveApi(client));
       // A failed resolution is not cached: the next call tries again.
@@ -748,6 +761,28 @@ export function createMcpServer(options: McpServerOptions): McpServer {
         }
         return undefined;
       },
+    ),
+  );
+
+  mcp.registerTool('board_claim', tool('board_claim'), ({ board: requested, ...rest }) =>
+    session.run(
+      async (api) => {
+        const board = await session.board(api, requested);
+        const result = await api.claim(board, defined(rest) as ClaimRequest);
+        const lines = [result.text];
+        if (result.conflicts.length > 0 && !rest.release) {
+          lines.push(
+            rest.partial
+              ? 'The nodes held by others were left out. Leave them to their holders.'
+              : 'Nothing was claimed: claiming is all or nothing. Pick other work, pass partial: true to take the free ones, or ask the holder (board_comment) or the user (board_ask). Do not retry in a loop: claims end on their own.',
+          );
+        }
+        return { text: lines.join('\n'), board };
+      },
+      (error) =>
+        error.code === 'not_found'
+          ? `${sentence(error.message)}. Nothing was claimed. Find node ids with board_read.`
+          : undefined,
     ),
   );
 

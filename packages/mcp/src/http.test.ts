@@ -13,9 +13,15 @@ let server: OpenBoardServer;
 let handler: McpHttpHandler;
 const clients: Client[] = [];
 
+/** The agent session ids `resolveApi` was given, in order. */
+const sessionIds: string[] = [];
+
 async function setup(idleTimeoutMs?: number) {
   handler = createHttpHandler({
-    resolveApi: (client) => server.api(actorForClient(client, {})),
+    resolveApi: (client) => {
+      sessionIds.push(client.session);
+      return server.api(actorForClient(client, {}), { session: client.session });
+    },
     ...(idleTimeoutMs !== undefined ? { idleTimeoutMs } : {}),
   });
   server.mount('/mcp', handler);
@@ -42,6 +48,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  sessionIds.splice(0);
   await Promise.all(clients.splice(0).map((client) => client.close().catch(() => {})));
   await handler.close();
   await server.close();
@@ -57,10 +64,12 @@ describe('MCP over Streamable HTTP', () => {
     expect(alpha.transport.sessionId).not.toBe(beta.transport.sessionId);
 
     const { tools } = await alpha.client.listTools();
-    expect(tools).toHaveLength(12);
+    expect(tools).toHaveLength(13);
 
     await alpha.client.callTool({ name: 'board_outline', arguments: {} });
     await beta.client.callTool({ name: 'board_outline', arguments: {} });
+    // Each MCP session is its own agent session, named by its MCP session id.
+    expect(sessionIds).toEqual([alpha.transport.sessionId, beta.transport.sessionId]);
     const applied = await alpha.client.callTool({
       name: 'board_apply',
       arguments: { ops: [{ op: 'add_node', node: { type: 'note', title: 'From alpha' } }] },

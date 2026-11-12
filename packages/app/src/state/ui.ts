@@ -44,15 +44,24 @@ export class UiStore {
   readonly highlight = new Value<readonly string[]>(NONE);
   /** The proposal the review panel should bring into view (a ghost was clicked). */
   readonly focusProposal = new Value<{ id: string; at: number } | null>(null);
+  /** Follow one agent session (`<actor>/<session>`) instead of everyone's changes. */
+  readonly followSession = new Value<string | null>(null);
   /** The question stack folded to a count in the top bar. */
   readonly asksCollapsed = new Value(false);
   readonly inspectorOpen = new Value(
     typeof window === 'undefined' || window.innerWidth >= NARROW_WIDTH,
   );
+  /** Set for a replay of the past: nothing on the canvas may be edited. */
+  readOnly = false;
   /** Last pointer position over the canvas, in canvas coordinates (not observable). */
   lastPointer: { x: number; y: number } | null = null;
 
-  constructor() {
+  constructor(opts: { readOnly?: boolean } = {}) {
+    this.readOnly = opts.readOnly ?? false;
+    // Nothing gets an editor while the canvas is read-only, however editing was started.
+    this.editing.subscribe(() => {
+      if (this.readOnly && this.editing.get() !== null) this.editing.set(null);
+    });
     this.minimap.subscribe(() => writeStored('minimap', this.minimap.get()));
     // Pausing is not a preference; only on and off are remembered.
     this.follow.subscribe(() => writeStored('follow', this.follow.get() !== 'off'));

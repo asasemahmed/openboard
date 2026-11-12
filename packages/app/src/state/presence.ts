@@ -4,8 +4,9 @@
  * when it becomes empty: the server answers "what is the human pointing at?"
  * from it, so it must never be stale.
  */
-import type { Actor, Presence } from '@openboard/core';
+import type { Actor, LiveSessions, Presence } from '@openboard/core';
 import type { Awareness } from 'y-protocols/awareness';
+import { type AgentSession, partitionPresence } from '../lib/agents.js';
 import { colorFor } from '../lib/identity.js';
 import { Emitter } from './emitter.js';
 
@@ -100,6 +101,13 @@ export class PresenceStore extends Emitter {
   participants: readonly Peer[] = [];
   private participantsKey = '';
   private byNode = new Map<string, string>();
+  /** Agent sessions the server publishes for this board. */
+  agents: readonly AgentSession[] = [];
+  private agentsKey = '';
+  /** The live session list the server publishes, or null before it has. */
+  live: LiveSessions | null = null;
+  private liveKey = '';
+  private agentsByNode = new Map<string, string>();
 
   private readonly onChange = () => this.refresh();
 
@@ -119,6 +127,13 @@ export class PresenceStore extends Emitter {
   }
 
   readonly getPeers = (): readonly Peer[] => this.peers;
+  readonly getAgents = (): readonly AgentSession[] => this.agents;
+  readonly getLive = (): LiveSessions | null => this.live;
+
+  /** Agents reading or writing this node: "color|name|status" entries joined by newlines. */
+  agentsOnNode(nodeId: string): string {
+    return this.agentsByNode.get(nodeId) ?? '';
+  }
   readonly getParticipants = (): readonly Peer[] => this.participants;
 
   /** A stable key for who has `nodeId` selected: "color|name" entries joined by newlines. */
@@ -169,11 +184,33 @@ export class PresenceStore extends Emitter {
   }
 
   private refresh(): void {
-    const peers: Peer[] = [];
-    for (const [clientId, state] of this.awareness.getStates()) {
-      if (clientId === this.awareness.clientID) continue;
-      const peer = parsePeer(clientId, state);
-      if (peer && peer.actor.id !== this.actor.id) peers.push(peer);
+    const own = this.awareness.clientID;
+    const entries = [...this.awareness.getStates()].filter(([clientId]) => clientId !== own);
+    const split = partitionPresence(entries, parsePeer);
+    const peers = split.people.filter((peer) => peer.actor.id !== this.actor.id);
+    const agentsKey = split.agents
+      .map(
+        (a) =>
+          `${a.key}|${a.actor.name}|${a.status}|${a.detail ?? ''}|${a.focus.join(',')}|${a.at}`,
+      )
+      .join('\n');
+    if (agentsKey !== this.agentsKey) {
+      this.agents = split.agents;
+      this.agentsKey = agentsKey;
+      const onNode = new Map<string, string[]>();
+      for (const a of split.agents) {
+        if (a.status !== 'reading' && a.status !== 'writing') continue;
+        for (const id of a.focus) {
+          const entry = `${a.color}|${a.actor.name}|${a.status}`;
+          onNode.set(id, [...(onNode.get(id) ?? []), entry]);
+        }
+      }
+      this.agentsByNode = new Map([...onNode].map(([id, list]) => [id, list.join('\n')]));
+    }
+    const liveKey = split.live ? `${split.live.at}|${split.live.sessions.length}` : '';
+    if (liveKey !== this.liveKey) {
+      this.live = split.live;
+      this.liveKey = liveKey;
     }
     peers.sort((a, b) => a.actor.name.localeCompare(b.actor.name) || a.clientId - b.clientId);
     const seen = new Set<string>();

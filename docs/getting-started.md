@@ -100,7 +100,9 @@ Clients that support MCP prompts also offer `map_codebase` and `plan_work`, whic
 - By default an agent adds to the board freely, but changing or removing what you made waits for your review as a proposal: ghosts on the canvas, and items in the **Review** panel to accept or reject, with a note the agent reads. From the terminal, `openboard proposals`, `openboard accept` and `openboard reject` do the same. **Settings** (or `openboard policy`) sets how strict this is, for all agents or one; a frame's **Agent access** in the inspector does it for what is inside the frame.
 - Every change is recorded: the **Activity** panel (or `openboard history`) lists them, and undo takes one back exactly, leaving later changes alone. Agents undo their own mistakes, answer your comments, and ask you questions on the canvas when they need an answer before going on.
 
-[Staying in control](agents.md#staying-in-control) explains the details.
+- The canvas shows agents while they work: the **Agents** panel lists their sessions, and with the Claude Code plugin's hooks (or `openboard hook` in another tool) it also shows what they run outside the board. **Replay history** in the command palette plays back how the board came to be.
+
+[Staying in control](agents.md#staying-in-control) and [seeing agents work](agents.md#seeing-agents-work) explain the details.
 
 ## Where boards live
 

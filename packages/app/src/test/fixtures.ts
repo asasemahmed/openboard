@@ -83,6 +83,7 @@ export function fakeApi(overrides: Partial<ApiClient> = {}): ApiClient {
     history: vi.fn(async (boardId: string) => ({
       boardId,
       cursor: 0,
+      earliest: 0,
       batches: [],
       text: '',
       tokens: 0,
@@ -94,6 +95,9 @@ export function fakeApi(overrides: Partial<ApiClient> = {}): ApiClient {
       policy: { default: 'review_destructive' as const, agents: {} },
     })),
     setConfig: vi.fn(async (config) => config),
+    lineage: vi.fn(async () => 'l_test'),
+    claim: vi.fn(),
+    snapshotAt: vi.fn(),
     ...overrides,
   };
 }

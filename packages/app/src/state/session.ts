@@ -4,11 +4,13 @@
  */
 import { type Actor, BoardDoc, MAX_MAX_TOKENS } from '@openboard/core';
 import * as Y from 'yjs';
-import type { ApiClient } from '../lib/api.js';
+import { type ApiClient, calmMessage } from '../lib/api.js';
 import { ActivityStore, itemKey, type RemovalResolver } from './activity.js';
 import { BoardStore } from './boardStore.js';
+import { ClaimStore } from './claims.js';
 import { ConnectionStore } from './connection.js';
 import { PresenceStore } from './presence.js';
+import { loadReplayTimeline, ReplayController } from './replay.js';
 import type { Transport } from './transport.js';
 import { UiStore } from './ui.js';
 import { UndoController } from './undo.js';
@@ -22,6 +24,8 @@ export interface BoardSession {
   readonly undo: UndoController;
   readonly ui: UiStore;
   readonly activity: ActivityStore;
+  readonly claims: ClaimStore;
+  readonly replay: ReplayController;
   readonly api: ApiClient;
   actor(): Actor;
   setActor(actor: Actor): void;
@@ -36,6 +40,8 @@ export interface SessionOptions {
   transport: (ydoc: Y.Doc) => Transport;
   /** Use an existing document (tests); defaults to a fresh one filled by the transport. */
   doc?: BoardDoc;
+  /** A read-only view (replay): nothing can be edited. */
+  readOnly?: boolean;
 }
 
 export function createSession(options: SessionOptions): BoardSession {
@@ -46,7 +52,7 @@ export function createSession(options: SessionOptions): BoardSession {
   const presence = new PresenceStore(transport.awareness, actor);
   const connection = new ConnectionStore(transport);
   const undo = new UndoController(doc, actor.id);
-  const ui = new UiStore();
+  const ui = new UiStore({ readOnly: options.readOnly ?? false });
   const feed = feedResolver(options.api, options.boardId);
   const activity = new ActivityStore({
     me: () => actor.id,
@@ -54,6 +60,22 @@ export function createSession(options: SessionOptions): BoardSession {
     edge: (id) => doc.getEdge(id),
     live: () => connection.get().synced,
     resolveRemovals: feed.resolve,
+  });
+  const claims = new ClaimStore(doc);
+  const replay = new ReplayController({
+    loadTimeline: () =>
+      loadReplayTimeline((before) =>
+        options.api
+          .history(options.boardId, {
+            limit: 200,
+            includeMoves: true,
+            maxTokens: MAX_MAX_TOKENS,
+            ...(before !== undefined ? { before } : {}),
+          })
+          .then((result) => ({ batches: result.batches, earliest: result.earliest ?? 0 })),
+      ),
+    fetchSnapshot: (cursor, signal) => options.api.snapshotAt(options.boardId, cursor, signal),
+    describeError: (error) => calmMessage(error),
   });
   const offActivity = doc.observe((event) => {
     // The first change from someone else is a good moment to learn the feed cursor.
@@ -75,6 +97,8 @@ export function createSession(options: SessionOptions): BoardSession {
     undo,
     ui,
     activity,
+    claims,
+    replay,
     api: options.api,
     actor: () => actor,
     setActor(next) {
@@ -85,6 +109,8 @@ export function createSession(options: SessionOptions): BoardSession {
     destroy() {
       offSelection();
       offActivity();
+      replay.destroy();
+      claims.destroy();
       activity.destroy();
       undo.destroy();
       connection.destroy();

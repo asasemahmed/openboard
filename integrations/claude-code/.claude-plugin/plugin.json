@@ -2,7 +2,7 @@
   "name": "openboard",
   "displayName": "OpenBoard",
   "version": "0.0.0",
-  "description": "Connects Claude Code to the OpenBoard canvas of the current project over MCP, with a skill for working on the board.",
+  "description": "Connects Claude Code to the OpenBoard canvas of the current project over MCP, with a skill for working on the board and hooks that show what Claude Code is doing.",
   "author": {
     "name": "OpenBoard contributors"
   },

@@ -15,10 +15,11 @@ OpenBoard is an open canvas that AI agents read and edit over MCP while you edit
 ## What it does
 
 - **A live canvas.** The board runs in your browser and stays in sync with everyone editing it. Changes made by others, people or agents, are highlighted as they arrive.
-- **Agent tools over MCP.** Twelve `board_*` tools to outline, read, change and lay out a board, and to talk with the people on it, over stdio or Streamable HTTP, with ready-made setups for Claude Code, Cursor and Codex.
+- **Agent tools over MCP.** Thirteen `board_*` tools to outline, read, change and lay out a board, and to talk with the people on it, over stdio or Streamable HTTP, with ready-made setups for Claude Code, Cursor and Codex.
 - **Budgeted reads, atomic writes.** Agents read an outline, a slice or just what changed, within a token budget. They write whole intents as one batch that is validated and applied all at once, and the layout engine places what they add.
 - **Selection as context.** Select cards on the canvas and say "these"; the agent sees what you selected.
 - **You stay in control.** Decide per project and per agent what agents may change on their own; changes to your work wait as proposals you accept or reject, in whole or in part. Every change is recorded and can be undone exactly, without overwriting later work.
+- **See agents at work.** Agents appear on the canvas next to the people: what they are reading, writing or running, including work outside the board reported by their hooks. Agents claim the nodes they work on so they do not collide, and you can replay how the board came to be.
 - **Agents ask instead of guessing.** Agents put questions to you on the board and wait for the answer, read your comments and mentions in their inbox, and reply in the thread.
 - **Boards in git.** Each board is a deterministic JSON file in `.openboard/`. It diffs and merges like code, and the server picks up changes from a checkout or a merge.
 

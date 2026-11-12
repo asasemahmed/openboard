@@ -14,7 +14,8 @@ export interface ExportOptions {
   out?: string;
 }
 
-function chooseExporter(options: ExportOptions): Exporter {
+/** The exporter for `--format`, else the one `--out`'s extension selects, else `json`. */
+export function chooseExporter(options: Pick<ExportOptions, 'format' | 'out'>): Exporter {
   if (options.format !== undefined) {
     const exporter = findExporter(options.format);
     if (!exporter) {
@@ -47,15 +48,22 @@ export async function exportCommand(
   const root = resolveRoot(io, options.root);
   const { store } = await openSession(io, root);
   const board = await store.getBoard(boardId ?? (await defaultBoardId(store)));
-  let text = exporter.render(board);
-  if (!text.endsWith('\n')) text += '\n';
+  await writeExport(io, exporter.render(board), options.out);
+  return 0;
+}
 
-  if (options.out === undefined || options.out === '-') {
+/** Write exported text to stdout, or to `out` (relative to the working directory) with a note on stderr. */
+export async function writeExport(
+  io: CliIo,
+  rendered: string,
+  out: string | undefined,
+): Promise<void> {
+  const text = rendered.endsWith('\n') ? rendered : `${rendered}\n`;
+  if (out === undefined || out === '-') {
     io.stdout.write(text);
   } else {
-    const file = path.resolve(io.cwd, options.out);
+    const file = path.resolve(io.cwd, out);
     await writeFile(file, text);
     println(io.stderr, `Wrote ${path.relative(io.cwd, file) || file}`);
   }
-  return 0;
 }

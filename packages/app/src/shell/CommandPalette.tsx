@@ -149,6 +149,15 @@ export function CommandPalette() {
         }),
       ),
       {
+        id: 'replay',
+        group: 'Commands',
+        label: 'Replay history',
+        detail: 'Watch the board change, batch by batch',
+        lead: icon('history'),
+        keywords: 'replay history timeline past time travel playback',
+        run: () => void session.replay.open(),
+      },
+      {
         id: 'connect-agent',
         group: 'Commands',
         label: 'Connect an agent…',

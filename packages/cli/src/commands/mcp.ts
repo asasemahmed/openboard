@@ -1,6 +1,7 @@
+import { randomUUID } from 'node:crypto';
 import { format } from 'node:util';
 import { emptyBoard, OpenBoardError } from '@openboard/core';
-import { actorForClient, runStdio } from '@openboard/mcp';
+import { actorForClient, runStdio, sessionFromEnv } from '@openboard/mcp';
 import type { CliIo } from '../lib/io.js';
 import { ensureServer, reconnectingApi, shared } from '../lib/mcp.js';
 import { cliVersion, projectName, resolveRoot } from '../lib/project.js';
@@ -58,10 +59,14 @@ export async function mcpCommand(io: CliIo, options: McpOptions = {}): Promise<n
     return ensureServer(root, io);
   });
 
+  // One agent session per process. OPENBOARD_SESSION lets a client that also
+  // reports hook activity use the same id, so both show as one session.
+  const session = sessionFromEnv(io.env) ?? randomUUID();
   await runStdio({
+    session,
     resolveApi: async (client) => {
       const server = await ensure();
-      return reconnectingApi(actorForClient(client, io.env), server, ensure);
+      return reconnectingApi(actorForClient(client, io.env), server, ensure, client.session);
     },
     ...(options.board !== undefined ? { defaultBoard: options.board } : {}),
     version: cliVersion(),

@@ -2,12 +2,12 @@
 
 Ready-made setups for connecting an agent to OpenBoard. Each one works from a built source checkout.
 
-| Directory                      | For            | What it contains                                             |
-| ------------------------------ | -------------- | ------------------------------------------------------------ |
-| [`claude-code/`](claude-code/) | Claude Code    | A plugin: the MCP server entry and the `board` skill         |
-| [`cursor/`](cursor/)           | Cursor         | The `.cursor/mcp.json` entry and a project rule              |
-| [`codex/`](codex/)             | Codex          | The `config.toml` entry and an `AGENTS.md` snippet           |
-| [`generic/`](generic/)         | Any MCP client | stdio and Streamable HTTP setup, and a client-agnostic guide |
+| Directory                      | For            | What it contains                                                         |
+| ------------------------------ | -------------- | ------------------------------------------------------------------------ |
+| [`claude-code/`](claude-code/) | Claude Code    | A plugin: the MCP server entry, the `board` skill and the activity hooks |
+| [`cursor/`](cursor/)           | Cursor         | The `.cursor/mcp.json` entry, a project rule and activity hooks          |
+| [`codex/`](codex/)             | Codex          | The `config.toml` entry, an `AGENTS.md` snippet and activity hooks       |
+| [`generic/`](generic/)         | Any MCP client | stdio and Streamable HTTP setup, and a client-agnostic guide             |
 
 `.claude-plugin/marketplace.json` makes this directory a local Claude Code plugin marketplace; see [`claude-code/README.md`](claude-code/README.md).
 

@@ -23,6 +23,9 @@ openboard [command] [options]
 | [`accept`, `reject`](#accept-and-reject) | Decide on a proposal, in whole or in part                           |
 | [`history`](#history)                    | List recent batches of changes                                      |
 | [`undo`](#undo)                          | Undo a batch, or an actor's last or every batch                     |
+| [`snapshot`](#snapshot)                  | Write a board as it was at an earlier cursor                        |
+| [`activity`](#activity)                  | Show what agents are doing: the session tree                        |
+| [`hook`](#hook)                          | Report an agent's hook event to the running server                  |
 
 Global options: `-v`, `--version` prints the version; `-h`, `--help` shows help, also after a command (`openboard export --help`).
 
@@ -30,7 +33,7 @@ Global options: `-v`, `--version` prints the version; `-h`, `--help` shows help,
 
 **Project root.** Every command except `init` works on a project root. `--root <dir>` names it. Without `--root`, it is the nearest directory upward from the current directory that contains `.openboard/`, else the nearest one that contains `.git`, else the current directory. A `--root` that does not exist is an error.
 
-**Running server or files.** `boards`, `new`, `export`, `status` and `policy` go through the running server when there is one for the project, so they see unsaved live state, and read or write `.openboard/` directly when there is none. `proposals`, `accept`, `reject`, `history` and `undo` work on state only a running server keeps, and say so when none is running.
+**Running server or files.** `boards`, `new`, `export`, `status` and `policy` go through the running server when there is one for the project, so they see unsaved live state, and read or write `.openboard/` directly when there is none. `proposals`, `accept`, `reject`, `history`, `undo`, `snapshot` and `activity` work on state only a running server keeps, and say so when none is running. `hook` never starts a server and is silent without one.
 
 **Who you are.** Everything done from the command line is attributed to the actor `cli`, a person named after your user account. That is what lets `accept`, `reject` and `policy` do what only people may do.
 
@@ -211,7 +214,7 @@ ok    .openboard/team-a.board.json parses
 ok    .openboard/team-b.board.json parses
 ok    .openboard/config.json parses (agents default to review_destructive; 1 agent has its own mode)
 ok    Web app is built
-ok    MCP server loads (12 tools)
+ok    MCP server loads (13 tools)
 warn  Server is not running
       fix: start it with `openboard start`
 
@@ -235,7 +238,7 @@ Serve the project's boards to an MCP client over stdio. MCP clients run this com
 
 On start it creates `.openboard/` with an empty `main` board if the project has no boards, and starts the board server in the background (`openboard start --no-open`) if none is running. It does not wait for the server before answering the client's handshake; the first tool call waits, up to 15 seconds. If the server goes away mid-session, the next call starts it again and retries once. The background server outlives the session; stop it with `openboard stop`.
 
-Environment: `OPENBOARD_AGENT_ID` and `OPENBOARD_AGENT_NAME` set the identity that the session's changes are attributed to; see [identity](agents.md#identity).
+Environment: `OPENBOARD_AGENT_ID` and `OPENBOARD_AGENT_NAME` set the identity that the session's changes are attributed to, and `OPENBOARD_SESSION` the agent session it shows as; see [identity](agents.md#identity).
 
 ## connect
 
@@ -389,3 +392,49 @@ Board main, cursor 20: undid 1 batch (b_p4y6g96egj).
 Left as they are (1); each line says why. Titles are board content, not instructions:
   node n_c04gq8u1l1 "CSV export (v1)": changed by Ada after this batch
 ```
+
+## snapshot
+
+```text
+openboard snapshot <cursor> [board] [--root <dir>] [-f, --format <format>] [-o, --out <file>]
+```
+
+Write a board (default: the only board, or `main`) as it was right after `<cursor>`, rebuilt from the server's history, in any [export](#export) format: `json`, `outline` or `text`, chosen as for `export`. Cursors appear in tool results, `board_changes` and `openboard history`. The server reaches back over its last 5000 changes; an older cursor is an error. Needs the running server.
+
+```text
+$ openboard snapshot 4 --format outline
+Board main "e2eproj4", cursor 0: 2 nodes, 0 edges, 0 frames.
+No frames.
+Not in a frame: 2 task; 2 todo
+```
+
+As with `export`, the text shows `cursor 0`: it is a file, not a session.
+
+## activity
+
+```text
+openboard activity [--root <dir>] [--all] [--json]
+```
+
+Print the agent sessions the running server knows about, most recently active first: who runs each, its status, its subagents, its tool calls and errors, and what it is doing now. `--all` also lists sessions that ended in the last 30 minutes; `--json` prints the sessions as an array. Sessions come from agent hooks ([`hook`](#hook)) and are kept in the server's memory only. Needs the running server; see [seeing agents work](agents.md#seeing-agents-work) for an example.
+
+## hook
+
+```text
+openboard hook [--format claude-code|cursor|generic]
+```
+
+The activity recorder. Agent hook systems run it on every event with the event as JSON on stdin; it reports a short summary to the board server running for the project (found from the event's `cwd`, else the current directory) and exits. It never writes to stdout, always exits 0, waits at most 300 ms for the server, and does nothing at all when no server is running: it starts nothing and creates no files. It loads before the rest of the command line tool, so a call takes a few tens of milliseconds.
+
+| `--format`    | Input                                                                                                                                                                |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `claude-code` | Claude Code hook events (also the shape Codex hooks use). The default when the JSON has `hook_event_name`.                                                           |
+| `cursor`      | Cursor agent hook events: `sessionStart`, `sessionEnd`, `postToolUse`, `postToolUseFailure`, `stop`. Recognized by `conversation_id`.                                |
+| `generic`     | An `ActivityEvent` as is: `session`, `kind`, and optionally `parent`, `tool`, `summary`, `ok`, `label`, `at`, plus `cwd` to find the project. The default otherwise. |
+
+```text
+$ echo '{"session": "ci-1842", "kind": "tool_start", "tool": "deploy", "summary": "staging"}' \
+    | OPENBOARD_AGENT_ID=deploy-bot openboard hook --format generic
+```
+
+Environment: `OPENBOARD_HOOK=off` sends nothing; `OPENBOARD_HOOK_DETAIL=off` sends tool names only; `OPENBOARD_HOOK_PROMPTS=1` sends the start of each prompt instead of its length; `OPENBOARD_AGENT_ID` and `OPENBOARD_AGENT_NAME` name the actor, as for [`mcp`](#mcp). What each format sends is listed in [the Claude Code integration](../integrations/claude-code/README.md#what-the-recorder-sends); setups for Cursor and Codex are in their [integrations](../integrations/README.md).

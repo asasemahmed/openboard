@@ -1268,7 +1268,7 @@ input[type="checkbox"] {
 .topbar-overflow {
   display: none;
 }
-@media (max-width: 1180px) {
+@media (max-width: 1480px) {
   .topbar-wide {
     display: none;
   }
@@ -1276,7 +1276,7 @@ input[type="checkbox"] {
     display: contents;
   }
 }
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
   .topbar-roomy,
   .participants,
   .search-btn .kbd-group,

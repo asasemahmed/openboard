@@ -1,0 +1,541 @@
+/*
+ * Agents at work: presence in the top bar, pointer chips on the canvas,
+ * claims, the agents panel, and replay.
+ */
+
+/* ── Status glyphs ────────────────────────────────────────────────────────── */
+
+.status-glyph {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+}
+.status-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  color: var(--ink-2);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.status-label.agent-reading,
+.status-label.agent-writing,
+.status-label.agent-working {
+  color: var(--accent-ink);
+}
+
+/* ── Top bar ──────────────────────────────────────────────────────────────── */
+
+.agent-avatar {
+  position: relative;
+  display: inline-grid;
+}
+.agent-avatar + .agent-avatar {
+  margin-left: -6px;
+}
+.agent-avatar.is-absent .avatar {
+  opacity: 0.55;
+}
+.agent-avatar .status-glyph {
+  position: absolute;
+  right: -4px;
+  bottom: -3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: 0 0 0 1.5px var(--paper);
+}
+.agent-avatar-count {
+  position: absolute;
+  top: -5px;
+  right: -6px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--inverse);
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+}
+.agents-working {
+  color: var(--ink);
+}
+/* A filled square: not a colour-only signal, and not a pulse. */
+.agents-working-mark {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--accent-ink);
+  flex: none;
+}
+
+/* ── Agent pointer chips ──────────────────────────────────────────────────── */
+
+.agent-cursors {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+  pointer-events: none;
+}
+.agent-cursor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: flex-start;
+  transform-origin: 0 0;
+  transition: transform 360ms var(--ease);
+  pointer-events: auto;
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-cursor {
+    transition: none;
+  }
+}
+.agent-cursor-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 14px 0 0 -4px;
+  padding: 1px 8px 1px 6px;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 18px;
+  white-space: nowrap;
+}
+.agent-focus {
+  position: absolute;
+  inset: -3px;
+  border: 1.5px solid var(--peer);
+  border-radius: 14px;
+  pointer-events: none;
+}
+.frame .agent-focus {
+  border-radius: 18px;
+}
+
+/* ── Claims ───────────────────────────────────────────────────────────────── */
+
+.claim-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  max-width: 132px;
+  height: 18px;
+  margin-right: 4px;
+  padding: 0 6px 0 4px;
+  border: 1px solid color-mix(in srgb, var(--claim) 55%, transparent);
+  border-radius: 4px;
+  background: var(--card);
+  color: var(--ink);
+  font-size: 10.5px;
+  font-weight: 600;
+  flex: 0 1 auto;
+}
+.claim-chip svg {
+  flex: none;
+  color: var(--claim);
+}
+.claim-chip-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.claim-tint {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-card);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--claim) 45%, transparent);
+  pointer-events: none;
+}
+.frame .claim-tint {
+  border-radius: 16px;
+}
+.claim-box {
+  display: flex;
+  gap: 10px;
+  font-size: 13px;
+}
+.claim-box p + p {
+  margin-top: 4px;
+}
+
+/* ── Agents panel ─────────────────────────────────────────────────────────── */
+
+.session-list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 8px;
+  list-style: none;
+  font-variant-numeric: tabular-nums;
+}
+.session-row {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  padding: 8px 8px 8px calc(8px + var(--depth, 0) * 18px);
+  border-radius: 8px;
+}
+.session-row:hover {
+  background: var(--hover);
+}
+/* The tree line from a subagent back to its parent. */
+.session-row.is-child::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: calc(var(--depth, 1) * 18px - 2px);
+  width: 9px;
+  height: 19px;
+  border-left: 1px solid var(--line-strong);
+  border-bottom: 1px solid var(--line-strong);
+  border-bottom-left-radius: 4px;
+}
+.session-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+}
+.session-name {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-size: 13px;
+}
+.session-name:disabled {
+  cursor: default;
+}
+.session-name strong {
+  flex: none;
+  font-weight: 600;
+}
+.session-label {
+  min-width: 0;
+  color: var(--ink-2);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.session-now {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  height: 18px;
+  margin-left: 28px;
+  font-size: 12.5px;
+  overflow: hidden;
+}
+.session-tool {
+  flex: none;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--sunken);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.session-summary {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ink-2);
+}
+.session-timer {
+  flex: none;
+  margin-left: auto;
+  min-width: 64px;
+  color: var(--ink-2);
+  font-size: 11.5px;
+  text-align: right;
+}
+.session-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-left: 28px;
+  color: var(--ink-3);
+  font-size: 11.5px;
+}
+.session-errors {
+  color: var(--danger);
+}
+.waiting-links {
+  display: inline-flex;
+  gap: 10px;
+}
+.session-claims {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-left: 28px;
+  font-size: 11.5px;
+}
+.claim-pill {
+  max-width: 160px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--card);
+  color: var(--ink);
+  font-size: 11.5px;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.session-steps {
+  margin-left: 28px;
+  font-size: 12px;
+}
+.session-steps summary {
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.session-steps ol {
+  display: grid;
+  gap: 3px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.session-steps li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  height: 18px;
+  overflow: hidden;
+}
+.session-steps li.is-failed .session-tool {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* ── Stale tab ────────────────────────────────────────────────────────────── */
+
+.lost-edits {
+  position: fixed;
+  top: calc(var(--topbar-h) + 10px);
+  left: 50%;
+  z-index: 55;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: min(560px, calc(100vw - 32px));
+  padding: 12px 12px 12px 14px;
+  border: 1px solid var(--danger);
+  border-radius: 12px;
+  background: var(--raised);
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.45;
+  box-shadow: var(--shadow-pop);
+  transform: translateX(-50%);
+}
+.lost-edits > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--danger);
+}
+.lost-edits p {
+  flex: 1;
+}
+
+/* ── Replay ───────────────────────────────────────────────────────────────── */
+
+.replay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  background: var(--canvas);
+}
+.replay-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--topbar-h);
+  padding: 8px 12px 8px 16px;
+  border-bottom: 2px solid var(--accent-ink);
+  background: var(--paper);
+}
+.replay-banner > svg {
+  flex: none;
+  color: var(--accent-ink);
+}
+.replay-banner-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+}
+.replay-banner-text strong {
+  font-size: 14px;
+}
+.replay-banner-step,
+.replay-banner-note {
+  color: var(--ink-2);
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.replay-loading {
+  color: var(--ink-2);
+  font-size: 12px;
+}
+.replay-canvas {
+  position: relative;
+  min-height: 0;
+}
+.replay-wait {
+  display: grid;
+  place-items: center;
+  height: 100%;
+}
+.replay-timeline {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 4px 16px;
+  padding: 10px 16px 10px 12px;
+  border-top: 1px solid var(--line);
+  background: var(--paper);
+}
+.replay-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  grid-row: 1 / span 2;
+}
+.replay-speed {
+  width: 64px;
+  margin-left: 4px;
+}
+.replay-track-wrap {
+  position: relative;
+}
+.replay-track {
+  position: relative;
+  height: 32px;
+  margin: 0 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  touch-action: none;
+}
+.replay-track::before {
+  content: "";
+  position: absolute;
+  top: 15px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--line-strong);
+}
+.replay-track:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.replay-tick {
+  position: absolute;
+  top: 8px;
+  width: 2px;
+  height: 16px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--ink-2);
+}
+.tick-agent {
+  background: var(--accent-ink);
+}
+.tick-system {
+  background: var(--ink-3);
+  height: 10px;
+  top: 11px;
+}
+.replay-thumb {
+  position: absolute;
+  top: 3px;
+  width: 14px;
+  height: 26px;
+  margin-left: -7px;
+  border: 2px solid var(--accent-ink);
+  border-radius: 5px;
+  background: var(--card);
+  pointer-events: none;
+  transition: left 120ms var(--ease);
+}
+.replay-tick-card {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  z-index: 2;
+  width: 260px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--raised);
+  font-size: 12.5px;
+  box-shadow: var(--shadow-pop);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.replay-tick-card time {
+  color: var(--ink-3);
+  font-size: 11.5px;
+}
+.replay-legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 8px;
+  color: var(--ink-3);
+  font-size: 11px;
+}
+.tick-key {
+  display: inline-block;
+  width: 2px;
+  height: 10px;
+  margin-left: 6px;
+  border-radius: 1px;
+}
+.tick-key.tick-human {
+  background: var(--ink-2);
+}
+
+/* The board name keeps a few letters however crowded the bar gets. */
+.board-title .board-name {
+  min-width: 72px;
+}
+
+/* At the narrowest widths the left panels are opened from the agents menu instead. */
+@media (max-width: 800px) {
+  .panel-toggle-left {
+    display: none;
+  }
+}
+.board-title {
+  flex: none;
+}

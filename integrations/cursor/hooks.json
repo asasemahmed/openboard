@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "/absolute/path/to/node /absolute/path/to/openboard/packages/cli/dist/bin.js hook --format cursor",
+        "timeout": 5
+      }
+    ],
+    "postToolUse": [
+      {
+        "command": "/absolute/path/to/node /absolute/path/to/openboard/packages/cli/dist/bin.js hook --format cursor",
+        "timeout": 5
+      }
+    ],
+    "postToolUseFailure": [
+      {
+        "command": "/absolute/path/to/node /absolute/path/to/openboard/packages/cli/dist/bin.js hook --format cursor",
+        "timeout": 5
+      }
+    ],
+    "stop": [
+      {
+        "command": "/absolute/path/to/node /absolute/path/to/openboard/packages/cli/dist/bin.js hook --format cursor",
+        "timeout": 5
+      }
+    ],
+    "sessionEnd": [
+      {
+        "command": "/absolute/path/to/node /absolute/path/to/openboard/packages/cli/dist/bin.js hook --format cursor",
+        "timeout": 5
+      }
+    ]
+  }
+}

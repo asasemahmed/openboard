@@ -7,6 +7,7 @@ import './styles/canvas.css';
 import './styles/nodes.css';
 import './styles/panels.css';
 import './styles/trust.css';
+import './styles/live.css';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.js';

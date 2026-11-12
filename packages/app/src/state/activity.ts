@@ -460,6 +460,16 @@ export class ActivityStore extends Emitter {
     this.noteBurst(ready);
   }
 
+  /** Highlight these entries as changed by `actorId` (replay shows what each step did). */
+  flash(
+    items: ReadonlyArray<{ kind: ItemKind; id: string; verb: ChangeVerb }>,
+    actorId: string,
+  ): void {
+    if (this.destroyed || items.length === 0) return;
+    const changes = items.map((item) => ({ ...item, actorId }));
+    this.dispatch(receive(this.state, changes, '', this.clock.now()));
+  }
+
   dismissRemoval(id: number): void {
     this.dispatch(dismissRemoval(this.state, id));
   }

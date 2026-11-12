@@ -45,7 +45,8 @@ export async function startCommand(io: CliIo, options: StartOptions = {}): Promi
   const stdio = mcpLaunch(root);
   const server = await startServer({
     root,
-    info: ({ url }) => ({ mcp: { httpUrl: `${url}/mcp`, stdio } }),
+    // `user` lets the web app suggest a display name for the person at this machine.
+    info: ({ url }) => ({ user: cliActor(io.env).name, mcp: { httpUrl: `${url}/mcp`, stdio } }),
     ...(options.port !== undefined ? { port: options.port } : {}),
     ...(options.host !== undefined ? { host: options.host } : {}),
     ...(app.built && app.dir ? { appDir: app.dir } : {}),
@@ -56,7 +57,7 @@ export async function startCommand(io: CliIo, options: StartOptions = {}): Promi
 
   // MCP over HTTP, in process: each session gets its own actor from its client name.
   const mcp = createHttpHandler({
-    resolveApi: (client) => server.api(actorForClient(client, {})),
+    resolveApi: (client) => server.api(actorForClient(client, {}), { session: client.session }),
     version: cliVersion(),
   });
   server.mount('/mcp', mcp);
