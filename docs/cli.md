@@ -376,7 +376,7 @@ All setups launch `openboard mcp` with absolute paths: the Node.js binary runnin
 | `claude-code` | A `claude mcp add openboard -- ...` command, and the same server as a `.mcp.json` block |
 | `cursor`      | A block for `.cursor/mcp.json`                                                          |
 | `codex`       | A `[mcp_servers.openboard]` table for `~/.codex/config.toml`                            |
-| `gemini-cli`  | A `gemini mcp add openboard ...` command, and the `.gemini/settings.json` block          |
+| `gemini-cli`  | A `gemini mcp add openboard ...` command, and the `.gemini/settings.json` block         |
 | `generic`     | The stdio command, and the Streamable HTTP URL                                          |
 
 ```text
