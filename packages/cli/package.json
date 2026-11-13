@@ -1,10 +1,30 @@
 {
-  "name": "openboard",
+  "name": "@openboard/cli",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
-  "description": "The open canvas for AI agents.",
+  "description": "A shared canvas your AI agent can read, edit, and be steered from. Works with any MCP client.",
   "license": "PolyForm-Noncommercial-1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/asasemahmed/openboard.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/asasemahmed/openboard#readme",
+  "bugs": "https://github.com/asasemahmed/openboard/issues",
+  "keywords": [
+    "mcp",
+    "mcp-server",
+    "model-context-protocol",
+    "ai-agents",
+    "whiteboard",
+    "canvas",
+    "claude-code",
+    "cursor",
+    "codex"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
   "bin": {
     "openboard": "./dist/bin.js"
   },
@@ -28,5 +48,12 @@
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2"
+  },
+  "scripts": {
+    "prepack": "cp ../../LICENSE LICENSE",
+    "postpack": "rm -f LICENSE"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

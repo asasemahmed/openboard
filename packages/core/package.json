@@ -1,10 +1,19 @@
 {
   "name": "@openboard/core",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
-  "description": "Board schema, operations, validation, and serialization for OpenBoard.",
+  "description": "Schema, operations and formats for OpenBoard boards.",
   "license": "PolyForm-Noncommercial-1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/asasemahmed/openboard.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/asasemahmed/openboard#readme",
+  "bugs": "https://github.com/asasemahmed/openboard/issues",
+  "engines": {
+    "node": ">=22"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -17,5 +26,12 @@
   "dependencies": {
     "yjs": "^13.6.33",
     "zod": "^4.6.7"
+  },
+  "scripts": {
+    "prepack": "cp ../../LICENSE LICENSE",
+    "postpack": "rm -f LICENSE"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
