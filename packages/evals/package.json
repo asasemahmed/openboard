@@ -1,6 +1,6 @@
 {
   "name": "@openboard/evals",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "description": "Evaluation harness: how well an agent uses an OpenBoard, scored on task success and token cost.",
