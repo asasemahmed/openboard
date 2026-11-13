@@ -8,7 +8,7 @@ import { type Launch, mcpLaunch, shellCommand } from '../lib/mcp.js';
 import { resolveRoot } from '../lib/project.js';
 import { DEFAULT_PORT, findRunningServer } from '../lib/server.js';
 
-export const AGENTS = ['claude-code', 'cursor', 'codex', 'generic'] as const;
+export const AGENTS = ['claude-code', 'cursor', 'codex', 'gemini-cli', 'generic'] as const;
 export type AgentName = (typeof AGENTS)[number];
 
 export interface ConnectOptions {
@@ -75,6 +75,11 @@ export function remoteSetups(publicUrl: string): Record<AgentName, AgentSetup> {
         `args = [${proxy.args.map((arg) => JSON.stringify(arg)).join(', ')}]`,
         `env = { OPENBOARD_TOKEN = ${JSON.stringify(TOKEN_PLACEHOLDER)} }`,
       ].join('\n'),
+    },
+    'gemini-cli': {
+      label: 'Gemini CLI',
+      file: '.gemini/settings.json',
+      config: proxyJson,
     },
     generic: {
       label: 'Any MCP client',
@@ -169,6 +174,12 @@ export function agentSetups(launch: Launch, httpUrl: string): Record<AgentName, 
     },
     cursor: { label: 'Cursor', file: '.cursor/mcp.json', config: jsonBlock(launch) },
     codex: { label: 'Codex', file: '~/.codex/config.toml', config: tomlBlock(launch) },
+    'gemini-cli': {
+      label: 'Gemini CLI',
+      command: `gemini mcp add openboard ${shellCommand(launch)}`,
+      file: '.gemini/settings.json',
+      config: jsonBlock(launch),
+    },
     generic: {
       label: 'Any MCP client',
       command: shellCommand(launch),
@@ -224,6 +235,7 @@ export async function connectCommand(
     out(`  Claude Code  ${setups['claude-code'].command}`);
     out(`  Cursor       add to .cursor/mcp.json: ${flat(setups.cursor.config ?? '')}`);
     out(`  Codex        add to ~/.codex/config.toml: ${flat(setups.codex.config ?? '')}`);
+    out(`  Gemini CLI   add to .gemini/settings.json: ${flat(setups['gemini-cli'].config ?? '')}`);
     out(`  Other        stdio: ${shellCommand(info.stdio)}`);
     out(`               HTTP:  ${info.http.url} ${httpNote}`);
     out();
@@ -241,6 +253,13 @@ export async function connectCommand(
       out(indent(setup.command ?? '', '  '));
       out();
       out('Or add this to .mcp.json in the project root:');
+      out(indent(setup.config ?? '', '  '));
+      break;
+    case 'gemini-cli':
+      out('Run in the project:');
+      out(indent(setup.command ?? '', '  '));
+      out();
+      out('Or add this to .gemini/settings.json:');
       out(indent(setup.config ?? '', '  '));
       break;
     case 'generic':

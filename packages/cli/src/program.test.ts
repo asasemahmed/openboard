@@ -150,7 +150,7 @@ describe('argument parsing and exit codes', () => {
     const bad = captureIo(dir);
     expect(await run(['connect', 'vim'], bad)).toBe(1);
     expect(bad.err()).toBe(
-      'openboard: unknown agent "vim" (choose one of: claude-code, cursor, codex, generic)\n',
+      'openboard: unknown agent "vim" (choose one of: claude-code, cursor, codex, gemini-cli, generic)\n',
     );
   });
 

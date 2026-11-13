@@ -67,7 +67,7 @@ In the project, run:
 openboard connect
 ```
 
-It prints the setup for Claude Code, Cursor, Codex and any other MCP client, with the absolute paths for your machine. `openboard connect claude-code` (or `cursor`, `codex`, `generic`) shows one agent in full. It only prints; it never edits a config file. The canvas shows the same snippets under "Connect an agent" in the top bar.
+It prints the setup for Claude Code, Cursor, Codex, Gemini CLI and any other MCP client, with the absolute paths for your machine. `openboard connect claude-code` (or `cursor`, `codex`, `gemini-cli`, `generic`) shows one agent in full. It only prints; it never edits a config file. The canvas shows the same snippets under "Connect an agent" in the top bar.
 
 For Claude Code the quickest route is the command it prints, run in the project:
 
@@ -80,6 +80,7 @@ To also give the agent guidance on working with a board, use the ready-made inte
 - Claude Code: the plugin in [`integrations/claude-code`](../integrations/claude-code/README.md), with the MCP server and a skill.
 - Cursor: [`integrations/cursor`](../integrations/cursor/README.md), with the `.cursor/mcp.json` entry and a project rule.
 - Codex: [`integrations/codex`](../integrations/codex/README.md), with the `config.toml` entry and an `AGENTS.md` snippet.
+- Gemini CLI: [`integrations/gemini-cli`](../integrations/gemini-cli/README.md), with the `.gemini/settings.json` entry and a `GEMINI.md` snippet.
 - Anything else: [`integrations/generic`](../integrations/generic/README.md).
 
 The stdio command starts the board server in the background if it is not running, so the agent works whether or not `openboard start` is open.

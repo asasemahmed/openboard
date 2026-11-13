@@ -367,7 +367,7 @@ openboard connect [agent] [--root <dir>] [--json]
 openboard connect [agent] --remote [--url <public url>] [--json]
 ```
 
-Print how to connect an agent to this project. It only prints; it never writes a config file. `agent` is one of `claude-code`, `cursor`, `codex` or `generic`; without it, every agent is shown in brief.
+Print how to connect an agent to this project. It only prints; it never writes a config file. `agent` is one of `claude-code`, `cursor`, `codex`, `gemini-cli` or `generic`; without it, every agent is shown in brief.
 
 All setups launch `openboard mcp` with absolute paths: the Node.js binary running `connect`, this checkout's `bin.js`, and `--root` set to the project. They work from any directory and keep working while you are in another project.
 
@@ -376,6 +376,7 @@ All setups launch `openboard mcp` with absolute paths: the Node.js binary runnin
 | `claude-code` | A `claude mcp add openboard -- ...` command, and the same server as a `.mcp.json` block |
 | `cursor`      | A block for `.cursor/mcp.json`                                                          |
 | `codex`       | A `[mcp_servers.openboard]` table for `~/.codex/config.toml`                            |
+| `gemini-cli`  | A `gemini mcp add openboard ...` command, and the `.gemini/settings.json` block         |
 | `generic`     | The stdio command, and the Streamable HTTP URL                                          |
 
 ```text
@@ -399,6 +400,7 @@ With `--remote`, it prints the setup for an agent on another machine connecting 
 | `claude-code` | `claude mcp add --transport http ... --header "Authorization: Bearer ${OPENBOARD_TOKEN}"`, or the same as `.mcp.json` |
 | `cursor`      | The stdio bridge (`openboard mcp --url`) for `.cursor/mcp.json`, with `OPENBOARD_TOKEN` in its `env` block            |
 | `codex`       | The stdio bridge as a `[mcp_servers.openboard]` table with `env = { OPENBOARD_TOKEN = ... }`                          |
+| `gemini-cli`  | The stdio bridge as an `openboard` entry in `.gemini/settings.json`, with `OPENBOARD_TOKEN` in its `env` block        |
 | `generic`     | The HTTP URL with the header to send, and the stdio bridge                                                            |
 
 ```text
