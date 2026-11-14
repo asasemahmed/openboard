@@ -5,12 +5,13 @@
  */
 import type { McpInfo } from './api.js';
 
-export type AgentClient = 'claude' | 'cursor' | 'codex' | 'other';
+export type AgentClient = 'claude' | 'cursor' | 'codex' | 'gemini-cli' | 'other';
 
 export const AGENT_CLIENTS: ReadonlyArray<{ id: AgentClient; name: string }> = [
   { id: 'claude', name: 'Claude Code' },
   { id: 'cursor', name: 'Cursor' },
   { id: 'codex', name: 'Codex' },
+  { id: 'gemini-cli', name: 'Gemini CLI' },
   { id: 'other', name: 'Other' },
 ];
 
@@ -49,7 +50,7 @@ export function claudeCodeCommand(mcp: McpInfo): string {
   return `claude mcp add ${SERVER_NAME} -- ${shellCommand(mcp.stdio)}`;
 }
 
-/** The `mcpServers` block used by `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor). */
+/** The `mcpServers` block used by Claude Code, Cursor and Gemini CLI. */
 export function mcpServersJson(mcp: McpInfo): string {
   const block = {
     mcpServers: {
@@ -106,6 +107,20 @@ export function snippetsFor(client: AgentClient, mcp: McpInfo): Snippet[] {
           label: 'Add this to',
           file: '~/.codex/config.toml',
           text: codexToml(mcp),
+        },
+      ];
+    case 'gemini-cli':
+      return [
+        {
+          id: 'gemini-cli-command',
+          label: 'Run this in the project folder',
+          text: `gemini mcp add ${SERVER_NAME} ${shellCommand(mcp.stdio)}`,
+        },
+        {
+          id: 'gemini-cli-json',
+          label: 'Or add this to',
+          file: '.gemini/settings.json',
+          text: mcpServersJson(mcp),
         },
       ];
     case 'other':

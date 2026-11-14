@@ -1,6 +1,6 @@
 /**
  * "Connect an agent": how to add this project's board server to Claude Code,
- * Cursor, Codex or any other MCP client, with copyable snippets built from
+ * Cursor, Codex, Gemini CLI or any other MCP client, with copyable snippets built from
  * what the server reports in `GET /api/info`, and a few prompts to try.
  */
 import { type KeyboardEvent, useEffect, useId, useRef, useState } from 'react';
