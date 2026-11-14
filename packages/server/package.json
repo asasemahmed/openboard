@@ -1,10 +1,19 @@
 {
   "name": "@openboard/server",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
-  "description": "Local OpenBoard server: sync, persistence, layout, and the agent API.",
+  "description": "The OpenBoard board server: sync, persistence, layout and shared mode.",
   "license": "PolyForm-Noncommercial-1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/asasemahmed/openboard.git",
+    "directory": "packages/server"
+  },
+  "homepage": "https://github.com/asasemahmed/openboard#readme",
+  "bugs": "https://github.com/asasemahmed/openboard/issues",
+  "engines": {
+    "node": ">=22"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -29,5 +38,12 @@
   "devDependencies": {
     "@types/ws": "^8.18.1",
     "y-websocket": "^3.1.0"
+  },
+  "scripts": {
+    "prepack": "cp ../../LICENSE LICENSE",
+    "postpack": "rm -f LICENSE"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

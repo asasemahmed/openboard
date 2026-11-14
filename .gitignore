@@ -26,3 +26,6 @@ coverage/
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
+
+# Copied in by prepack for npm, removed after
+packages/*/LICENSE

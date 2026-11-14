@@ -1,10 +1,19 @@
 {
   "name": "@openboard/sdk",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
-  "description": "TypeScript client for a running OpenBoard server.",
+  "description": "A typed HTTP client for a running OpenBoard server.",
   "license": "PolyForm-Noncommercial-1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/asasemahmed/openboard.git",
+    "directory": "packages/sdk"
+  },
+  "homepage": "https://github.com/asasemahmed/openboard#readme",
+  "bugs": "https://github.com/asasemahmed/openboard/issues",
+  "engines": {
+    "node": ">=22"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -19,5 +28,12 @@
   },
   "devDependencies": {
     "@openboard/server": "workspace:*"
+  },
+  "scripts": {
+    "prepack": "cp ../../LICENSE LICENSE",
+    "postpack": "rm -f LICENSE"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
