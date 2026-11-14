@@ -69,6 +69,8 @@ openboard connect
 
 It prints the setup for Claude Code, Cursor, Codex, Gemini CLI and any other MCP client, with the absolute paths for your machine. `openboard connect claude-code` (or `cursor`, `codex`, `gemini-cli`, `generic`) shows one agent in full. It only prints; it never edits a config file. The canvas shows the same snippets under "Connect an agent" in the top bar.
 
+In the canvas, choose Gemini CLI to copy either the `gemini mcp add openboard ...` command or the `mcpServers` block for `.gemini/settings.json`.
+
 For Claude Code the quickest route is the command it prints, run in the project:
 
 ```bash

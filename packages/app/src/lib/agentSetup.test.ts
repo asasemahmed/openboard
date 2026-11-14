@@ -84,6 +84,27 @@ describe('Codex', () => {
   });
 });
 
+describe('Gemini CLI', () => {
+  it('offers the registration command and the settings.json block', () => {
+    const snippets = snippetsFor('gemini-cli', simple);
+    expect(snippets.map((s) => s.file)).toEqual([undefined, '.gemini/settings.json']);
+    expect(snippets[0]?.text).toBe('gemini mcp add openboard npx openboard mcp --root /work/shop');
+    expect(JSON.parse(snippets[1]?.text ?? '')).toEqual({
+      mcpServers: { openboard: { command: simple.stdio.command, args: simple.stdio.args } },
+    });
+  });
+
+  it('preserves paths with spaces and quotes in both snippets', () => {
+    const snippets = snippetsFor('gemini-cli', spaced);
+    expect(snippets[0]?.text).toBe(
+      "gemini mcp add openboard '/Users/ada/My Tools/node' '/Users/ada/My Projects/open board/cli.js' mcp '--name=Ada'\\''s board'",
+    );
+    expect(JSON.parse(snippets[1]?.text ?? '')).toEqual({
+      mcpServers: { openboard: { command: spaced.stdio.command, args: spaced.stdio.args } },
+    });
+  });
+});
+
 describe('Other', () => {
   it('shows the stdio command and the HTTP URL', () => {
     expect(snippetsFor('other', spaced).map((s) => s.text)).toEqual([
