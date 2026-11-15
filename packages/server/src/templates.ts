@@ -8,6 +8,7 @@
 import { readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import {
+  type Board,
   BUILTIN_TEMPLATES,
   countAdded,
   type Op,
@@ -24,6 +25,26 @@ import type { PluginHost } from './plugins.js';
 
 /** Project template files larger than this are not read. */
 export const MAX_TEMPLATE_BYTES = 5 * 1024 * 1024;
+
+/**
+ * The checks a project template's file must pass to be listed or applied:
+ * its size, then that it parses as a valid board. `where` names it in the
+ * error, such as `template file templates/plan.board.json`. Throws
+ * `invalid_request` saying why.
+ */
+export function parseProjectTemplate(bytes: Uint8Array, where: string): Board {
+  if (bytes.byteLength > MAX_TEMPLATE_BYTES) {
+    throw new OpenBoardError(
+      'invalid_request',
+      `${where} is larger than ${MAX_TEMPLATE_BYTES} bytes`,
+    );
+  }
+  try {
+    return parseBoard(Buffer.from(bytes).toString('utf8'));
+  } catch (error) {
+    throw new OpenBoardError('invalid_request', `${where} does not parse: ${errorMessage(error)}`);
+  }
+}
 
 export interface ResolvedTemplate {
   summary: TemplateSummary;
@@ -148,15 +169,7 @@ export class TemplateCatalog {
     }
     const bytes = await readIfExists(file);
     if (bytes === null) return undefined;
-    let board: ReturnType<typeof parseBoard>;
-    try {
-      board = parseBoard(bytes.toString('utf8'));
-    } catch (error) {
-      throw new OpenBoardError(
-        'invalid_request',
-        `template file templates/${id}.board.json does not parse: ${errorMessage(error)}`,
-      );
-    }
+    const board = parseProjectTemplate(bytes, `template file templates/${id}.board.json`);
     const summary: TemplateSummary = {
       id,
       name: board.name,
