@@ -8,8 +8,9 @@
  * drag is in progress, measured sizes, selection flags) also lives here.
  *
  * It also derives what people review: pending proposals (drawn as the ghost
- * layer), open questions, and comment threads. Each is memoised and rebuilt
- * only after a transaction that changed its collection.
+ * layer), open questions, comment threads, and what needs attention on the
+ * board. Each is memoised and rebuilt only after a transaction that changed
+ * its collection.
  */
 import type {
   Actor,
@@ -20,8 +21,10 @@ import type {
   BoardMeta,
   BoardNode,
   DocEvent,
+  HealthFinding,
   Op,
 } from '@openboard/core';
+import { boardHealth } from '@openboard/core';
 import {
   applyEdgeChanges,
   applyNodeChanges,
@@ -74,6 +77,7 @@ export class BoardStore extends Emitter {
   private reviewCache: ReviewModel | null = null;
   private asksCache: { open: readonly Ask[]; nodes: ReadonlyMap<string, string[]> } | null = null;
   private commentCache: CommentIndex | null = null;
+  private healthCache: readonly HealthFinding[] | null = null;
   /** Ghosts come from pending proposals unless a caller set its own layer. */
   private ghostsFromReview = true;
 
@@ -169,6 +173,15 @@ export class BoardStore extends Emitter {
     return this.commentCache;
   };
 
+  /** What needs attention on the board (`boardHealth`). Same array until a node or edge changes meaning. */
+  readonly health = (): readonly HealthFinding[] => {
+    this.healthCache ??= boardHealth({
+      nodes: Object.fromEntries(this.boardNodes()),
+      edges: Object.fromEntries(this.boardEdges()),
+    });
+    return this.healthCache;
+  };
+
   /** Where every real node is drawn right now, including positions mid-drag. */
   placements(): PlacementMap {
     if (!this.placementCache) this.placementCache = placementsOf(this.nodeMap.values());
@@ -256,6 +269,8 @@ export class BoardStore extends Emitter {
     if (event.metaChanged) this.meta = this.readMeta();
     if (event.asks) this.asksCache = null;
     if (event.comments) this.commentCache = null;
+    // Moving or resizing a card changes nothing the checks look at.
+    if (event.changes.some((c) => c.kind !== 'node_moved')) this.healthCache = null;
     // Marks depend on which nodes exist; ghosts on the proposals themselves.
     if (event.proposals || structuralNodes || structuralEdges) {
       this.reviewCache = null;

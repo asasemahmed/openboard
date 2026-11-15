@@ -219,6 +219,7 @@ Full reference: [docs/tools.md](docs/tools.md).
 - **Exact undo.** Every change is a batch with an author and a reason. Undo restores exactly what was there and never overwrites later work.
 - **See agents at work.** Agents appear among the participants with what they are reading, writing, or running. A recorder hook shows the whole session tree, subagents included. Replay scrubs through how the board came to be.
 - **A conversation in context.** Comment threads on cards, mentions, and question cards from agents with one-click answers.
+- **What needs attention.** With nothing selected, the inspector lists open questions, risks with no task or decision, cards still marked blocked after what held them up is done, and stray cards. Click one to go to it.
 
 ### For your repository
 
