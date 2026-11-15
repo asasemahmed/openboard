@@ -17,6 +17,7 @@ import {
 } from '@openboard/core';
 import { CliError } from '../lib/errors.js';
 import { type CliIo, println } from '../lib/io.js';
+import { placeUnplaced } from '../lib/layout.js';
 import { cliActor, resolveRoot } from '../lib/project.js';
 import { FileStore, openSession } from '../lib/store.js';
 import { defaultBoardId } from './export.js';
@@ -168,15 +169,8 @@ export async function importCommand(
   }
   const target = store.paths.boardFile(board);
   const temp = path.join(path.dirname(target), `.${path.basename(target)}.${process.pid}.tmp`);
-  await writeFile(temp, serializeBoard(outcome.board));
+  await writeFile(temp, serializeBoard(await placeUnplaced(outcome.board)));
   await rename(temp, target);
   println(io.stdout, `Imported ${file} into ${board}: added ${added}.`);
-  const unplaced = outcome.applied.addedNodes.filter((id) => !outcome.board.nodes[id]?.view).length;
-  if (unplaced > 0) {
-    println(
-      io.stdout,
-      `${unplaced} new node${unplaced === 1 ? ' has' : 's have'} no position yet; the next automatic layout places them (the next change made through the server, or Tidy up on the canvas).`,
-    );
-  }
   return 0;
 }

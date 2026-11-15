@@ -32,7 +32,7 @@ openboard template apply kanban                       # onto the main board
 openboard template apply decision-record main --frame <frame id> --title "Pick a queue" --dry-run
 ```
 
-`--dry-run` checks the template against the board and says what it would add without changing anything. With a server running, the template is applied through it as you; without one, it is written to the board file, and the new nodes are placed by the next automatic layout.
+`--dry-run` checks the template against the board and says what it would add without changing anything. With a server running, the template is applied through it as you; without one, it is written to the board file with the new nodes already laid out.
 
 ## Share a template
 

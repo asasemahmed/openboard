@@ -21,6 +21,7 @@ import {
 import { connect, type OpenBoardClient } from '@openboard/sdk';
 import { CliError, isNodeError } from './errors.js';
 import { type CliIo, println } from './io.js';
+import { placeUnplaced } from './layout.js';
 import { cliActor } from './project.js';
 import { findRunningServer, type ProjectPaths, projectPaths, type ServerInfo } from './server.js';
 import { templateOps } from './templates.js';
@@ -154,7 +155,7 @@ export class FileStore implements BoardStore {
           `template "${template}" does not apply: ${outcome.errors[0]?.message ?? 'unknown problem'}`,
         );
       }
-      board = outcome.board;
+      board = await placeUnplaced(outcome.board);
     }
     await ensureProjectDir(this.paths);
     await writeNewBoardFile(this.paths, board);
