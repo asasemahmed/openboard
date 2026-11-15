@@ -41,5 +41,5 @@ export {
   MAX_AWARENESS_STATE_BYTES,
   MAX_SOCKETS_PER_GRANT,
 } from './sync.js';
-export { MAX_TEMPLATE_BYTES } from './templates.js';
+export { MAX_TEMPLATE_BYTES, parseProjectTemplate } from './templates.js';
 export * from './types.js';

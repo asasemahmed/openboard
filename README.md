@@ -218,7 +218,9 @@ Full reference: [docs/tools.md](docs/tools.md).
 - **Review on the canvas.** By default an agent adds freely and edits its own work freely, while changes to anyone else's content arrive as proposals: dashed ghosts with Accept and Reject, decided as a whole or item by item, with an optional note back to the agent. Four policy modes per agent, and a frame can be opened up, protected, or locked.
 - **Exact undo.** Every change is a batch with an author and a reason. Undo restores exactly what was there and never overwrites later work.
 - **See agents at work.** Agents appear among the participants with what they are reading, writing, or running. A recorder hook shows the whole session tree, subagents included. Replay scrubs through how the board came to be.
+- **Since your last visit.** Open a board again and a short notice says what others changed while you were away, and who, with the cards outlined on request.
 - **A conversation in context.** Comment threads on cards, mentions, and question cards from agents with one-click answers.
+- **What needs attention.** With nothing selected, the inspector lists open questions, risks with no task or decision, cards still marked blocked after what held them up is done, and stray cards. Click one to go to it.
 
 ### For your repository
 
@@ -226,7 +228,7 @@ Full reference: [docs/tools.md](docs/tools.md).
 - **Merged by meaning.** `openboard git setup` installs a merge driver that merges at field level, never writes conflict markers, and never drops an edit.
 - **Reviewable.** `openboard diff` shows what changed between revisions as text, markdown, or an SVG that draws what was added, changed, and removed. The canvas can compare the live board with any revision.
 - **Code-aware.** A card linked to a file or a line range follows the code when it moves and is flagged when it changes.
-- **In and out.** Export to JSON, Markdown, Mermaid, JSON Canvas, and SVG. Import Mermaid flowcharts and JSON Canvas files.
+- **In and out.** Export to JSON, Markdown, Mermaid, JSON Canvas, SVG, and a self-contained HTML page. Import Mermaid flowcharts and JSON Canvas files.
 
 ### For your team
 

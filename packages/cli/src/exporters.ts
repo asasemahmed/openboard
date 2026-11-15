@@ -1,5 +1,5 @@
 /**
- * Export formats: core's (`json`, `markdown`, `mermaid`, `canvas`, `svg`) plus
+ * Export formats: core's (`json`, `markdown`, `mermaid`, `canvas`, `svg`, `html`) plus
  * two text formats of the command line (`outline`, `text`), which render a
  * board the way the agent tools do.
  */
@@ -12,7 +12,7 @@ import {
 } from '@openboard/core';
 
 export interface ExportOptions {
-  /** For `svg`. */
+  /** For `svg` and `html`. */
   theme?: 'light' | 'dark';
 }
 
@@ -36,6 +36,7 @@ const CORE_NAMES: Record<string, { name: string; aliases: string[]; extensions?:
   mermaid: { name: 'mermaid', aliases: ['mmd'], extensions: ['.mmd', '.mermaid'] },
   jsoncanvas: { name: 'canvas', aliases: ['jsoncanvas'] },
   svg: { name: 'svg', aliases: [] },
+  html: { name: 'html', aliases: [], extensions: ['.html', '.htm'] },
 };
 
 /** The full text of every node, as an agent reads it at `full` detail. */

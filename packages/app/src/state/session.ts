@@ -9,6 +9,7 @@ import { ActivityStore, itemKey, type RemovalResolver } from './activity.js';
 import { BoardStore } from './boardStore.js';
 import { ClaimStore } from './claims.js';
 import { ConnectionStore } from './connection.js';
+import { VisitStore } from './lastVisit.js';
 import { PresenceStore } from './presence.js';
 import { loadReplayTimeline, ReplayController } from './replay.js';
 import type { Transport } from './transport.js';
@@ -26,6 +27,8 @@ export interface BoardSession {
   readonly activity: ActivityStore;
   readonly claims: ClaimStore;
   readonly replay: ReplayController;
+  /** What changed since the person's last visit. */
+  readonly visit: VisitStore;
   readonly api: ApiClient;
   actor(): Actor;
   setActor(actor: Actor): void;
@@ -42,6 +45,12 @@ export interface SessionOptions {
   doc?: BoardDoc;
   /** A read-only view (replay): nothing can be edited. */
   readOnly?: boolean;
+  /**
+   * The lineage of the live document. When given (null: the server does not
+   * say), the session remembers the board as the person last saw it and tells
+   * them what changed since.
+   */
+  lineage?: string | null;
 }
 
 export function createSession(options: SessionOptions): BoardSession {
@@ -62,6 +71,21 @@ export function createSession(options: SessionOptions): BoardSession {
     resolveRemovals: feed.resolve,
   });
   const claims = new ClaimStore(doc);
+  const visit = new VisitStore({
+    boardId: options.boardId,
+    lineage: options.lineage ?? null,
+    me: () => actor.id,
+    api: options.api,
+    doc,
+  });
+  // Count from the board as it is on the server, so wait for the first sync.
+  const offVisit =
+    options.lineage === undefined
+      ? () => {}
+      : connection.subscribe(() => {
+          if (connection.get().synced) visit.start();
+        });
+  if (options.lineage !== undefined && connection.get().synced) visit.start();
   const replay = new ReplayController({
     loadTimeline: () =>
       loadReplayTimeline((before) =>
@@ -112,6 +136,7 @@ export function createSession(options: SessionOptions): BoardSession {
     activity,
     claims,
     replay,
+    visit,
     api: options.api,
     actor: () => actor,
     setActor(next) {
@@ -123,6 +148,8 @@ export function createSession(options: SessionOptions): BoardSession {
       offSelection();
       offActivity();
       offReplay();
+      offVisit();
+      visit.destroy();
       if (replayTimer) clearTimeout(replayTimer);
       replay.destroy();
       claims.destroy();

@@ -234,7 +234,7 @@ You can edit a board file by hand, or let git change it through a checkout, merg
 
 If the file stops parsing, for example because a merge left conflict markers in it, the server keeps serving the board as it was and does not overwrite the file until it parses again. Fix the file, or check out a good version; `openboard doctor` names a file that does not parse and why.
 
-To create a board without the server, write a file with an empty `actors`, `nodes` and `edges`, or run `openboard new`. To produce the canonical form of a board, run `openboard export <board> --format json`; the same command writes Markdown, Mermaid, JSON Canvas or SVG, and `openboard import` adds a Mermaid flowchart or a JSON Canvas to a board (see the [CLI reference](cli.md#export)).
+To create a board without the server, write a file with an empty `actors`, `nodes` and `edges`, or run `openboard new`. To produce the canonical form of a board, run `openboard export <board> --format json`; the same command writes Markdown, Mermaid, JSON Canvas or SVG, `openboard adr` writes the decisions as Architecture Decision Records, and `openboard import` adds a Mermaid flowchart or a JSON Canvas to a board (see the [CLI reference](cli.md#export)).
 
 ## Schema version
 
