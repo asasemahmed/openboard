@@ -1,5 +1,6 @@
 /** The one place the CLI reaches into `@openboard/server`. */
 export {
+  checkCodeLinks,
   DEFAULT_PORT,
   findProjectRoot,
   findRunningServer,

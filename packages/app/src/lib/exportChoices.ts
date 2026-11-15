@@ -17,9 +17,10 @@ export const BUILTIN_EXPORTS: readonly ExportChoice[] = [
   { label: 'JSON Canvas', format: 'jsoncanvas' },
   { label: 'SVG, light', format: 'svg', theme: 'light' },
   { label: 'SVG, dark', format: 'svg', theme: 'dark' },
+  { label: 'HTML page', format: 'html' },
 ];
 
-const BUILTIN_FORMATS = new Set(['json', 'markdown', 'mermaid', 'jsoncanvas', 'svg']);
+const BUILTIN_FORMATS = new Set(['json', 'markdown', 'mermaid', 'jsoncanvas', 'svg', 'html']);
 
 function shout(name: string): string {
   return name.length <= 4 ? name.toUpperCase() : name.charAt(0).toUpperCase() + name.slice(1);

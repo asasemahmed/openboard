@@ -1,8 +1,9 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseBoard, serializeBoard } from '@openboard/core';
-import { describe, expect, it } from 'vitest';
+import { type Board, parseBoard, serializeBoard } from '@openboard/core';
+import { findOverlaps } from '@openboard/server';
+import { describe, expect, it, vi } from 'vitest';
 import { loadPlugins } from '../lib/plugins.js';
 import { startServer } from '../lib/server.js';
 import { captureIo, sampleBoard, serverWorks, tempDir } from '../testing/helpers.js';
@@ -10,6 +11,7 @@ import { newBoardCommand } from './boards.js';
 import { runChecks } from './doctor.js';
 import { exportCommand } from './export.js';
 import {
+  templateAddCommand,
   templateApplyCommand,
   templateSaveCommand,
   templatesCommand,
@@ -54,6 +56,12 @@ async function project(config?: unknown) {
 const board = async (dir: string, id = 'main') =>
   parseBoard(await readFile(path.join(dir, `.openboard/${id}.board.json`), 'utf8'));
 
+/** Every node has a position and no two siblings sit on top of each other. */
+const expectLaidOut = (b: Board) => {
+  expect(Object.values(b.nodes).filter((n) => !n.view)).toEqual([]);
+  expect(findOverlaps(b)).toEqual([]);
+};
+
 describe('templates without a server', () => {
   it("lists the built-in templates and the project's, and creates a board from one", async () => {
     const dir = await project();
@@ -69,6 +77,7 @@ describe('templates without a server', () => {
     expect(
       Object.values(made.nodes).some((n) => n.type === 'frame' && n.title === 'CSV export'),
     ).toBe(true);
+    expectLaidOut(made);
   });
 
   it('applies a template into a frame, dry-runs, and saves a board as a project template', async () => {
@@ -91,6 +100,8 @@ describe('templates without a server', () => {
     const after = await board(dir);
     const outer = Object.values(after.nodes).find((n) => n.title === 'Pick a queue');
     expect(outer?.parent).toBe('f_plan');
+    expect(io.out()).not.toContain('no position yet');
+    expectLaidOut(after);
 
     const saved = captureIo(dir);
     await templateSaveCommand(saved, 'launch-plan', undefined, { root: dir });
@@ -120,6 +131,170 @@ describe('templates without a server', () => {
     expect(Object.keys((await board(dir, 'copy')).nodes).length).toBe(
       Object.keys(after.nodes).length,
     );
+  });
+});
+
+describe('template add', () => {
+  const templateText = () => {
+    const b = sampleBoard();
+    b.id = 'shared';
+    b.name = 'Shared plan';
+    const { comments: _c, ...rest } = b;
+    return serializeBoard(rest);
+  };
+  const templateFile = (dir: string, id: string) =>
+    path.join(dir, '.openboard/templates', `${id}.board.json`);
+  /** A fetch that answers every URL with this text, and records the URLs. */
+  const serve = (text: string) => {
+    const urls: string[] = [];
+    const fetch = vi.fn(async (input: string | URL | Request) => {
+      urls.push(String(input));
+      return new Response(text);
+    }) as unknown as typeof globalThis.fetch;
+    return { fetch, urls };
+  };
+
+  it('adds a template from GitHub, byte for byte, and lists it', async () => {
+    const dir = await project();
+    const text = templateText();
+    const { fetch, urls } = serve(text);
+    const io = captureIo(dir);
+    await templateAddCommand(io, 'github:ada/boards/templates/shared-plan.board.json@v1', {
+      root: dir,
+      fetch,
+    });
+    expect(urls).toEqual([
+      'https://raw.githubusercontent.com/ada/boards/v1/templates/shared-plan.board.json',
+    ]);
+    expect(io.out()).toBe(
+      'Added the template shared-plan ("Shared plan", 4 nodes, 2 edges) from github:ada/boards/templates/shared-plan.board.json@v1: .openboard/templates/shared-plan.board.json\n' +
+        'Review it, then commit it so everyone gets it.\n',
+    );
+    expect(await readFile(templateFile(dir, 'shared-plan'), 'utf8')).toBe(text);
+    const listed = captureIo(dir);
+    await templatesCommand(listed, { root: dir, json: true });
+    expect(
+      JSON.parse(listed.out()).find((t: { id: string }) => t.id === 'shared-plan'),
+    ).toMatchObject({ source: 'project', name: 'Shared plan', nodeCount: 4 });
+  });
+
+  it('adds a local file under --name, dry-runs, and replaces only with --force', async () => {
+    const dir = await project();
+    const source = path.join(dir, 'plan.board.json');
+    await writeFile(source, templateText());
+
+    const dry = captureIo(dir);
+    await templateAddCommand(dry, 'plan.board.json', {
+      root: dir,
+      name: 'team-plan',
+      dryRun: true,
+    });
+    expect(dry.out()).toBe(
+      'Dry run: plan.board.json is a valid template ("Shared plan", 4 nodes, 2 edges); it would be saved as team-plan: .openboard/templates/team-plan.board.json. Nothing was written.\n',
+    );
+    await expect(readFile(templateFile(dir, 'team-plan'))).rejects.toThrow(/ENOENT/);
+
+    await templateAddCommand(captureIo(dir), 'plan.board.json', { root: dir, name: 'team-plan' });
+    const fetch = vi.fn() as unknown as typeof globalThis.fetch;
+    await expect(
+      templateAddCommand(captureIo(dir), 'https://example.com/team-plan.board.json', {
+        root: dir,
+        fetch,
+      }),
+    ).rejects.toThrow(
+      'a project template "team-plan" exists already (.openboard/templates/team-plan.board.json); pass --force to replace it',
+    );
+    expect(fetch).not.toHaveBeenCalled();
+
+    const changed = sampleBoard();
+    changed.name = 'Changed';
+    const { fetch: served } = serve(serializeBoard(changed));
+    const forced = captureIo(dir);
+    await templateAddCommand(forced, 'https://example.com/team-plan.board.json', {
+      root: dir,
+      force: true,
+      fetch: served,
+    });
+    expect(forced.out()).toMatch(/^Replaced the template team-plan \("Changed"/);
+    expect(parseBoard(await readFile(templateFile(dir, 'team-plan'), 'utf8')).name).toBe('Changed');
+  });
+
+  it('refuses invalid templates with the checks project templates get, writing nothing', async () => {
+    const dir = await project();
+    for (const [text, message] of [
+      [
+        'not json',
+        /^https:\/\/example\.com\/bad\.board\.json does not parse: board file is not valid JSON/,
+      ],
+      ['{"id":"x"}', /does not parse: board file is invalid: .*; nothing was saved$/],
+    ] as const) {
+      const { fetch } = serve(text);
+      await expect(
+        templateAddCommand(captureIo(dir), 'https://example.com/bad.board.json', {
+          root: dir,
+          fetch,
+        }),
+      ).rejects.toThrow(message);
+    }
+    const broken = sampleBoard();
+    broken.edges.e_1 = {
+      ...(broken.edges.e_1 as NonNullable<typeof broken.edges.e_1>),
+      target: 'gone',
+    };
+    const { fetch } = serve(serializeBoard(broken));
+    await expect(
+      templateAddCommand(captureIo(dir), 'https://example.com/bad.board.json', {
+        root: dir,
+        fetch,
+      }),
+    ).rejects.toThrow(/does not parse: board file is invalid: .*gone/);
+    await expect(readFile(templateFile(dir, 'bad'))).rejects.toThrow(/ENOENT/);
+  });
+
+  it('never lets the name leave the templates folder', async () => {
+    const dir = await project();
+    const fetch = vi.fn() as unknown as typeof globalThis.fetch;
+    const add = (source: string, name?: string) =>
+      templateAddCommand(captureIo(dir), source, {
+        root: dir,
+        fetch,
+        ...(name !== undefined ? { name } : {}),
+      });
+    await expect(add('https://example.com/t.board.json', '../main')).rejects.toThrow(
+      '"../main" cannot be a template name: use lowercase letters, digits and dashes, starting with a letter',
+    );
+    await expect(add('https://example.com/t.board.json', '/tmp/x')).rejects.toThrow(
+      /cannot be a template name/,
+    );
+    await expect(add('https://example.com/..%2F..%2Fmain.board.json')).rejects.toThrow(
+      '"../../main" (from the file name) cannot be a template name; pass --name',
+    );
+    await expect(add('https://example.com/a%5Cb.board.json')).rejects.toThrow(
+      /cannot be a template name/,
+    );
+    await expect(add('github:ada/boards/../../x.board.json')).rejects.toThrow(/^github:/);
+    await expect(add('https://example.com/')).rejects.toThrow(
+      '"" (from the file name) cannot be a template name',
+    );
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('refuses http, and a redirect to http, before writing anything', async () => {
+    const dir = await project();
+    await expect(
+      templateAddCommand(captureIo(dir), 'http://example.com/t.board.json', { root: dir }),
+    ).rejects.toThrow('only https:// URLs are allowed');
+    const fetch = vi.fn(
+      async () =>
+        new Response(null, {
+          status: 302,
+          headers: { location: 'http://example.com/t.board.json' },
+        }),
+    ) as unknown as typeof globalThis.fetch;
+    await expect(
+      templateAddCommand(captureIo(dir), 'https://example.com/t.board.json', { root: dir, fetch }),
+    ).rejects.toThrow('redirected to http://example.com/t.board.json; only https:// is allowed');
+    await expect(readFile(templateFile(dir, 't'))).rejects.toThrow(/ENOENT/);
   });
 });
 

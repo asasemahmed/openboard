@@ -4,6 +4,7 @@
  */
 import type { Board } from '../schema.js';
 import { serializeBoard } from '../serialize.js';
+import { toHtml } from './html.js';
 import { fromJsonCanvas, toJsonCanvas } from './jsoncanvas.js';
 import { toMarkdown } from './markdown.js';
 import { toMermaid } from './mermaid.js';
@@ -47,6 +48,16 @@ export const EXPORTERS: readonly Exporter[] = [
     mime: 'image/svg+xml',
     description: 'a static picture of the board',
     render: (board, options) => toSvg(board, svgOptions(options)),
+  },
+  {
+    name: 'html',
+    extension: '.html',
+    mime: 'text/html',
+    description: 'a page to view the board in a browser: pan, zoom and open cards',
+    render: (board, options) => {
+      const theme = options?.theme;
+      return toHtml(board, theme === 'light' || theme === 'dark' ? { theme } : {});
+    },
   },
 ];
 

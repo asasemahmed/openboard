@@ -1,7 +1,8 @@
 /**
  * What others are doing, drawn over the canvas: a pill per actor at the edge
  * of the view when their recent changes are out of sight, a small stack of
- * removal notices, follow mode, and a polite announcement for screen readers.
+ * notices (what changed since the last visit, removals), follow mode, and a
+ * polite announcement for screen readers.
  */
 import { useReactFlow, useStore } from '@xyflow/react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -25,6 +26,7 @@ import {
 } from '../state/activity.js';
 import { useSession } from '../state/context.js';
 import { useStoreValue } from '../state/emitter.js';
+import { CHANGED_MESSAGE, showable, type VisitItem, visitMessage } from '../state/lastVisit.js';
 import { undoBatch } from '../state/review.js';
 import type { BoardSession } from '../state/session.js';
 import { toasts } from '../state/toasts.js';
@@ -138,14 +140,79 @@ async function removalBatches(session: BoardSession, notice: RemovalNotice): Pro
   return batch ? [batch.id] : [];
 }
 
-function RemovalNotices() {
+/** Where the cards and connections of a last-visit notice are, as node ids to frame. */
+function visitNodeIds(session: BoardSession, items: readonly VisitItem[]): string[] {
+  const ids = new Set<string>();
+  for (const item of items) {
+    if (item.kind === 'node') ids.add(item.id);
+    else {
+      const edge = session.store.edge(item.id);
+      if (edge) {
+        ids.add(edge.source);
+        ids.add(edge.target);
+      }
+    }
+  }
+  return [...ids];
+}
+
+/**
+ * What others changed since the person last had the board open. "Show"
+ * outlines what is still there (the same outline as live changes) and frames
+ * it; dismissing remembers the board as it is now.
+ */
+function LastVisitNotice() {
   const session = useSession();
-  const { activity, store } = session;
+  const { visit, store, activity } = session;
+  const notice = useStoreValue(visit, visit.get);
+  const actors = useStoreValue(store, () => store.meta.actors);
+  const fitTo = useFitTo();
+  if (!notice) return null;
+  const items = showable(notice, (kind, id) =>
+    kind === 'node' ? store.node(id) !== undefined : store.edge(id) !== undefined,
+  );
+  const show = () => {
+    const byActorId = new Map<string, VisitItem[]>();
+    for (const item of items)
+      byActorId.set(item.actorId, [...(byActorId.get(item.actorId) ?? []), item]);
+    for (const [actorId, list] of byActorId) {
+      activity.flash(
+        list.map((item) => ({
+          kind: item.kind,
+          id: item.id,
+          verb: item.verb === 'added' ? ('added' as const) : ('updated' as const),
+        })),
+        actorId,
+        { replace: false },
+      );
+    }
+    fitTo(visitNodeIds(session, items));
+  };
+  return (
+    <div className="removal-notice visit-notice">
+      <Icon name="history" size={14} />
+      <span className="visit-notice-text">
+        {notice.kind === 'changes' ? visitMessage(notice.summary, actors) : CHANGED_MESSAGE}
+      </span>
+      {items.length > 0 && (
+        <button type="button" className="removal-undo" onClick={show}>
+          Show
+        </button>
+      )}
+      <IconButton icon="close" label="Dismiss" size="sm" onClick={() => visit.dismiss()} />
+    </div>
+  );
+}
+
+function Notices() {
+  const session = useSession();
+  const { activity, store, visit } = session;
   const removals = useStoreValue(activity, () => activity.get().removals);
+  const sinceVisit = useStoreValue(visit, visit.get);
   const actors = useStoreValue(store, () => store.meta.actors);
   const [busy, setBusy] = useState<number | null>(null);
   const canUndo = useCan('board.undo');
-  if (removals.length === 0) return null;
+  if (removals.length === 0 && !sinceVisit) return null;
 
   const undo = async (notice: RemovalNotice) => {
     setBusy(notice.id);
@@ -182,6 +249,7 @@ function RemovalNotices() {
 
   return (
     <div className="removal-stack" role="status" aria-live="polite">
+      <LastVisitNotice />
       {removals.map((notice) => (
         <div key={notice.id} className="removal-notice">
           <Icon name="trash" size={14} />
@@ -309,7 +377,7 @@ export function ActivityLayer() {
   return (
     <>
       <OffscreenPills />
-      <RemovalNotices />
+      <Notices />
       <div className="visually-hidden" role="status" aria-live="polite">
         {announcement}
       </div>

@@ -33,7 +33,8 @@ function linkDestination(target: string): string {
   return encodeURI(target).replace(/[()]/g, (char) => (char === '(' ? '%28' : '%29'));
 }
 
-function renderLink(link: Link): string {
+/** A node link as markdown: URLs and files as links, everything else as code. */
+export function renderLink(link: Link): string {
   const range =
     link.line !== undefined
       ? `:${link.line}${link.endLine !== undefined ? `-${link.endLine}` : ''}`

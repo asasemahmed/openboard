@@ -57,6 +57,7 @@ and opens the board in your browser. The project root is the nearest directory u
 - Cards are filled with the colour of their type. Connections an agent made stay out of sight until you point at or select one of their cards (the count in a card's corner says how many it has); the ones you draw always show. The connections button beside the zoom controls shows every connection at once.
 - Drag a card to place it yourself. It is then pinned, and automatic layout leaves it where you put it.
 - Select cards to show the agent what you mean by "this" or "these".
+- With nothing selected, the inspector shows **Needs attention** when something does: questions no decision answers yet, risks with no task or decision linked, cards marked blocked whose blockers are all done, and cards on their own outside any frame on an otherwise tidy board. Click one to select it and bring it into view.
 - <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>K</kbd> opens search and commands, and <kbd>?</kbd> lists every shortcut.
 
 ## Connect an agent
@@ -68,6 +69,8 @@ openboard connect
 ```
 
 It prints the setup for Claude Code, Cursor, Codex, Gemini CLI and any other MCP client, with the absolute paths for your machine. `openboard connect claude-code` (or `cursor`, `codex`, `gemini-cli`, `generic`) shows one agent in full. It only prints; it never edits a config file. The canvas shows the same snippets under "Connect an agent" in the top bar.
+
+In the canvas, choose Gemini CLI to copy either the `gemini mcp add openboard ...` command or the `mcpServers` block for `.gemini/settings.json`.
 
 For Claude Code the quickest route is the command it prints, run in the project:
 
@@ -103,6 +106,7 @@ Clients that support MCP prompts also offer `map_codebase` and `plan_work`, whic
 - Every change is recorded: the **Activity** panel (or `openboard history`) lists them, and undo takes one back exactly, leaving later changes alone. Agents undo their own mistakes, answer your comments, and ask you questions on the canvas when they need an answer before going on.
 
 - The canvas shows agents while they work: the **Agents** panel lists their sessions, and with the Claude Code plugin's hooks (or `openboard hook` in another tool) it also shows what they run outside the board. **Replay history** in the command palette plays back how the board came to be.
+- When you open a board again, a small notice says what others changed since your last visit and who did it. **Show** outlines those cards; dismiss it and it stays gone. This browser remembers where you left off.
 
 [Staying in control](agents.md#staying-in-control) and [seeing agents work](agents.md#seeing-agents-work) explain the details.
 
@@ -120,7 +124,7 @@ your-project/
 
 Commit the `*.board.json` files and `config.json`. They are written with a stable layout so that a change on the board is a small diff, and the running server picks up changes to them from a checkout, merge or editor. `.openboard/.local/` is runtime state: `openboard init` and the server create it with a `.gitignore` of its own so git skips it. The format is described in [board-format.md](board-format.md).
 
-More boards: `openboard new "Release plan"` creates `.openboard/release-plan.board.json`. `openboard boards` lists them. `openboard import flow.mmd` adds a Mermaid flowchart (or a JSON Canvas) to a board, and `openboard export --format markdown` (or `mermaid`, `canvas`, `svg`) writes one out. Run `openboard git setup --diff` once per clone so git merges and diffs boards by meaning; see [Boards in git](git.md).
+More boards: `openboard new "Release plan"` creates `.openboard/release-plan.board.json`. `openboard boards` lists them. `openboard import flow.mmd` adds a Mermaid flowchart (or a JSON Canvas) to a board, and `openboard export --format markdown` (or `mermaid`, `canvas`, `svg`) writes one out. `openboard adr` writes its decisions to `docs/adr` as Architecture Decision Records. Run `openboard git setup --diff` once per clone so git merges and diffs boards by meaning; see [Boards in git](git.md).
 
 ## Share with others
 

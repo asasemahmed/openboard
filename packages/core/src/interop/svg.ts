@@ -54,6 +54,8 @@ export interface SvgOptions {
   maxWidth?: number;
   /** Prefix for ids inside the SVG. Defaults to one derived from the board. */
   idPrefix?: string;
+  /** Colours to draw with instead of `theme`'s, e.g. placeholders a page's CSS fills in. */
+  palette?: SvgTheme;
 }
 
 const FONT_TYPE: FontSpec = { size: 12, bold: true };
@@ -293,7 +295,7 @@ function diffMarks(board: Board, diff: BoardDiff, before: Board | undefined): Di
 
 /** The board as a self-contained SVG document. */
 export function toSvg(board: Board, options: SvgOptions = {}): string {
-  const theme = options.theme === 'dark' ? DARK_THEME : LIGHT_THEME;
+  const theme = options.palette ?? (options.theme === 'dark' ? DARK_THEME : LIGHT_THEME);
   const padding = Math.max(0, options.padding ?? 32);
   const showTitle = options.title ?? true;
   const prefix =

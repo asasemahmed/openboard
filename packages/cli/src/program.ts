@@ -9,13 +9,16 @@ import {
   accessRevokeCommand,
   whoamiCommand,
 } from './commands/access.js';
+import { adrCommand } from './commands/adr.js';
 import { boardsCommand, newBoardCommand } from './commands/boards.js';
+import { checkCommand } from './commands/check.js';
 import { linksCommand, revisionsCommand } from './commands/code.js';
 import { AGENTS, connectCommand } from './commands/connect.js';
 import { diffCommand } from './commands/diff.js';
 import { doctorCommand } from './commands/doctor.js';
 import { exportCommand } from './commands/export.js';
 import {
+  templateAddCommand,
   templateApplyCommand,
   templateSaveCommand,
   templatesCommand,
@@ -29,6 +32,7 @@ import {
   mergeDriverCommand,
   textconvCommand,
 } from './commands/git.js';
+import { gitSyncCommand } from './commands/git-sync.js';
 import { importCommand } from './commands/import.js';
 import { initCommand } from './commands/init.js';
 import { activityCommand, snapshotCommand } from './commands/live.js';
@@ -50,12 +54,14 @@ Examples:
   $ openboard connect claude-code      show how to add the boards to Claude Code
   $ openboard mcp                      serve the boards to an agent over stdio
   $ openboard export --format outline  print the shape of the main board
+  $ openboard adr --dry-run            which decision records it would write to docs/adr
   $ openboard status --json            machine-readable status for scripts
   $ openboard proposals                what agents are waiting to have reviewed
   $ openboard policy set review_all    hold every agent change for review
   $ openboard activity                 what agents are doing right now
   $ openboard import flow.mmd          add a Mermaid flowchart to the main board
   $ openboard diff --format markdown   what changed on the boards since HEAD
+  $ openboard check                    fail when a board has drifted from the code (CI, hooks)
   $ openboard git setup --diff         merge and diff board files by meaning in git
 `;
 
@@ -231,7 +237,9 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
 
   const templateCommand = program
     .command('template')
-    .description('apply a template to a board, or save a board as a project template')
+    .description(
+      'apply a template to a board, save a board as a project template, or add one from a link',
+    )
     .enablePositionalOptions();
   templateCommand
     .command('apply')
@@ -267,6 +275,27 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
         templateSaveCommand(io, name, board, opts),
       ),
     );
+  templateCommand
+    .command('add')
+    .description(
+      'download a template and save it as a project template in .openboard/templates/ (review and commit it)',
+    )
+    .argument(
+      '<source>',
+      'github:owner/repo/path/file.board.json[@ref], an https:// URL, or a local file',
+    )
+    .addOption(rootOption())
+    .option('--name <id>', 'the template id (default: from the file name)')
+    .option('--force', 'replace a project template of that name')
+    .option('--dry-run', 'download and check it, say what would be saved; write nothing')
+    .action(
+      action(
+        (
+          source: string,
+          opts: { root?: string; name?: string; force?: boolean; dryRun?: boolean },
+        ) => templateAddCommand(io, source, opts),
+      ),
+    );
 
   const typesCommandDef = program
     .command('types')
@@ -293,7 +322,7 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
 
   program
     .command('export')
-    .description('write a board as JSON, Markdown, Mermaid, JSON Canvas, SVG or text')
+    .description('write a board as JSON, Markdown, Mermaid, JSON Canvas, SVG, HTML or text')
     .argument('[board]', 'board id (default: the only board, or "main")')
     .addOption(rootOption())
     .addOption(urlOption())
@@ -303,7 +332,10 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
     )
     .option('-o, --out <file>', 'write to a file instead of stdout')
     .addOption(
-      new Option('--theme <theme>', 'svg colours (default: light)').choices(['light', 'dark']),
+      new Option(
+        '--theme <theme>',
+        'svg and html colours (default: light for svg; html follows the system)',
+      ).choices(['light', 'dark']),
     )
     .action(
       action(
@@ -311,6 +343,22 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
           board: string | undefined,
           opts: { root?: string; format?: string; out?: string; theme?: 'light' | 'dark' },
         ) => exportCommand(io, board, opts),
+      ),
+    );
+
+  program
+    .command('adr')
+    .description(
+      'write the decision cards of a board as Architecture Decision Records, one Markdown file each',
+    )
+    .argument('[board]', 'board id (default: the only board, or "main")')
+    .addOption(rootOption())
+    .addOption(urlOption())
+    .option('-o, --out <dir>', 'the ADR folder (default: docs/adr in the project root)')
+    .option('--dry-run', 'say which files it would write; write nothing')
+    .action(
+      action((board: string | undefined, opts: { root?: string; out?: string; dryRun?: boolean }) =>
+        adrCommand(io, board, opts),
       ),
     );
 
@@ -380,7 +428,9 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
 
   const gitCommand = program
     .command('git')
-    .description('set up git to merge and diff board files by meaning')
+    .description(
+      'set up git to merge and diff board files by meaning, and close cards from commits',
+    )
     .enablePositionalOptions();
   gitCommand
     .command('setup')
@@ -390,8 +440,12 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
     .addOption(rootOption())
     .option('--global', 'write the git settings to your global configuration')
     .option('--diff', 'also make git diff and git log -p show board files as readable text')
+    .option(
+      '--hooks',
+      'also install post-commit and post-merge hooks that run openboard git sync (never replaces a hook of your own)',
+    )
     .action(
-      action((opts: { root?: string; global?: boolean; diff?: boolean }) =>
+      action((opts: { root?: string; global?: boolean; diff?: boolean; hooks?: boolean }) =>
         gitSetupCommand(io, opts),
       ),
     );
@@ -407,6 +461,28 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
     .addOption(rootOption())
     .option('--global', 'remove the git settings from your global configuration')
     .action(action((opts: { root?: string; global?: boolean }) => gitRemoveCommand(io, opts)));
+  gitCommand
+    .command('sync')
+    .description(
+      'mark the cards that commits close ("Closes card <id>") as done and record the commit on them; safe to run again',
+    )
+    .argument('[range]', 'commits to read, such as main..HEAD (default: the last 100 on HEAD)')
+    .addOption(rootOption())
+    .option('--dry-run', 'say what would change, and change nothing')
+    .addOption(
+      new Option(
+        '--hook <name>',
+        'as run from that git hook: read only the commits it brought in, print only changes and warnings, never fail',
+      ).choices(['post-commit', 'post-merge']),
+    )
+    .action(
+      action(
+        (
+          range: string | undefined,
+          opts: { root?: string; dryRun?: boolean; hook?: 'post-commit' | 'post-merge' },
+        ) => gitSyncCommand(io, range, opts),
+      ),
+    );
 
   program
     .command('merge-driver')
@@ -461,6 +537,25 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
     .action(
       action((args: string[], opts: { root?: string; all?: boolean; json?: boolean }) =>
         linksCommand(io, args, opts),
+      ),
+    );
+
+  program
+    .command('check')
+    .description(
+      'check that the boards still match the code: code links whose code changed or is gone, and nodes that do not fit their declared type. Reads the files, needs no server; exits 0 when clean, 1 when something needs a look, 2 on error',
+    )
+    .argument('[board]', 'board id (default: every board)')
+    .addOption(rootOption())
+    .option('--no-links', 'do not check the code links')
+    .option('--no-types', 'do not check the nodes against their declared types')
+    .option('--json', 'print JSON')
+    .action(
+      action(
+        (
+          board: string | undefined,
+          opts: { root?: string; links: boolean; types: boolean; json?: boolean },
+        ) => checkCommand(io, board, opts),
       ),
     );
 

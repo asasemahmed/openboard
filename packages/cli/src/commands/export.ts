@@ -18,7 +18,7 @@ export interface ExportOptions {
   format?: string;
   /** Write here instead of stdout. */
   out?: string;
-  /** For `svg`. */
+  /** For `svg` and `html`. */
   theme?: 'light' | 'dark';
 }
 

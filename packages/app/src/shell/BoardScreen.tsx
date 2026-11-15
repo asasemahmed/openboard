@@ -78,6 +78,7 @@ function useBoardSession(boardId: string, enabled: boolean): BoardConnection {
       api,
       // People who may not edit get a read-only board (the server drops their document writes anyway).
       readOnly: !canNow('board.edit'),
+      lineage,
       transport: (ydoc) => createWebsocketTransport(ydoc, boardId, actor, lineage),
     });
     setSession(next);

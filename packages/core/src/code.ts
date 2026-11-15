@@ -78,6 +78,123 @@ export const RefreshLinksRequestSchema = z
   });
 export type RefreshLinksRequest = z.infer<typeof RefreshLinksRequestSchema>;
 
+/** Whether a link points into the project's code (`file` or `symbol`). */
+export function isCodeLink(link: Link): boolean {
+  return link.kind === 'file' || link.kind === 'symbol';
+}
+
+/** The path part of a code link's target (`symbol` targets are `path#name`), trimmed. */
+export function linkPath(link: Link): string {
+  return (link.kind === 'symbol' ? (link.target.split('#')[0] ?? '') : link.target).trim();
+}
+
+/** Text with `\r\n` and `\r` line endings turned into `\n`, as it is hashed. */
+export function normaliseLineEndings(text: string): string {
+  return text.replace(/\r\n?/g, '\n');
+}
+
+/** The text of a link's range in a file's lines, or null when the range is not in the file. */
+export function linkRangeText(lines: string[], link: Link): string | null {
+  if (link.line === undefined) return lines.join('\n');
+  const end = link.endLine ?? link.line;
+  if (link.line < 1 || end < link.line || end > lines.length) return null;
+  return lines.slice(link.line - 1, end).join('\n');
+}
+
+/** `line 4`, `lines 4-9`, or `` for a whole-file link. */
+export function linkRangeLabel(link: Link): string {
+  if (link.line === undefined) return '';
+  const end = link.endLine ?? link.line;
+  return end === link.line ? `line ${link.line}` : `lines ${link.line}-${end}`;
+}
+
+/** The 1-based line where `needle` starts in `lines`, when it occurs exactly once. */
+export function findLinesOnce(lines: string[], needle: string[]): number | null {
+  if (needle.length === 0 || needle.length > lines.length) return null;
+  let found: number | null = null;
+  outer: for (let i = 0; i + needle.length <= lines.length; i++) {
+    for (let j = 0; j < needle.length; j++) if (lines[i + j] !== needle[j]) continue outer;
+    if (found !== null) return null;
+    found = i + 1;
+  }
+  return found;
+}
+
+/** What the linked code says about a code link. */
+export interface LinkEvaluation {
+  state: LinkState;
+  detail?: string;
+  /** The link as it should be stored, when that may differ. */
+  next?: Link;
+  /** The linked text as it is now, when it matches the link's hash (or was just hashed). */
+  current?: string;
+}
+
+export interface EvaluateLinkOptions {
+  /** The content hash of a text, as `Link.hash` holds it (see `LINK_HASH_PREFIX`). */
+  hash: (text: string) => string;
+  /** Fill `hash` on a link that has none; otherwise such a link is `unchecked`. */
+  fill?: boolean;
+  /** The text the link's range had when it was hashed, when known: code that moved is followed. */
+  original?: string;
+}
+
+/**
+ * The state of a `file` or `symbol` link against the linked file's text
+ * (with normalised line endings), `null` when the file is missing, or
+ * `undefined` when it was too large to read. Resolving the path and reading
+ * the file is the caller's job; this is the rest of the code link upkeep,
+ * the same for the server and for checks run without one.
+ *
+ * When the text changed and `original` sits exactly once elsewhere in the
+ * file, the range moved: the state is `ok` and `next` has the new lines.
+ * The stored `stale` mark is not read: `next` sets or clears it.
+ */
+export function evaluateLink(
+  link: Link,
+  file: string | null | undefined,
+  options: EvaluateLinkOptions,
+): LinkEvaluation {
+  if (!isCodeLink(link)) return { state: 'unchecked' };
+  if (file === undefined) return { state: 'unchecked', detail: 'file too large to check' };
+  const withStale = (stale: boolean): Link => {
+    const { stale: _s, ...rest } = link;
+    return stale ? { ...rest, stale: true } : rest;
+  };
+  if (file === null) return { state: 'missing', detail: 'file missing', next: withStale(true) };
+  const lines = file.split('\n');
+  const current = linkRangeText(lines, link);
+  if (link.hash === undefined) {
+    if (!options.fill) return { state: 'unchecked', detail: 'not hashed yet' };
+    if (current === null) {
+      return {
+        state: 'stale',
+        detail: `${linkRangeLabel(link)} not in the file`,
+        next: withStale(true),
+      };
+    }
+    return { state: 'ok', next: { ...withStale(false), hash: options.hash(current) }, current };
+  }
+  if (current !== null && options.hash(current) === link.hash) {
+    return { state: 'ok', next: withStale(false), current };
+  }
+  // Changed. If the original text of a range sits exactly once elsewhere, the code moved.
+  const original = link.line !== undefined ? options.original : undefined;
+  if (original !== undefined) {
+    const needle = original.split('\n');
+    const found = findLinesOnce(lines, needle);
+    if (found !== null) {
+      const moved: Link = { ...withStale(false), line: found };
+      if (link.endLine !== undefined || needle.length > 1)
+        moved.endLine = found + needle.length - 1;
+      else delete moved.endLine;
+      return { state: 'ok', detail: `moved to ${linkRangeLabel(moved)}`, next: moved };
+    }
+  }
+  const where = link.line !== undefined ? ` at ${linkRangeLabel(link)}` : '';
+  return { state: 'stale', detail: `content changed${where}`, next: withStale(true) };
+}
+
 // ── Git ──────────────────────────────────────────────────────────────────────
 
 /**
@@ -159,7 +276,7 @@ export type ImportIntoResult = ApplyResult & {
 };
 
 export const ExportOptionsSchema = z.object({
-  /** An exporter name (see `EXPORTERS`): `json`, `markdown`, `mermaid`, `jsoncanvas`, `svg`. */
+  /** An exporter name (see `EXPORTERS`): `json`, `markdown`, `mermaid`, `jsoncanvas`, `svg`, `html`. */
   format: z.string().max(40),
   theme: z.enum(['light', 'dark']).optional(),
   /** `svg` only: draw the changes since this revision. */
