@@ -1,6 +1,6 @@
 # Boards in git
 
-A board is a file in your repository, `.openboard/<board id>.board.json`, so it is versioned, branched, reviewed and merged with the code it describes. This page covers what a board change looks like in git, how to merge boards without conflict markers, and how to review board changes in pull requests. The file format itself is described in [board-format.md](board-format.md).
+A board is a file in your repository, `.openboard/<board id>.board.json`, so it is versioned, branched, reviewed and merged with the code it describes. This page covers what a board change looks like in git, how to merge boards without conflict markers, how commits close cards, and how to review board changes in pull requests. The file format itself is described in [board-format.md](board-format.md).
 
 ## A board change in a diff
 
@@ -75,6 +75,46 @@ With `--diff`, `git diff`, `git show` and `git log -p` show a board as text inst
 ```
 
 `git diff --no-textconv` shows the JSON. Hosting services do not run your textconv; for pull requests, use `openboard diff`.
+
+## Closing cards from commits
+
+A commit can close a card. Write `Closes card <node id>` anywhere in the message:
+
+```text
+Add the login form
+
+Closes card n_k3x9a0bq2m
+```
+
+`openboard git sync` then marks that card as done and records the commit on it, as a commit link with the short sha and the subject. The canvas shows it with the card's other links.
+
+```text
+$ openboard git sync
+Closed card n_k3x9a0bq2m "Add the login page" on main (93b4786).
+```
+
+What it reads:
+
+- `Closes`, `Fixes` or `Resolves`, in any case, then `card` and the id. The id is the node id from the board, as `[task] n_k3x9a0bq2m` shows it in a read or an export.
+- Several cards: `Closes card a, card b and card c`, or `Closes cards a, b and c`. `Fixes card a` twice in one message is one card.
+- A full stop or colon after the id is not part of it, and the id may be in backticks.
+- A card is a task, or any other node except a frame that already has a status. Anything else is left alone with a warning, and so is an id that is on no board.
+- A commit already recorded on a card is not applied again, also after an amend or a rebase (the same subject counts as the same commit). Running `git sync` twice changes nothing. Commits whose subject starts with `Revert "` are skipped.
+- A card that is already done keeps its status and gets the commit recorded.
+
+Without a range it reads the last 100 commits on `HEAD`. Name a range to read others: `openboard git sync main..HEAD`. `--dry-run` says what would change.
+
+With a server running, the change goes through the server as the `git` actor: the canvas updates live, and the history shows the batch with the reason `Closed by commit 93b4786`. Without a server, the board file is written directly. Either way the board file changes after the commit; commit it with your next change.
+
+### Doing it on every commit
+
+```bash
+openboard git setup --hooks
+```
+
+This installs two git hooks that run `openboard git sync`: `post-commit` reads the commit just made, and `post-merge` reads what a merge or a pull brought in. They print only what changed and the warnings, and they never fail, so a commit or a merge always goes through. A pull with `--rebase` does not run `post-merge`; run `openboard git sync` after it.
+
+The hooks are never written over a hook you already have. `setup --hooks` then leaves that file alone, says so, and prints the line to add to it yourself. `openboard git status` shows the hooks, and `openboard git remove` deletes OpenBoard's own hooks and nothing else.
 
 ## Reviewing board changes in pull requests
 
