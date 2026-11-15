@@ -9,6 +9,7 @@ import {
   accessRevokeCommand,
   whoamiCommand,
 } from './commands/access.js';
+import { adrCommand } from './commands/adr.js';
 import { boardsCommand, newBoardCommand } from './commands/boards.js';
 import { linksCommand, revisionsCommand } from './commands/code.js';
 import { AGENTS, connectCommand } from './commands/connect.js';
@@ -51,6 +52,7 @@ Examples:
   $ openboard connect claude-code      show how to add the boards to Claude Code
   $ openboard mcp                      serve the boards to an agent over stdio
   $ openboard export --format outline  print the shape of the main board
+  $ openboard adr --dry-run            which decision records it would write to docs/adr
   $ openboard status --json            machine-readable status for scripts
   $ openboard proposals                what agents are waiting to have reviewed
   $ openboard policy set review_all    hold every agent change for review
@@ -335,6 +337,22 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
           board: string | undefined,
           opts: { root?: string; format?: string; out?: string; theme?: 'light' | 'dark' },
         ) => exportCommand(io, board, opts),
+      ),
+    );
+
+  program
+    .command('adr')
+    .description(
+      'write the decision cards of a board as Architecture Decision Records, one Markdown file each',
+    )
+    .argument('[board]', 'board id (default: the only board, or "main")')
+    .addOption(rootOption())
+    .addOption(urlOption())
+    .option('-o, --out <dir>', 'the ADR folder (default: docs/adr in the project root)')
+    .option('--dry-run', 'say which files it would write; write nothing')
+    .action(
+      action((board: string | undefined, opts: { root?: string; out?: string; dryRun?: boolean }) =>
+        adrCommand(io, board, opts),
       ),
     );
 

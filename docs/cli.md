@@ -15,6 +15,7 @@ openboard [command] [options]
 | [`boards`](#boards)                      | List boards                                                         |
 | [`new`](#new)                            | Create a board                                                      |
 | [`export`](#export)                      | Write a board as JSON or text                                       |
+| [`adr`](#adr)                            | Write a board's decisions as Architecture Decision Records          |
 | [`doctor`](#doctor)                      | Check the installation and the project                              |
 | [`mcp`](#mcp)                            | Serve the boards to an MCP client over stdio                        |
 | [`connect`](#connect)                    | Show how to connect an agent (writes nothing)                       |
@@ -45,11 +46,11 @@ Global options: `-v`, `--version` prints the version; `-h`, `--help` shows help,
 
 **Project root.** Every command except `init` works on a project root. `--root <dir>` names it. Without `--root`, it is the nearest directory upward from the current directory that contains `.openboard/`, else the nearest one that contains `.git`, else the current directory. A `--root` that does not exist is an error.
 
-**Running server or files.** `boards`, `new`, `export`, `status` and `policy` go through the running server when there is one for the project, so they see unsaved live state, and read or write `.openboard/` directly when there is none. `proposals`, `accept`, `reject`, `history`, `undo`, `snapshot`, `activity` and `links` work on state only a running server keeps, and say so when none is running. `hook` never starts a server and is silent without one.
+**Running server or files.** `boards`, `new`, `export`, `adr`, `status` and `policy` go through the running server when there is one for the project, so they see unsaved live state, and read or write `.openboard/` directly when there is none. `proposals`, `accept`, `reject`, `history`, `undo`, `snapshot`, `activity` and `links` work on state only a running server keeps, and say so when none is running. `hook` never starts a server and is silent without one.
 
 **Who you are.** Everything done from the command line is attributed to the actor `cli`, a person named after your user account. That is what lets `accept`, `reject` and `policy` do what only people may do.
 
-**Remote servers.** Every command that talks to a server (`boards`, `new`, `export`, `import`, `diff`, `policy`, `proposals`, `accept`, `reject`, `history`, `undo`, `snapshot`, `activity`, `links`, `revisions`, `whoami`, `access`) takes `--url <url>` to use a [shared server](sharing.md) elsewhere instead of the project's own. The token comes from the environment variable `OPENBOARD_TOKEN`, never from a flag: command-line arguments end up in shell history and process lists, and `--token` is refused. On a remote server you are who the token's grant says, with its role; a command your role does not cover fails with a message that names the missing permission (`your access (viewer) does not include "board.create" ...`). Without `--url`, `OPENBOARD_TOKEN` is not sent.
+**Remote servers.** Every command that talks to a server (`boards`, `new`, `export`, `adr`, `import`, `diff`, `policy`, `proposals`, `accept`, `reject`, `history`, `undo`, `snapshot`, `activity`, `links`, `revisions`, `whoami`, `access`) takes `--url <url>` to use a [shared server](sharing.md) elsewhere instead of the project's own. The token comes from the environment variable `OPENBOARD_TOKEN`, never from a flag: command-line arguments end up in shell history and process lists, and `--token` is refused. On a remote server you are who the token's grant says, with its role; a command your role does not cover fails with a message that names the missing permission (`your access (viewer) does not include "board.create" ...`). Without `--url`, `OPENBOARD_TOKEN` is not sent.
 
 **Errors and exit codes.** A failure prints one line, `openboard: <message>`, on stderr and exits with status 1. `diff` and `merge-driver` have their own exit codes, described with them. Set `OPENBOARD_DEBUG=1` to also print stack traces, and the server's log lines for `start`.
 
@@ -210,6 +211,49 @@ $ openboard export -o main.outline.txt
 Wrote main.outline.txt
 $ openboard export -o board.svg --theme dark
 Wrote board.svg
+```
+
+## adr
+
+```text
+openboard adr [board] [--root <dir>] [-o, --out <dir>] [--dry-run]
+```
+
+Write the `decision` cards of a board into a folder as Architecture Decision Records: one Markdown file per decision, in the common Nygard form. Commit the folder, and a decision made on the board ends up in the docs. `export` writes one file; this command writes many, and reads the folder first to keep its numbers.
+
+| Option              | Default                        | Meaning                                                         |
+| ------------------- | ------------------------------ | --------------------------------------------------------------- |
+| `[board]`           | the only board, else `main`    | Board id. With several boards and none called `main`, name one. |
+| `-o`, `--out <dir>` | `docs/adr` in the project root | The ADR folder, relative to the current directory               |
+| `--dry-run`         |                                | Say which files it would write; write nothing                   |
+
+Each file has the title, the date the card was made, then Status, Context, Decision and Consequences, and a Related section.
+
+- **Status** comes from the card: `done` is Accepted, `cancelled` is Rejected, anything else (or none) is Proposed. Who made the card and when, and who changed it last, follow.
+- **Context, Decision, Consequences** come from the card's body. Headings named Context, Decision or Consequences split it; text before them, or a body without them, is the decision. A note linked to the card and titled Context or Consequences, as the [`decision-record` template](templates.md) makes, fills that section when the body has none. A section with nothing in it says so.
+- **Related** lists the linked cards with their type and status (a task that implements it, a question it answers, a risk), other decisions as links to their files, and the card's own links.
+
+The file name is the number and the title, such as `0001-use-postgres.md`. Titles become lowercase letters, digits and dashes, so no title can name a path outside the folder. Under the title, an HTML comment records the board and the card id:
+
+```markdown
+# 1. Use Postgres
+
+<!-- openboard-adr board=main node=n_q2k8xw3hpa -->
+```
+
+On a rerun, that comment finds the file again. The file keeps its number and its name, even when the card's title changed (the heading shows the new title), and only its text is rewritten; edit the card, not the file. New decisions get the next number after the highest one in the folder, whoever wrote it. Nothing is renumbered, renamed or deleted: a file whose card is gone is listed as `kept` and left alone.
+
+```text
+$ openboard adr
+updated    docs/adr/0001-pick-a-queue.md
+unchanged  docs/adr/0002-stream-rows.md
+new        docs/adr/0003-use-postgres.md
+Wrote 2 files to docs/adr (1 new, 1 updated, 1 unchanged).
+$ openboard adr --dry-run
+unchanged  docs/adr/0001-pick-a-queue.md
+unchanged  docs/adr/0002-stream-rows.md
+unchanged  docs/adr/0003-use-postgres.md
+Dry run: 0 new, 0 updated, 3 unchanged. Nothing was written.
 ```
 
 ## import
