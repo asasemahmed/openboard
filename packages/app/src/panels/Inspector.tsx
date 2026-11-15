@@ -1,7 +1,8 @@
 /**
- * The right-hand inspector: whatever is selected, or the board itself. The
- * editors for a selection load separately (they are not needed to show a
- * board) and are fetched as soon as the browser is idle.
+ * The right-hand inspector: whatever is selected, or the board itself and
+ * what needs attention on it. The editors for a selection load separately
+ * (they are not needed to show a board) and are fetched as soon as the
+ * browser is idle.
  */
 import { LIMITS } from '@openboard/core';
 import { lazy, Suspense, useEffect } from 'react';
@@ -11,6 +12,7 @@ import { useStoreValue } from '../state/emitter.js';
 import { toasts } from '../state/toasts.js';
 import { Kbd } from '../ui/Button.js';
 import { Field, Section } from './fields.js';
+import { NeedsAttention } from './NeedsAttention.js';
 import { useDraft } from './useDraft.js';
 
 const loadEditors = () =>
@@ -78,6 +80,7 @@ function BoardInfo() {
           <Kbd shortcut="?" /> for shortcuts.
         </p>
       </Section>
+      <NeedsAttention />
     </div>
   );
 }

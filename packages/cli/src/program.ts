@@ -9,6 +9,7 @@ import {
   accessRevokeCommand,
   whoamiCommand,
 } from './commands/access.js';
+import { adrCommand } from './commands/adr.js';
 import { boardsCommand, newBoardCommand } from './commands/boards.js';
 import { linksCommand, revisionsCommand } from './commands/code.js';
 import { AGENTS, connectCommand } from './commands/connect.js';
@@ -16,6 +17,7 @@ import { diffCommand } from './commands/diff.js';
 import { doctorCommand } from './commands/doctor.js';
 import { exportCommand } from './commands/export.js';
 import {
+  templateAddCommand,
   templateApplyCommand,
   templateSaveCommand,
   templatesCommand,
@@ -50,6 +52,7 @@ Examples:
   $ openboard connect claude-code      show how to add the boards to Claude Code
   $ openboard mcp                      serve the boards to an agent over stdio
   $ openboard export --format outline  print the shape of the main board
+  $ openboard adr --dry-run            which decision records it would write to docs/adr
   $ openboard status --json            machine-readable status for scripts
   $ openboard proposals                what agents are waiting to have reviewed
   $ openboard policy set review_all    hold every agent change for review
@@ -231,7 +234,9 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
 
   const templateCommand = program
     .command('template')
-    .description('apply a template to a board, or save a board as a project template')
+    .description(
+      'apply a template to a board, save a board as a project template, or add one from a link',
+    )
     .enablePositionalOptions();
   templateCommand
     .command('apply')
@@ -265,6 +270,27 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
     .action(
       action((name: string, board: string | undefined, opts: { root?: string; force?: boolean }) =>
         templateSaveCommand(io, name, board, opts),
+      ),
+    );
+  templateCommand
+    .command('add')
+    .description(
+      'download a template and save it as a project template in .openboard/templates/ (review and commit it)',
+    )
+    .argument(
+      '<source>',
+      'github:owner/repo/path/file.board.json[@ref], an https:// URL, or a local file',
+    )
+    .addOption(rootOption())
+    .option('--name <id>', 'the template id (default: from the file name)')
+    .option('--force', 'replace a project template of that name')
+    .option('--dry-run', 'download and check it, say what would be saved; write nothing')
+    .action(
+      action(
+        (
+          source: string,
+          opts: { root?: string; name?: string; force?: boolean; dryRun?: boolean },
+        ) => templateAddCommand(io, source, opts),
       ),
     );
 
@@ -314,6 +340,22 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
           board: string | undefined,
           opts: { root?: string; format?: string; out?: string; theme?: 'light' | 'dark' },
         ) => exportCommand(io, board, opts),
+      ),
+    );
+
+  program
+    .command('adr')
+    .description(
+      'write the decision cards of a board as Architecture Decision Records, one Markdown file each',
+    )
+    .argument('[board]', 'board id (default: the only board, or "main")')
+    .addOption(rootOption())
+    .addOption(urlOption())
+    .option('-o, --out <dir>', 'the ADR folder (default: docs/adr in the project root)')
+    .option('--dry-run', 'say which files it would write; write nothing')
+    .action(
+      action((board: string | undefined, opts: { root?: string; out?: string; dryRun?: boolean }) =>
+        adrCommand(io, board, opts),
       ),
     );
 

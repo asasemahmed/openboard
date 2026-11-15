@@ -22,6 +22,7 @@ describe('argument parsing and exit codes', () => {
       'boards',
       'new',
       'export',
+      'adr',
       'doctor',
       'mcp',
       'connect',

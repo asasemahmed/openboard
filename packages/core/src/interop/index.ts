@@ -1,5 +1,18 @@
 export { type HtmlOptions, scriptJson, toHtml } from './html.js';
 export {
+  ADR_STATUS,
+  type AdrAction,
+  type AdrExistingFile,
+  type AdrFile,
+  type AdrPlan,
+  adrFileName,
+  adrMarker,
+  adrSlug,
+  parseAdrMarker,
+  planAdrs,
+  splitDecisionBody,
+} from './adr.js';
+export {
   type CanvasEdge,
   type CanvasNode,
   fromJsonCanvas,

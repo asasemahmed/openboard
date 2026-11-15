@@ -143,7 +143,7 @@ These writes are made as the system actor with the transaction source `code`. Th
 
 **Git.** `revisions` lists the commits that touched the board file (`tracked: false`, not an error, outside a repository, when git is missing, or for a file never committed), `boardAtRevision` parses the file as committed, and `diffRevisions` compares two revisions or a revision with the live board. Git runs with `execFile` (no shell), a timeout and the project root as its working directory; a revision must match `RevisionSchema` (no leading `-`, no whitespace, `:` or `..`) and is resolved to a commit id before anything else uses it.
 
-**Import and export.** `importInto` reads Mermaid or JSON Canvas through the importers in `core/src/interop` and applies the result as one normal batch by the caller (policy, layout, history with the reason "Import from <format>"), optionally inside a frame; `GET /api/boards/:id/export?format=` returns any exporter's output as a download, and `format=svg&diffFrom=<rev>` draws the changes since that revision.
+**Import and export.** `importInto` reads Mermaid or JSON Canvas through the importers in `core/src/interop` and applies the result as one normal batch by the caller (policy, layout, history with the reason "Import from <format>"), optionally inside a frame; `GET /api/boards/:id/export?format=` returns any exporter's output as a download, and `format=svg&diffFrom=<rev>` draws the changes since that revision. `planAdrs` in the same folder is not an exporter: it turns the decision cards into one Architecture Decision Record each, given the files already in the ADR folder, and keeps a file's number on every rerun by the board and node id the file records (`openboard adr`).
 
 ## Types, templates and plugins
 
