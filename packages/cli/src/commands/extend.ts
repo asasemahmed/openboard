@@ -4,12 +4,13 @@
  * built-in templates, the project's templates in `.openboard/templates/` and
  * the types declared in `.openboard/config.json` are read directly.
  */
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
   type ApplyResult,
   type ApplyTemplateRequest,
   applyOps,
+  type Board,
   BUILTIN_TEMPLATES,
   checkBoardAgainstTypes,
   countAdded,
@@ -22,11 +23,17 @@ import {
   type TemplateSummary,
   type TypeRegistry,
 } from '@openboard/core';
+import { parseProjectTemplate } from '@openboard/server';
 import { CliError, isNodeError } from '../lib/errors.js';
 import { type CliIo, println } from '../lib/io.js';
 import { cliActor, resolveRoot } from '../lib/project.js';
 import { projectPaths } from '../lib/server.js';
 import { FileStore, openSession, type Session } from '../lib/store.js';
+import {
+  nameFromFileName,
+  parseTemplateSource,
+  readTemplateSource,
+} from '../lib/template-source.js';
 import { projectTemplates, templateOps } from '../lib/templates.js';
 import { defaultBoardId } from './export.js';
 
@@ -204,6 +211,98 @@ export async function templateSaveCommand(
   const rel = path.relative(io.cwd, file) || file;
   println(io.stdout, `Saved board ${board.id} as the template ${name}: ${rel}`);
   println(io.stdout, 'Commit it so everyone gets it. Comments are not part of it.');
+  if (BUILTIN_TEMPLATES.some((t) => t.id === name)) {
+    println(io.stdout, `It replaces the built-in template ${name} in this project.`);
+  }
+  return 0;
+}
+
+export interface TemplateAddOptions {
+  root?: string;
+  /** The template id; by default, from the file name. */
+  name?: string;
+  /** Replace a project template of that name. */
+  force?: boolean;
+  /** Read and check it, say what would be saved, write nothing. */
+  dryRun?: boolean;
+  /** For tests: the fetch to download with. */
+  fetch?: typeof fetch;
+}
+
+/**
+ * Add a template from GitHub, an https URL or a local file as the project
+ * template `.openboard/templates/<name>.board.json`. It is checked exactly as
+ * the server checks project templates before anything is written, and saved
+ * byte for byte, so what gets reviewed and committed is what was downloaded.
+ */
+export async function templateAddCommand(
+  io: CliIo,
+  sourceArg: string,
+  options: TemplateAddOptions = {},
+): Promise<number> {
+  const source = parseTemplateSource(sourceArg, io.cwd);
+  const name = options.name ?? nameFromFileName(source.fileName);
+  if (!TemplateIdSchema.safeParse(name).success) {
+    throw new CliError(
+      options.name === undefined
+        ? `"${name}" (from the file name) cannot be a template name; pass --name with lowercase letters, digits and dashes, starting with a letter`
+        : `"${name}" cannot be a template name: use lowercase letters, digits and dashes, starting with a letter`,
+    );
+  }
+  const root = resolveRoot(io, options.root);
+  const dir = path.join(projectPaths(root).dir, 'templates');
+  const file = path.join(dir, `${name}${BOARD_SUFFIX}`);
+  if (path.dirname(file) !== dir) throw new CliError(`"${name}" cannot be a template name`);
+
+  const rel = path.relative(io.cwd, file) || file;
+  const exists = await stat(file).then(
+    () => true,
+    (error: unknown) => {
+      if (isNodeError(error) && (error.code === 'ENOENT' || error.code === 'ENOTDIR')) return false;
+      throw error;
+    },
+  );
+  const refuse = () =>
+    new CliError(
+      `a project template "${name}" exists already (${rel}); pass --force to replace it`,
+    );
+  if (exists && !options.force) throw refuse();
+
+  const bytes = await readTemplateSource(
+    source,
+    options.fetch !== undefined ? { fetch: options.fetch } : {},
+  );
+  let template: Board;
+  try {
+    template = parseProjectTemplate(bytes, sourceArg);
+  } catch (error) {
+    throw new CliError(
+      `${error instanceof Error ? error.message : String(error)}; nothing was saved`,
+    );
+  }
+
+  const n = Object.keys(template.nodes).length;
+  const e = Object.keys(template.edges).length;
+  const what = `"${template.name}", ${n} node${n === 1 ? '' : 's'}, ${e} edge${e === 1 ? '' : 's'}`;
+  if (options.dryRun) {
+    println(
+      io.stdout,
+      `Dry run: ${sourceArg} is a valid template (${what}); it would be ${exists ? 'replaced' : 'saved'} as ${name}: ${rel}. Nothing was written.`,
+    );
+    return 0;
+  }
+  await mkdir(dir, { recursive: true });
+  try {
+    await writeFile(file, bytes, { flag: options.force ? 'w' : 'wx' });
+  } catch (error) {
+    if (isNodeError(error) && error.code === 'EEXIST') throw refuse();
+    throw error;
+  }
+  println(
+    io.stdout,
+    `${exists ? 'Replaced' : 'Added'} the template ${name} (${what}) from ${sourceArg}: ${rel}`,
+  );
+  println(io.stdout, 'Review it, then commit it so everyone gets it.');
   if (BUILTIN_TEMPLATES.some((t) => t.id === name)) {
     println(io.stdout, `It replaces the built-in template ${name} in this project.`);
   }
