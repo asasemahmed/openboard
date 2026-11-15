@@ -57,6 +57,7 @@ and opens the board in your browser. The project root is the nearest directory u
 - Cards are filled with the colour of their type. Connections an agent made stay out of sight until you point at or select one of their cards (the count in a card's corner says how many it has); the ones you draw always show. The connections button beside the zoom controls shows every connection at once.
 - Drag a card to place it yourself. It is then pinned, and automatic layout leaves it where you put it.
 - Select cards to show the agent what you mean by "this" or "these".
+- With nothing selected, the inspector shows **Needs attention** when something does: questions no decision answers yet, risks with no task or decision linked, cards marked blocked whose blockers are all done, and cards on their own outside any frame on an otherwise tidy board. Click one to select it and bring it into view.
 - <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>K</kbd> opens search and commands, and <kbd>?</kbd> lists every shortcut.
 
 ## Connect an agent
