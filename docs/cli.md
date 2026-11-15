@@ -33,7 +33,7 @@ openboard [command] [options]
 | [`hook`](#hook)                          | Report an agent's hook event to the running server                  |
 | [`import`](#import)                      | Add a Mermaid flowchart or a JSON Canvas to a board                 |
 | [`diff`](#diff)                          | What changed on a board between two git revisions                   |
-| [`git`](#git)                            | Set git up to merge and diff board files by meaning                 |
+| [`git`](#git)                            | Set git up for boards, and close cards from commits                 |
 | [`merge-driver`](#merge-driver)          | Merge three versions of a board file (git calls it)                 |
 | [`textconv`](#textconv)                  | Print a board file as readable text (git calls it)                  |
 | [`revisions`](#revisions)                | The git history of a board file                                     |
@@ -262,22 +262,36 @@ See [Boards in git](git.md) for reviewing board changes in pull requests.
 ## git
 
 ```text
-openboard git setup [--root <dir>] [--diff] [--global]
+openboard git setup [--root <dir>] [--diff] [--hooks] [--global]
 openboard git status [--root <dir>] [--json]
 openboard git remove [--root <dir>] [--global]
+openboard git sync [range] [--root <dir>] [--dry-run]
 ```
 
-Make git merge and diff board files by meaning; see [Boards in git](git.md).
+Make git merge and diff board files by meaning, and close cards from commit messages; see [Boards in git](git.md).
 
 | Command      | Effect                                                                                                                                                                                                                     |
 | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `git setup`  | Adds `.openboard/*.board.json merge=openboard` to the project's `.gitattributes` (creating it if needed) and sets `merge.openboard.name` and `merge.openboard.driver` to this install's `merge-driver`. Safe to run again. |
 | `--diff`     | Also adds `.openboard/*.board.json diff=openboard` and sets `diff.openboard.textconv` to this install's `textconv`, so `git diff` and `git log -p` show boards as readable text                                            |
 | `--global`   | Writes the git settings to your global git configuration instead of the repository's. `.gitattributes` is always the project's.                                                                                            |
-| `git status` | Says whether the merge driver and readable diffs are set up, and whether they run this install                                                                                                                             |
-| `git remove` | Removes exactly the lines and settings `setup` adds; nothing else in `.gitattributes` is touched, and a `.gitattributes` left empty is deleted                                                                             |
+| `--hooks`    | Also installs `post-commit` and `post-merge` hooks that run `git sync`. A hook you already have is never replaced: it is left as it is, and the line to add to it is printed (exit status 1).                              |
+| `git status` | Says whether the merge driver, readable diffs and hooks are set up, and whether they run this install                                                                                                                      |
+| `git remove` | Removes exactly the lines, settings and hooks `setup` adds; nothing else in `.gitattributes` is touched, a `.gitattributes` left empty is deleted, and a hook of your own is kept                                          |
+| `git sync`   | Marks the cards that commits close as done and records each commit on its card. Without a range, the last 100 commits on `HEAD`; a range is `main..HEAD`, `HEAD~5..` or one revision and its history                       |
+| `--dry-run`  | With `sync`: says what would change, and changes nothing                                                                                                                                                                   |
 
 Commit `.gitattributes`. The git settings are per clone (or per user with `--global`), so each person runs `openboard git setup` once.
+
+A commit closes a card when its message says `Closes card <id>`, `Fixes card <id>` or `Resolves card <id>` (any case; several with `card a, card b` or `cards a, b and c`). `git sync` goes through the running server as the `git` actor when there is one, and writes the board file otherwise. A commit already recorded on a card is not applied again, so running it twice changes nothing. Ids on no board, frames, and other nodes that are neither a task nor have a status are left alone with a warning.
+
+```text
+$ openboard git sync
+warning: commit 93b4786 closes card n_nope, which is on no board; ignored
+Closed card n_login "Add the login page" on main (93b4786).
+```
+
+The hooks run `git sync --hook post-commit` and `git sync --hook post-merge`. With `--hook`, it reads only the commit just made, or what the merge brought in (from `ORIG_HEAD`), prints only what changed and the warnings, and exits 0 even when something went wrong.
 
 ## merge-driver
 
