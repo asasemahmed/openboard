@@ -34,6 +34,19 @@ openboard template apply decision-record main --frame <frame id> --title "Pick a
 
 `--dry-run` checks the template against the board and says what it would add without changing anything. With a server running, the template is applied through it as you; without one, it is written to the board file, and the new nodes are placed by the next automatic layout.
 
+## Share a template
+
+A template is one board file, so you can share it without waiting for a release. Save a board as a template, commit `.openboard/templates/<name>.board.json` to any GitHub repository, and others add it to their project:
+
+```bash
+openboard template add github:ada/boards/templates/team-retro.board.json        # at the default branch
+openboard template add github:ada/boards/templates/team-retro.board.json@v1.2   # at a tag, branch or commit
+openboard template add https://example.com/team-retro.board.json --name retro
+openboard template add ../shared/team-retro.board.json --dry-run
+```
+
+`add` reads the template, checks it as a project template is checked, and saves it unchanged as `.openboard/templates/<name>.board.json`. The name comes from the file name unless you pass `--name`. It never replaces a template without `--force`. Downloads are https only, also after redirects, and a template over 1 MB is refused. Review the file and commit it like any other: from then on it is a project template.
+
 ## For agents
 
 Agents list and apply templates with [`board_template`](tools.md#board_template), and `board_create` takes a `template` too. An agent's template is a batch like any other: under the default policy it lands at once on an empty board or in its own area, and it is held for review when it changes what people made. The server instructions and the agent guides suggest starting a new board or area from a template when one fits.

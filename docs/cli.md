@@ -20,7 +20,7 @@ openboard [command] [options]
 | [`connect`](#connect)                    | Show how to connect an agent (writes nothing)                       |
 | [`whoami`](#whoami)                      | Who a server takes you to be, and your role                         |
 | [`templates`](#templates)                | List the templates                                                  |
-| [`template`](#template)                  | Apply a template to a board, or save a board as one                 |
+| [`template`](#template)                  | Apply a template, save a board as one, or add one from a link       |
 | [`types`](#types)                        | The node and edge types, and nodes that do not fit them             |
 | [`access`](#access)                      | Invite people and agents to a shared server; list and revoke        |
 | [`policy`](#policy)                      | Show or change the review policy for agents                         |
@@ -703,6 +703,7 @@ feature-plan "Feature plan" (built-in; 12 nodes, 6 edges; tags planning, feature
 ```text
 openboard template apply <id> [board] [--frame <id>] [--title <text>] [--dry-run] [--root <dir>] [--url <url>]
 openboard template save <name> [board] [--force] [--root <dir>]
+openboard template add <source> [--name <id>] [--force] [--dry-run] [--root <dir>]
 ```
 
 `apply` adds a template to a board (default: the only board, or `main`) as one batch: through the running server as you, or, without one, to the board file (the new nodes are placed by the next automatic layout). `--frame` puts its top-level nodes in that frame, `--title` names its outer frame, `--dry-run` says what it would add and changes nothing.
@@ -713,6 +714,14 @@ openboard template save <name> [board] [--force] [--root <dir>]
 $ openboard template save launch-plan
 Saved board main as the template launch-plan: .openboard/templates/launch-plan.board.json
 Commit it so everyone gets it. Comments are not part of it.
+```
+
+`add` reads a template from `github:owner/repo/path/to/file.board.json` (from raw.githubusercontent.com, at `HEAD` unless it ends in `@ref`), from an `https://` URL, or from a local file. It checks it as the server checks project templates and saves it unchanged as `.openboard/templates/<name>.board.json`, so you can review and commit it. The name comes from the file name (`retro.board.json` gives `retro`) unless you pass `--name`, with the same rules as `save`. A template of that name is replaced only with `--force`; `--dry-run` reads and checks it and writes nothing. Downloads are https only, also after redirects, must finish within 20 seconds, and may be at most 1 MB. `add` writes to the local project, so it takes no `--url`. See [sharing a template](templates.md#share-a-template).
+
+```text
+$ openboard template add github:ada/boards/templates/team-retro.board.json
+Added the template team-retro ("Team retro", 9 nodes, 4 edges) from github:ada/boards/templates/team-retro.board.json: .openboard/templates/team-retro.board.json
+Review it, then commit it so everyone gets it.
 ```
 
 ## types

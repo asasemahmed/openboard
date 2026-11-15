@@ -16,6 +16,7 @@ import { diffCommand } from './commands/diff.js';
 import { doctorCommand } from './commands/doctor.js';
 import { exportCommand } from './commands/export.js';
 import {
+  templateAddCommand,
   templateApplyCommand,
   templateSaveCommand,
   templatesCommand,
@@ -231,7 +232,9 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
 
   const templateCommand = program
     .command('template')
-    .description('apply a template to a board, or save a board as a project template')
+    .description(
+      'apply a template to a board, save a board as a project template, or add one from a link',
+    )
     .enablePositionalOptions();
   templateCommand
     .command('apply')
@@ -265,6 +268,27 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
     .action(
       action((name: string, board: string | undefined, opts: { root?: string; force?: boolean }) =>
         templateSaveCommand(io, name, board, opts),
+      ),
+    );
+  templateCommand
+    .command('add')
+    .description(
+      'download a template and save it as a project template in .openboard/templates/ (review and commit it)',
+    )
+    .argument(
+      '<source>',
+      'github:owner/repo/path/file.board.json[@ref], an https:// URL, or a local file',
+    )
+    .addOption(rootOption())
+    .option('--name <id>', 'the template id (default: from the file name)')
+    .option('--force', 'replace a project template of that name')
+    .option('--dry-run', 'download and check it, say what would be saved; write nothing')
+    .action(
+      action(
+        (
+          source: string,
+          opts: { root?: string; name?: string; force?: boolean; dryRun?: boolean },
+        ) => templateAddCommand(io, source, opts),
       ),
     );
 
