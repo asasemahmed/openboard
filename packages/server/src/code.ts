@@ -21,11 +21,17 @@ import { createHash } from 'node:crypto';
 import { readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import {
+  type Board,
   type BoardNode,
+  evaluateLink,
+  isCodeLink,
   LINK_HASH_PREFIX,
   type Link,
   type LinkEntry,
-  type LinkState,
+  type LinkEvaluation,
+  linkPath,
+  linkRangeText,
+  normaliseLineEndings,
   RELOCATE_MAX_LINES,
 } from '@openboard/core';
 import { type FSWatcher, watch } from 'chokidar';
@@ -49,37 +55,12 @@ export function hashContent(text: string): string {
   return `${LINK_HASH_PREFIX}${createHash('sha256').update(text, 'utf8').digest('hex').slice(0, 32)}`;
 }
 
-function normalise(text: string): string {
-  return text.replace(/\r\n?/g, '\n');
-}
-
-/** The text of a link's range, or null when the range is not in the file. */
-function rangeText(lines: string[], link: Link): string | null {
-  if (link.line === undefined) return lines.join('\n');
-  const end = link.endLine ?? link.line;
-  if (link.line < 1 || end < link.line || end > lines.length) return null;
-  return lines.slice(link.line - 1, end).join('\n');
-}
-
-function rangeLabel(link: Link): string {
-  if (link.line === undefined) return '';
-  const end = link.endLine ?? link.line;
-  return end === link.line ? `line ${link.line}` : `lines ${link.line}-${end}`;
-}
-
 type Resolved = { abs: string } | { outside: string };
 
 interface FileState {
   key: string | null;
   /** Normalised text, or null when the file is missing; undefined when too large. */
   text: string | null | undefined;
-}
-
-interface Evaluation {
-  state: LinkState;
-  detail?: string;
-  /** The link as it should be stored, when that differs. */
-  next?: Link;
 }
 
 export class CodeLinks {
@@ -299,13 +280,14 @@ export class CodeLinks {
     if (!node.links?.length) return undefined;
     const out: Link[] = [];
     for (const link of node.links) {
-      if (link.kind !== 'file' && link.kind !== 'symbol') {
+      if (!isCodeLink(link)) {
         out.push(link);
         continue;
       }
       const resolved = await this.resolve(link);
       const file = 'abs' in resolved ? await this.read(resolved.abs) : undefined;
-      const text = typeof file?.text === 'string' ? rangeText(file.text.split('\n'), link) : null;
+      const text =
+        typeof file?.text === 'string' ? linkRangeText(file.text.split('\n'), link) : null;
       if (text === null) {
         out.push(link);
         continue;
@@ -318,54 +300,23 @@ export class CodeLinks {
     return out;
   }
 
-  private async evaluate(link: Link, remember: boolean): Promise<Evaluation> {
-    if (link.kind !== 'file' && link.kind !== 'symbol') return { state: 'unchecked' };
+  private async evaluate(link: Link, remember: boolean): Promise<LinkEvaluation> {
+    if (!isCodeLink(link)) return { state: 'unchecked' };
     const resolved = await this.resolve(link);
-    if ('outside' in resolved) {
-      return { state: 'outside', detail: resolved.outside };
-    }
+    if ('outside' in resolved) return { state: 'outside', detail: resolved.outside };
     const file = await this.read(resolved.abs);
-    if (file.text === undefined) return { state: 'unchecked', detail: 'file too large to check' };
-    const withStale = (stale: boolean): Link => {
-      const { stale: _s, ...rest } = link;
-      return stale ? { ...rest, stale: true } : rest;
-    };
-    if (file.text === null) {
-      return { state: 'missing', detail: 'file missing', next: withStale(true) };
+    const original =
+      link.line !== undefined && link.hash !== undefined ? this.texts.get(link.hash) : undefined;
+    const evaluation = evaluateLink(link, file.text, {
+      hash: hashContent,
+      fill: remember,
+      ...(original !== undefined ? { original } : {}),
+    });
+    const hash = evaluation.next?.hash ?? link.hash;
+    if (remember && evaluation.current !== undefined && hash !== undefined) {
+      this.remember(hash, evaluation.current, link);
     }
-    const lines = file.text.split('\n');
-    const current = rangeText(lines, link);
-    if (link.hash === undefined) {
-      if (!remember) return { state: 'unchecked', detail: 'not hashed yet' };
-      if (current === null) {
-        return {
-          state: 'stale',
-          detail: `${rangeLabel(link)} not in the file`,
-          next: withStale(true),
-        };
-      }
-      const hash = hashContent(current);
-      if (remember) this.remember(hash, current, link);
-      return { state: 'ok', next: { ...withStale(false), hash } };
-    }
-    if (current !== null && hashContent(current) === link.hash) {
-      if (remember) this.remember(link.hash, current, link);
-      return { state: 'ok', next: withStale(false) };
-    }
-    // Changed. If the original text of a range sits exactly once elsewhere, the code moved.
-    const original = link.line !== undefined ? this.texts.get(link.hash) : undefined;
-    if (original !== undefined) {
-      const found = findOnce(lines, original.split('\n'));
-      if (found !== null) {
-        const length = original.split('\n').length;
-        const moved: Link = { ...withStale(false), line: found };
-        if (link.endLine !== undefined || length > 1) moved.endLine = found + length - 1;
-        else delete moved.endLine;
-        return { state: 'ok', detail: `moved to ${rangeLabel(moved)}`, next: moved };
-      }
-    }
-    const where = link.line !== undefined ? ` at ${rangeLabel(link)}` : '';
-    return { state: 'stale', detail: `content changed${where}`, next: withStale(true) };
+    return evaluation;
   }
 
   private remember(hash: string, text: string, link: Link): void {
@@ -390,45 +341,15 @@ export class CodeLinks {
   // ── Files ──────────────────────────────────────────────────────────────────
 
   private async resolve(link: Link): Promise<Resolved> {
-    let target = link.kind === 'symbol' ? (link.target.split('#')[0] ?? '') : link.target;
-    target = target.trim();
-    if (target === '') return { outside: 'no path' };
-    const abs = path.resolve(this.root, target);
-    const rel = path.relative(this.root, abs);
-    if (rel === '' || rel.startsWith('..') || path.isAbsolute(rel)) {
-      return { outside: 'the path is outside the project' };
-    }
     this.rootReal ??= await realpath(this.root).catch(() => this.root);
-    try {
-      const real = await realpath(abs);
-      const relReal = path.relative(this.rootReal, real);
-      if (relReal.startsWith('..') || path.isAbsolute(relReal)) {
-        return { outside: 'the path leads outside the project through a symlink' };
-      }
-    } catch (error) {
-      if (!isErrno(error, 'ENOENT') && !isErrno(error, 'ENOTDIR')) throw error;
-    }
-    return { abs };
+    return resolveLinkFile(this.root, this.rootReal, link);
   }
 
   private async read(abs: string): Promise<FileState> {
     const key = await statKey(abs);
     const cached = this.files.get(abs);
     if (cached && cached.key === key) return cached;
-    let text: string | null | undefined = null;
-    if (key !== null) {
-      const size = Number(key.split(':')[1]);
-      if (size > MAX_LINKED_FILE_BYTES) text = undefined;
-      else {
-        try {
-          text = normalise(await readFile(abs, 'utf8'));
-        } catch (error) {
-          if (!isErrno(error, 'ENOENT') && !isErrno(error, 'EISDIR')) throw error;
-          text = null;
-        }
-      }
-    }
-    const state: FileState = { key, text };
+    const state: FileState = { key, text: await readLinkedText(abs, key) };
     this.files.set(abs, state);
     return state;
   }
@@ -439,9 +360,8 @@ export class CodeLinks {
     const files = new Set<string>();
     for (const node of room.doc.nodes()) {
       for (const link of node.links ?? []) {
-        if (link.kind !== 'file' && link.kind !== 'symbol') continue;
-        const target = link.kind === 'symbol' ? (link.target.split('#')[0] ?? '') : link.target;
-        const abs = path.resolve(this.root, target.trim());
+        if (!isCodeLink(link)) continue;
+        const abs = path.resolve(this.root, linkPath(link));
         const rel = path.relative(this.root, abs);
         if (rel && !rel.startsWith('..') && !path.isAbsolute(rel)) files.add(abs);
       }
@@ -494,13 +414,9 @@ export class CodeLinks {
       const ids = room.doc
         .nodes()
         .filter((node) =>
-          (node.links ?? []).some((link) => {
-            const target = link.kind === 'symbol' ? (link.target.split('#')[0] ?? '') : link.target;
-            return (
-              (link.kind === 'file' || link.kind === 'symbol') &&
-              path.resolve(this.root, target.trim()) === file
-            );
-          }),
+          (node.links ?? []).some(
+            (link) => isCodeLink(link) && path.resolve(this.root, linkPath(link)) === file,
+          ),
         )
         .map((node) => node.id);
       if (ids.length) this.schedule(room, ids);
@@ -532,16 +448,84 @@ export class CodeLinks {
   }
 }
 
-/** The 1-based line where `needle` starts in `lines`, when it occurs exactly once. */
-function findOnce(lines: string[], needle: string[]): number | null {
-  if (needle.length === 0 || needle.length > lines.length) return null;
-  let found: number | null = null;
-  outer: for (let i = 0; i + needle.length <= lines.length; i++) {
-    for (let j = 0; j < needle.length; j++) if (lines[i + j] !== needle[j]) continue outer;
-    if (found !== null) return null;
-    found = i + 1;
+// ── Without a server ─────────────────────────────────────────────────────────
+
+/**
+ * Every code link of a board with its state, read straight from the files:
+ * what the server reports right after it opens the board. Writes nothing and
+ * needs no server. The text of moved code is only known to a running server,
+ * so code that moved since the link was hashed is `stale` here.
+ */
+export async function checkCodeLinks(root: string, board: Board): Promise<LinkEntry[]> {
+  const rootReal = await realpath(root).catch(() => root);
+  const files = new Map<string, Promise<string | null | undefined>>();
+  const read = (abs: string) => {
+    let text = files.get(abs);
+    if (!text) {
+      text = statKey(abs).then((key) => readLinkedText(abs, key));
+      files.set(abs, text);
+    }
+    return text;
+  };
+  const out: LinkEntry[] = [];
+  const ordered = Object.values(board.nodes).sort((a, b) => (a.id < b.id ? -1 : 1));
+  for (const node of ordered) {
+    for (const [index, link] of (node.links ?? []).entries()) {
+      let evaluation: LinkEvaluation = { state: 'unchecked' };
+      if (isCodeLink(link)) {
+        const resolved = await resolveLinkFile(root, rootReal, link);
+        evaluation =
+          'outside' in resolved
+            ? { state: 'outside', detail: resolved.outside }
+            : evaluateLink(link, await read(resolved.abs), { hash: hashContent });
+      }
+      const entry: LinkEntry = {
+        nodeId: node.id,
+        title: node.title,
+        index,
+        link,
+        state: evaluation.state,
+      };
+      if (evaluation.detail) entry.detail = evaluation.detail;
+      out.push(entry);
+    }
   }
-  return found;
+  return out;
+}
+
+// ── Files ────────────────────────────────────────────────────────────────────
+
+/** Where a code link's file is, or why it is never read. `rootReal` is the root with symlinks resolved. */
+async function resolveLinkFile(root: string, rootReal: string, link: Link): Promise<Resolved> {
+  const target = linkPath(link);
+  if (target === '') return { outside: 'no path' };
+  const abs = path.resolve(root, target);
+  const rel = path.relative(root, abs);
+  if (rel === '' || rel.startsWith('..') || path.isAbsolute(rel)) {
+    return { outside: 'the path is outside the project' };
+  }
+  try {
+    const real = await realpath(abs);
+    const relReal = path.relative(rootReal, real);
+    if (relReal.startsWith('..') || path.isAbsolute(relReal)) {
+      return { outside: 'the path leads outside the project through a symlink' };
+    }
+  } catch (error) {
+    if (!isErrno(error, 'ENOENT') && !isErrno(error, 'ENOTDIR')) throw error;
+  }
+  return { abs };
+}
+
+/** A linked file's normalised text for its `statKey`: null when missing, undefined when too large. */
+async function readLinkedText(abs: string, key: string | null): Promise<string | null | undefined> {
+  if (key === null) return null;
+  if (Number(key.split(':')[1]) > MAX_LINKED_FILE_BYTES) return undefined;
+  try {
+    return normaliseLineEndings(await readFile(abs, 'utf8'));
+  } catch (error) {
+    if (!isErrno(error, 'ENOENT') && !isErrno(error, 'EISDIR')) throw error;
+    return null;
+  }
 }
 
 async function statKey(file: string): Promise<string | null> {

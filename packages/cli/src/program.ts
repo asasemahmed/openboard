@@ -11,6 +11,7 @@ import {
 } from './commands/access.js';
 import { adrCommand } from './commands/adr.js';
 import { boardsCommand, newBoardCommand } from './commands/boards.js';
+import { checkCommand } from './commands/check.js';
 import { linksCommand, revisionsCommand } from './commands/code.js';
 import { AGENTS, connectCommand } from './commands/connect.js';
 import { diffCommand } from './commands/diff.js';
@@ -60,6 +61,7 @@ Examples:
   $ openboard activity                 what agents are doing right now
   $ openboard import flow.mmd          add a Mermaid flowchart to the main board
   $ openboard diff --format markdown   what changed on the boards since HEAD
+  $ openboard check                    fail when a board has drifted from the code (CI, hooks)
   $ openboard git setup --diff         merge and diff board files by meaning in git
 `;
 
@@ -535,6 +537,25 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
     .action(
       action((args: string[], opts: { root?: string; all?: boolean; json?: boolean }) =>
         linksCommand(io, args, opts),
+      ),
+    );
+
+  program
+    .command('check')
+    .description(
+      'check that the boards still match the code: code links whose code changed or is gone, and nodes that do not fit their declared type. Reads the files, needs no server; exits 0 when clean, 1 when something needs a look, 2 on error',
+    )
+    .argument('[board]', 'board id (default: every board)')
+    .addOption(rootOption())
+    .option('--no-links', 'do not check the code links')
+    .option('--no-types', 'do not check the nodes against their declared types')
+    .option('--json', 'print JSON')
+    .action(
+      action(
+        (
+          board: string | undefined,
+          opts: { root?: string; links: boolean; types: boolean; json?: boolean },
+        ) => checkCommand(io, board, opts),
       ),
     );
 

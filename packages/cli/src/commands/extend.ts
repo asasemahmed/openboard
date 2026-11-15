@@ -311,7 +311,8 @@ export async function templateAddCommand(
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-async function projectTypes(root: string): Promise<TypeRegistry> {
+/** The types declared in `.openboard/config.json`, with the built-in ones. */
+export async function projectTypes(root: string): Promise<TypeRegistry> {
   let text: string;
   try {
     text = await readFile(projectPaths(root).config, 'utf8');

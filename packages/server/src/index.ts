@@ -15,6 +15,7 @@ export {
   THROTTLE_WINDOW_MS,
 } from './auth.js';
 export type { BoardListing } from './boards.js';
+export { checkCodeLinks } from './code.js';
 export { HISTORY_RETAIN, STEPS_RETAIN, UI_COALESCE_MS } from './history.js';
 export { MAX_BODY_BYTES } from './http.js';
 export { INBOX_RETAIN } from './inbox.js';

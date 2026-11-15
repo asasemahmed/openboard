@@ -39,6 +39,7 @@ openboard [command] [options]
 | [`textconv`](#textconv)                  | Print a board file as readable text (git calls it)                  |
 | [`revisions`](#revisions)                | The git history of a board file                                     |
 | [`links`](#links)                        | Code links whose code changed, and refreshing them                  |
+| [`check`](#check)                        | Fail when a board no longer matches the code (for CI and hooks)     |
 
 Global options: `-v`, `--version` prints the version; `-h`, `--help` shows help, also after a command (`openboard export --help`).
 
@@ -46,13 +47,13 @@ Global options: `-v`, `--version` prints the version; `-h`, `--help` shows help,
 
 **Project root.** Every command except `init` works on a project root. `--root <dir>` names it. Without `--root`, it is the nearest directory upward from the current directory that contains `.openboard/`, else the nearest one that contains `.git`, else the current directory. A `--root` that does not exist is an error.
 
-**Running server or files.** `boards`, `new`, `export`, `adr`, `status` and `policy` go through the running server when there is one for the project, so they see unsaved live state, and read or write `.openboard/` directly when there is none. `proposals`, `accept`, `reject`, `history`, `undo`, `snapshot`, `activity` and `links` work on state only a running server keeps, and say so when none is running. `hook` never starts a server and is silent without one.
+**Running server or files.** `boards`, `new`, `export`, `adr`, `status` and `policy` go through the running server when there is one for the project, so they see unsaved live state, and read or write `.openboard/` directly when there is none. `proposals`, `accept`, `reject`, `history`, `undo`, `snapshot`, `activity` and `links` work on state only a running server keeps, and say so when none is running. `check` always reads the files and never asks a server. `hook` never starts a server and is silent without one.
 
 **Who you are.** Everything done from the command line is attributed to the actor `cli`, a person named after your user account. That is what lets `accept`, `reject` and `policy` do what only people may do.
 
 **Remote servers.** Every command that talks to a server (`boards`, `new`, `export`, `adr`, `import`, `diff`, `policy`, `proposals`, `accept`, `reject`, `history`, `undo`, `snapshot`, `activity`, `links`, `revisions`, `whoami`, `access`) takes `--url <url>` to use a [shared server](sharing.md) elsewhere instead of the project's own. The token comes from the environment variable `OPENBOARD_TOKEN`, never from a flag: command-line arguments end up in shell history and process lists, and `--token` is refused. On a remote server you are who the token's grant says, with its role; a command your role does not cover fails with a message that names the missing permission (`your access (viewer) does not include "board.create" ...`). Without `--url`, `OPENBOARD_TOKEN` is not sent.
 
-**Errors and exit codes.** A failure prints one line, `openboard: <message>`, on stderr and exits with status 1. `diff` and `merge-driver` have their own exit codes, described with them. Set `OPENBOARD_DEBUG=1` to also print stack traces, and the server's log lines for `start`.
+**Errors and exit codes.** A failure prints one line, `openboard: <message>`, on stderr and exits with status 1. `diff`, `check` and `merge-driver` have their own exit codes, described with them. Set `OPENBOARD_DEBUG=1` to also print stack traces, and the server's log lines for `start`.
 
 ## start
 
@@ -696,6 +697,28 @@ Refreshed the code links of 1 node on main.
 ```
 
 `--json` prints the links as an array of `{ nodeId, title, index, link, state, detail? }`.
+
+## check
+
+```text
+openboard check [board] [--root <dir>] [--no-links] [--no-types] [--json]
+```
+
+Checks that the boards still match the code, for CI and pre-commit hooks. It lists code links whose code changed (`stale`) or is gone (`missing`), as `links` does, and nodes that do not fit their declared type, as `types check` does. Without a board, it checks every board in `.openboard/`. `--no-links` and `--no-types` turn one check off.
+
+It needs no server: it reads the board files and hashes the linked code itself, the same way the server does. Only a running server follows code that moved, so code that moved while no server ran counts as changed. Types are those declared in `.openboard/config.json`; a plugin's types are not checked.
+
+The exit status is 0 when everything matches, 1 when something needs a look, and 2 on an error (such as a board file that does not parse, or no boards). See [checking boards in CI](git.md#checking-boards-in-ci-and-before-a-commit).
+
+```text
+$ openboard check
+Board main: 1 node needs a look (1 code link out of date):
+  n_3mt1ai443b "exportOrders()" (code)
+    #0 file src/orders/export.ts:4-6 [stale]: content changed at lines 4-6
+Check those nodes against the code as it is now, then clear the mark with `openboard links refresh <node id>` (with the server running).
+```
+
+`--json` prints `{ clean, boards: [{ board, links?, types? }] }`: `links` as in `links --json`, only those that need a look; `types` as `{ nodeId, type, message }`. A check that was turned off is left out.
 
 ## whoami
 
