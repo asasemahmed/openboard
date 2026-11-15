@@ -1,10 +1,16 @@
-import { mkdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { type Actor, type BoardApi, LINK_HASH_PREFIX, type Link } from '@openboard/core';
+import {
+  type Actor,
+  type BoardApi,
+  LINK_HASH_PREFIX,
+  type Link,
+  parseBoard,
+} from '@openboard/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Boards } from './boards.js';
-import { hashContent } from './code.js';
+import { checkCodeLinks, hashContent } from './code.js';
 import { projectPaths } from './paths.js';
 import { LocalBoardApi } from './service.js';
 import { removeRoot, tempRoot, waitFor } from './testing.js';
@@ -290,6 +296,27 @@ describe('code links', () => {
     }, 'the load check');
     expect(after[1]?.hash).toBe(hashed[1]?.hash);
     expect(after[2]?.stale).toBeUndefined();
+  });
+
+  it('checks links from the files without a server, as the server sees them on load', async () => {
+    await links();
+    await boards.close();
+    await writeFile(file('src/a.ts'), SOURCE.replace('return 1;', 'return 2;'));
+    const board = parseBoard(await readFile(projectPaths(root).boardFile('plan'), 'utf8'));
+    const offline = await checkCodeLinks(root, board);
+    expect(offline.map((e) => [e.index, e.state, e.detail])).toEqual([
+      [0, 'stale', 'content changed'],
+      [1, 'stale', 'content changed at lines 1-3'],
+      [2, 'ok', undefined],
+      [3, 'unchecked', undefined],
+    ]);
+    // Nothing was written.
+    expect(parseBoard(await readFile(projectPaths(root).boardFile('plan'), 'utf8'))).toEqual(board);
+
+    await open();
+    await settle(async () => ((await links())[1]?.stale ? true : null), 'the load check');
+    const online = (await api(ADA).links('plan')).links;
+    expect(online.map((e) => e.state)).toEqual(offline.map((e) => e.state));
   });
 
   it('refreshes links as a reviewed change: a person directly, an agent through policy', async () => {

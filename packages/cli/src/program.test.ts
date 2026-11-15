@@ -40,6 +40,7 @@ describe('argument parsing and exit codes', () => {
       'merge-driver',
       'textconv',
       'links',
+      'check',
       'revisions',
       'whoami',
       'access',
