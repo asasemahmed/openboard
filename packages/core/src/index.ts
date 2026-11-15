@@ -6,6 +6,7 @@ export * from './collab.js';
 export * from './diff.js';
 export * from './doc.js';
 export * from './geometry.js';
+export * from './health.js';
 export * from './ids.js';
 export * from './interop/index.js';
 export * from './live.js';
