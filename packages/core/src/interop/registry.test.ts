@@ -4,13 +4,14 @@ import { applyToEmpty, richBoard } from './fixtures.test.js';
 import { detectFormat, EXPORTERS, findExporter, findImporter, IMPORTERS } from './registry.js';
 
 describe('EXPORTERS', () => {
-  it('lists json, markdown, mermaid, jsoncanvas and svg, each rendering the board', () => {
+  it('lists json, markdown, mermaid, jsoncanvas, svg and html, each rendering the board', () => {
     expect(EXPORTERS.map((e) => `${e.name}${e.extension}`)).toEqual([
       'json.json',
       'markdown.md',
       'mermaid.mmd',
       'jsoncanvas.canvas',
       'svg.svg',
+      'html.html',
     ]);
     const board = richBoard();
     for (const exporter of EXPORTERS) {
@@ -26,6 +27,9 @@ describe('EXPORTERS', () => {
     expect(findExporter('mermaid')?.render(board, { direction: 'LR' })).toContain('flowchart LR');
     expect(findExporter('svg')?.render(board, { theme: 'dark', title: false })).toContain(
       '#121519',
+    );
+    expect(findExporter('html')?.render(board, { theme: 'dark' })).toContain(
+      '<meta name="color-scheme" content="dark">',
     );
     expect(findExporter('markdown')?.render(board, { bodies: false })).not.toContain(
       'Stripe first.',

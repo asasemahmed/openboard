@@ -103,7 +103,7 @@ describe('argument parsing and exit codes', () => {
     expect(await run(['export', '--format', 'pdf'], badFormat)).toBe(1);
     expect(badFormat.err().trim().split('\n')).toHaveLength(1);
     expect(badFormat.err()).toContain(
-      'json, markdown, md, mermaid, mmd, canvas, jsoncanvas, svg, outline, text',
+      'json, markdown, md, mermaid, mmd, canvas, jsoncanvas, svg, html, outline, text',
     );
 
     const badPort = captureIo(dir);

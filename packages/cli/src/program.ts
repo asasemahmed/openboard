@@ -293,7 +293,7 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
 
   program
     .command('export')
-    .description('write a board as JSON, Markdown, Mermaid, JSON Canvas, SVG or text')
+    .description('write a board as JSON, Markdown, Mermaid, JSON Canvas, SVG, HTML or text')
     .argument('[board]', 'board id (default: the only board, or "main")')
     .addOption(rootOption())
     .addOption(urlOption())
@@ -303,7 +303,10 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
     )
     .option('-o, --out <file>', 'write to a file instead of stdout')
     .addOption(
-      new Option('--theme <theme>', 'svg colours (default: light)').choices(['light', 'dark']),
+      new Option(
+        '--theme <theme>',
+        'svg and html colours (default: light for svg; html follows the system)',
+      ).choices(['light', 'dark']),
     )
     .action(
       action(

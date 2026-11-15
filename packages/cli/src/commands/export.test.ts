@@ -77,6 +77,7 @@ describe('export', () => {
       'mermaid',
       'canvas',
       'svg',
+      'html',
       'outline',
       'text',
     ]);

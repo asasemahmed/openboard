@@ -44,6 +44,7 @@ describe('export formats', () => {
       'mermaid',
       'canvas',
       'svg',
+      'html',
       'outline',
       'text',
     ]);
@@ -53,6 +54,8 @@ describe('export formats', () => {
     expect(exporterForFile('notes.markdown')?.name).toBe('markdown');
     expect(exporterForFile('flow.mmd')?.name).toBe('mermaid');
     expect(exporterForFile('x.outline.txt')?.name).toBe('outline');
+    expect(exporterForFile('board.html')?.name).toBe('html');
+    expect(exporterForFile('board.htm')?.name).toBe('html');
   });
 
   it('writes every format from the board file', async () => {
@@ -70,6 +73,12 @@ describe('export formats', () => {
     expect(light).toMatch(/^(<\?xml[^>]*>\s*)?<svg\b/);
     expect(light.trimEnd()).toMatch(/<\/svg>$/);
     expect(await run('svg', { theme: 'dark' })).not.toBe(light);
+    const page = await run('html');
+    expect(page).toMatch(/^<!doctype html>/);
+    expect(page).toContain('prefers-color-scheme: dark');
+    expect(await run('html', { theme: 'dark' })).toContain(
+      '<meta name="color-scheme" content="dark">',
+    );
   });
 
   it('picks the format from --out', async () => {
@@ -78,6 +87,8 @@ describe('export formats', () => {
     await exportCommand(io, 'main', { root: dir, out: 'plan.mmd' });
     expect(await readFile(path.join(dir, 'plan.mmd'), 'utf8')).toMatch(/^flowchart TD$/m);
     expect(io.err()).toBe('Wrote plan.mmd\n');
+    await exportCommand(io, 'main', { root: dir, out: 'plan.html' });
+    expect(await readFile(path.join(dir, 'plan.html'), 'utf8')).toMatch(/^<!doctype html>/);
   });
 });
 

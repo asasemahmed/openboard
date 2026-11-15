@@ -159,7 +159,7 @@ export type ImportIntoResult = ApplyResult & {
 };
 
 export const ExportOptionsSchema = z.object({
-  /** An exporter name (see `EXPORTERS`): `json`, `markdown`, `mermaid`, `jsoncanvas`, `svg`. */
+  /** An exporter name (see `EXPORTERS`): `json`, `markdown`, `mermaid`, `jsoncanvas`, `svg`, `html`. */
   format: z.string().max(40),
   theme: z.enum(['light', 'dark']).optional(),
   /** `svg` only: draw the changes since this revision. */
