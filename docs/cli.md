@@ -185,7 +185,7 @@ Write a board to stdout or a file. With a server running, the live board is expo
 | `[board]`                 | the only board, else `main` | Board id. With several boards and none called `main`, name one.             |
 | `-f`, `--format <format>` | from `--out`, else `json`   | One of the formats below, or a format of a plugin the running server loaded |
 | `-o`, `--out <file>`      | stdout                      | Write to this file; `-` means stdout                                        |
-| `--theme <theme>`         | `light`                     | `light` or `dark`, for `svg`                                                |
+| `--theme <theme>`         | `light`                     | `light` or `dark`, for `svg`; for `html`, instead of following the system   |
 
 | Format                  | Output                                                                     | Extension that selects it |
 | ----------------------- | -------------------------------------------------------------------------- | ------------------------- |
@@ -194,8 +194,11 @@ Write a board to stdout or a file. With a server running, the live board is expo
 | `mermaid` (`mmd`)       | A Mermaid flowchart, frames as subgraphs                                   | `.mmd`, `.mermaid`        |
 | `canvas` (`jsoncanvas`) | JSON Canvas 1.0, as Obsidian and other canvas tools read it                | `.canvas`                 |
 | `svg`                   | A static picture of the board                                              | `.svg`                    |
+| `html`                  | One page to view the board in any browser                                  | `.html`, `.htm`           |
 | `outline`               | Frames and counts by type and status, as `board_outline` shows them        | `.outline.txt`            |
 | `text`                  | Every node at full detail, as `board_read` shows it                        | `.txt`                    |
+
+`html` is the picture in a page that works offline and fetches nothing. You can pan by dragging, zoom with the wheel, a pinch or the buttons, and click a card (or Tab to it and press Enter) to read its full title and body; Escape closes it. Without `--theme` the page follows the system's light or dark setting.
 
 `outline` and `text` are not tied to an agent session, so they show `cursor 0` and have no budget.
 
@@ -211,6 +214,8 @@ $ openboard export -o main.outline.txt
 Wrote main.outline.txt
 $ openboard export -o board.svg --theme dark
 Wrote board.svg
+$ openboard export -o board.html
+Wrote board.html
 ```
 
 ## adr

@@ -227,7 +227,7 @@ Full reference: [docs/tools.md](docs/tools.md).
 - **Merged by meaning.** `openboard git setup` installs a merge driver that merges at field level, never writes conflict markers, and never drops an edit.
 - **Reviewable.** `openboard diff` shows what changed between revisions as text, markdown, or an SVG that draws what was added, changed, and removed. The canvas can compare the live board with any revision.
 - **Code-aware.** A card linked to a file or a line range follows the code when it moves and is flagged when it changes.
-- **In and out.** Export to JSON, Markdown, Mermaid, JSON Canvas, and SVG. Import Mermaid flowcharts and JSON Canvas files.
+- **In and out.** Export to JSON, Markdown, Mermaid, JSON Canvas, SVG, and a self-contained HTML page. Import Mermaid flowcharts and JSON Canvas files.
 
 ### For your team
 

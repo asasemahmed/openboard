@@ -11,6 +11,7 @@ export {
   planAdrs,
   splitDecisionBody,
 } from './adr.js';
+export { type HtmlOptions, scriptJson, toHtml } from './html.js';
 export {
   type CanvasEdge,
   type CanvasNode,
