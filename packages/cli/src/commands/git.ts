@@ -1,10 +1,20 @@
 /**
  * Boards in git: a merge driver that merges board files by meaning (never
- * conflict markers), a textconv that makes `git diff` readable, and the
- * commands that set both up and take them down again.
+ * conflict markers), a textconv that makes `git diff` readable, hooks that
+ * run `git sync` after commits and merges, and the commands that set them up
+ * and take them down again.
  */
 import { existsSync } from 'node:fs';
-import { appendFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import {
+  appendFile,
+  chmod,
+  mkdir,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import path from 'node:path';
 import {
   type Board,
@@ -20,6 +30,7 @@ import { git, gitTopLevel } from '../lib/git.js';
 import { type CliIo, println } from '../lib/io.js';
 import { shellQuote } from '../lib/mcp.js';
 import { cliBinPath, resolveRoot } from '../lib/project.js';
+import { SYNC_HOOKS, type SyncHook } from './git-sync.js';
 
 /** The pattern the attributes apply to, relative to the project root. */
 export const BOARD_PATTERN = '.openboard/*.board.json';
@@ -38,6 +49,34 @@ export function mergeDriverLine(): string {
 
 export function textconvLine(): string {
   return command('textconv');
+}
+
+/** The hooks `setup --hooks` installs: after a commit, and after a merge or pull. */
+export const HOOK_NAMES = SYNC_HOOKS;
+export type HookName = SyncHook;
+/** The line that marks a hook file as OpenBoard's own. */
+export const HOOK_MARKER = '# openboard: git sync hook';
+
+/**
+ * The command a hook runs. Git runs hooks at the top of the work tree, so a
+ * project in a subdirectory is named relative to it.
+ */
+export function hookCommand(hook: HookName, rootFromTop: string): string {
+  const root = rootFromTop === '' ? [] : ['--root', rootFromTop];
+  return `${command('git', 'sync', '--hook', hook, ...root)} || true`;
+}
+
+/** A whole hook file. It always exits 0, so git never sees it fail. */
+export function hookScript(hook: HookName, rootFromTop: string): string {
+  return [
+    '#!/bin/sh',
+    HOOK_MARKER,
+    '# Added by `openboard git setup --hooks`; `openboard git remove` takes it out.',
+    '# Marks the cards that new commits close as done. It never fails.',
+    hookCommand(hook, rootFromTop),
+    'exit 0',
+    '',
+  ].join('\n');
 }
 
 // ── merge-driver ─────────────────────────────────────────────────────────────
@@ -160,6 +199,8 @@ export interface GitSetupOptions {
   global?: boolean;
   /** Also set up readable diffs (textconv). */
   diff?: boolean;
+  /** Also install the hooks that run `git sync` after commits and merges. */
+  hooks?: boolean;
   json?: boolean;
 }
 
@@ -217,6 +258,60 @@ async function removeAttributes(file: string, unwanted: string[]): Promise<strin
   return removed;
 }
 
+/** The directory git runs hooks from: `.git/hooks`, or `core.hooksPath` when it is set. */
+async function hooksDir(io: CliIo, r: Repo): Promise<string> {
+  const result = await git(io, r.top, ['rev-parse', '--git-path', 'hooks']);
+  if (result.code !== 0) throw new CliError(`cannot find the git hooks: ${result.stderr.trim()}`);
+  return path.resolve(r.top, result.stdout.trim());
+}
+
+/**
+ * Whose a hook is: `openboard` (ours), `chained` (someone else's that runs
+ * `openboard git sync`), `other`, or `none`.
+ */
+export type HookState = 'openboard' | 'chained' | 'other' | 'none';
+
+async function hookState(file: string): Promise<HookState> {
+  const lines = await readLines(file);
+  if (!lines) return 'none';
+  if (lines.some((line) => line.trim() === HOOK_MARKER)) return 'openboard';
+  return lines.some((line) => /openboard|bin\.js/.test(line) && /\bgit sync\b/.test(line))
+    ? 'chained'
+    : 'other';
+}
+
+/** The project root relative to the top of the work tree, with forward slashes. */
+async function rootFromTop(r: Repo): Promise<string> {
+  const [top, root] = await Promise.all([realpath(r.top), realpath(r.root)]);
+  return path.relative(top, root).split(path.sep).join('/');
+}
+
+interface HookOutcome {
+  installed: string[];
+  kept: string[];
+  refused: Array<{ name: HookName; file: string }>;
+}
+
+/** Write OpenBoard's hooks where there is none or ours; never touch anyone else's. */
+async function installHooks(io: CliIo, r: Repo): Promise<HookOutcome> {
+  const dir = await hooksDir(io, r);
+  const root = await rootFromTop(r);
+  const outcome: HookOutcome = { installed: [], kept: [], refused: [] };
+  for (const name of HOOK_NAMES) {
+    const file = path.join(dir, name);
+    const state = await hookState(file);
+    if (state === 'chained') outcome.kept.push(file);
+    else if (state === 'other') outcome.refused.push({ name, file });
+    else {
+      await mkdir(dir, { recursive: true });
+      await writeFile(file, hookScript(name, root));
+      await chmod(file, 0o755);
+      outcome.installed.push(file);
+    }
+  }
+  return outcome;
+}
+
 async function getConfig(io: CliIo, r: Repo, key: string): Promise<string | undefined> {
   const result = await git(io, r.top, ['config', r.scope, '--get', key]);
   return result.code === 0 ? result.stdout.trim() : undefined;
@@ -238,6 +333,8 @@ export interface GitStatusReport {
   textconv: string | null;
   /** True when the configured commands run this install. */
   current: { merge: boolean; diff: boolean };
+  /** Whose each hook `setup --hooks` installs is. */
+  hooks: Record<HookName, HookState>;
 }
 
 export async function gitStatus(
@@ -253,6 +350,9 @@ export async function gitStatus(
   };
   const mergeDriver = await any('merge.openboard.driver');
   const textconv = await any('diff.openboard.textconv');
+  const dir = await hooksDir(io, r);
+  const hooks = {} as Record<HookName, HookState>;
+  for (const name of HOOK_NAMES) hooks[name] = await hookState(path.join(dir, name));
   return {
     repository: r.top,
     attributes: { merge: lines.has(MERGE_ATTRIBUTE), diff: lines.has(DIFF_ATTRIBUTE) },
@@ -262,6 +362,7 @@ export async function gitStatus(
       merge: mergeDriver === mergeDriverLine(),
       diff: textconv === textconvLine(),
     },
+    hooks,
   };
 }
 
@@ -291,10 +392,30 @@ export async function gitSetupCommand(io: CliIo, options: GitSetupOptions = {}):
     io.stdout,
     `Commit ${rel} so everyone's git uses the driver once they run \`openboard git setup\` too.`,
   );
-  return 0;
+  if (!options.hooks) return 0;
+
+  const hooks = await installHooks(io, r);
+  const show = (file: string) => path.relative(io.cwd, file) || file;
+  if (hooks.installed.length) {
+    println(
+      io.stdout,
+      `Installed ${hooks.installed.map(show).join(' and ')}: commits that say "Closes card <id>" now close that card.`,
+    );
+  }
+  for (const file of hooks.kept)
+    println(io.stdout, `${show(file)} already runs openboard git sync.`);
+  if (hooks.refused.length === 0) return 0;
+  const root = await rootFromTop(r);
+  for (const { name, file } of hooks.refused) {
+    println(
+      io.stderr,
+      `openboard: ${show(file)} is not OpenBoard's, so it was left as it is. To chain to it, add this line to it:\n  ${hookCommand(name, root)}`,
+    );
+  }
+  return 1;
 }
 
-/** Print whether the merge driver and readable diffs are set up. */
+/** Print whether the merge driver, readable diffs and hooks are set up. */
 export async function gitStatusCommand(io: CliIo, options: GitSetupOptions = {}): Promise<number> {
   const report = await gitStatus(io, options);
   if (options.json) {
@@ -317,10 +438,21 @@ export async function gitStatusCommand(io: CliIo, options: GitSetupOptions = {})
     io.stdout,
     `Readable diffs: ${state(report.attributes.diff, report.textconv, report.current.diff)}`,
   );
+  const hookText: Record<HookState, string> = {
+    openboard: 'set up',
+    chained: 'set up (your hook runs openboard git sync)',
+    other: 'not set up (a hook of your own is there)',
+    none: 'not set up',
+  };
+  const hooks = HOOK_NAMES.map((name) => `${name} ${hookText[report.hooks[name]]}`);
+  println(io.stdout, `Hooks:          ${hooks.join('; ')}`);
   return 0;
 }
 
-/** Undo what setup added: the two `.gitattributes` lines and the git settings. Nothing else. */
+/**
+ * Undo what setup added: the two `.gitattributes` lines, the git settings and
+ * OpenBoard's own hooks. Nothing else.
+ */
 export async function gitRemoveCommand(io: CliIo, options: GitSetupOptions = {}): Promise<number> {
   const r = await repo(io, options);
   const removed = await removeAttributes(r.attributes, [MERGE_ATTRIBUTE, DIFF_ATTRIBUTE]);
@@ -328,11 +460,20 @@ export async function gitRemoveCommand(io: CliIo, options: GitSetupOptions = {})
   for (const key of ['merge.openboard.name', 'merge.openboard.driver', 'diff.openboard.textconv']) {
     if (await unsetConfig(io, r, key)) unset.push(key);
   }
-  if (removed.length === 0 && unset.length === 0) {
+  const dir = await hooksDir(io, r);
+  const hooks = [];
+  for (const name of HOOK_NAMES) {
+    const file = path.join(dir, name);
+    if ((await hookState(file)) !== 'openboard') continue;
+    await rm(file);
+    hooks.push(name);
+  }
+  if (removed.length === 0 && unset.length === 0 && hooks.length === 0) {
     println(io.stdout, 'Nothing to remove: the OpenBoard merge driver is not set up here.');
     return 0;
   }
   if (removed.length) println(io.stdout, `Removed from .gitattributes: ${removed.join(', ')}`);
   if (unset.length) println(io.stdout, `Unset: ${unset.join(', ')}`);
+  if (hooks.length) println(io.stdout, `Removed the hooks: ${hooks.join(', ')}`);
   return 0;
 }

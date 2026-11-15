@@ -29,6 +29,7 @@ import {
   mergeDriverCommand,
   textconvCommand,
 } from './commands/git.js';
+import { gitSyncCommand } from './commands/git-sync.js';
 import { importCommand } from './commands/import.js';
 import { initCommand } from './commands/init.js';
 import { activityCommand, snapshotCommand } from './commands/live.js';
@@ -380,7 +381,9 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
 
   const gitCommand = program
     .command('git')
-    .description('set up git to merge and diff board files by meaning')
+    .description(
+      'set up git to merge and diff board files by meaning, and close cards from commits',
+    )
     .enablePositionalOptions();
   gitCommand
     .command('setup')
@@ -390,8 +393,12 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
     .addOption(rootOption())
     .option('--global', 'write the git settings to your global configuration')
     .option('--diff', 'also make git diff and git log -p show board files as readable text')
+    .option(
+      '--hooks',
+      'also install post-commit and post-merge hooks that run openboard git sync (never replaces a hook of your own)',
+    )
     .action(
-      action((opts: { root?: string; global?: boolean; diff?: boolean }) =>
+      action((opts: { root?: string; global?: boolean; diff?: boolean; hooks?: boolean }) =>
         gitSetupCommand(io, opts),
       ),
     );
@@ -407,6 +414,28 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
     .addOption(rootOption())
     .option('--global', 'remove the git settings from your global configuration')
     .action(action((opts: { root?: string; global?: boolean }) => gitRemoveCommand(io, opts)));
+  gitCommand
+    .command('sync')
+    .description(
+      'mark the cards that commits close ("Closes card <id>") as done and record the commit on them; safe to run again',
+    )
+    .argument('[range]', 'commits to read, such as main..HEAD (default: the last 100 on HEAD)')
+    .addOption(rootOption())
+    .option('--dry-run', 'say what would change, and change nothing')
+    .addOption(
+      new Option(
+        '--hook <name>',
+        'as run from that git hook: read only the commits it brought in, print only changes and warnings, never fail',
+      ).choices(['post-commit', 'post-merge']),
+    )
+    .action(
+      action(
+        (
+          range: string | undefined,
+          opts: { root?: string; dryRun?: boolean; hook?: 'post-commit' | 'post-merge' },
+        ) => gitSyncCommand(io, range, opts),
+      ),
+    );
 
   program
     .command('merge-driver')
