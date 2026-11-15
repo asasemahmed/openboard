@@ -99,8 +99,9 @@ describe('import without a server', () => {
     const io = captureIo(dir);
     expect(await importCommand(io, 'flow.mmd', undefined, { root: dir, frame: 'f_plan' })).toBe(0);
     expect(io.out()).toMatch(/^Imported flow\.mmd into main: added \d+ nodes, \d+ edges\.\n/);
-    expect(io.out()).toContain('no position yet');
+    expect(io.out()).not.toContain('no position yet');
     const board = parseBoard(await readFile(boardFile(dir), 'utf8'));
+    expect(Object.values(board.nodes).filter((n) => !n.view)).toEqual([]);
     const router = Object.values(board.nodes).find((n) => n.title === 'Router');
     const frame = Object.values(board.nodes).find((n) => n.title === 'HTTP API');
     expect(frame?.parent).toBe('f_plan');

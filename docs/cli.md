@@ -276,12 +276,11 @@ Add a Mermaid flowchart or a JSON Canvas to a board (default: the only board, or
 | `--new <name>` | Create a board with this name and import into it (instead of naming a board) |
 | `--dry-run`    | Check the import and say what it would add; change nothing                   |
 
-With a server running, the import is applied through it as you (the `cli` actor) with the reason `Import from Mermaid` or `Import from JSON Canvas`, and new nodes are laid out at once. Without one, it is applied to the board file directly; nodes without a position are placed by the next automatic layout.
+With a server running, the import is applied through it as you (the `cli` actor) with the reason `Import from Mermaid` or `Import from JSON Canvas`, and new nodes are laid out at once. Without one, it is applied to the board file directly, and new nodes without a position are laid out before the file is written.
 
 ```text
 $ openboard import flow.mmd
 Imported flow.mmd into main: added 2 nodes, 1 edge.
-2 new nodes have no position yet; the next automatic layout places them (the next change made through the server, or Tidy up on the canvas).
 ```
 
 ## diff
@@ -792,7 +791,7 @@ openboard template save <name> [board] [--force] [--root <dir>]
 openboard template add <source> [--name <id>] [--force] [--dry-run] [--root <dir>]
 ```
 
-`apply` adds a template to a board (default: the only board, or `main`) as one batch: through the running server as you, or, without one, to the board file (the new nodes are placed by the next automatic layout). `--frame` puts its top-level nodes in that frame, `--title` names its outer frame, `--dry-run` says what it would add and changes nothing.
+`apply` adds a template to a board (default: the only board, or `main`) as one batch: through the running server as you, or, without one, to the board file (the new nodes are laid out before it is written). `--frame` puts its top-level nodes in that frame, `--title` names its outer frame, `--dry-run` says what it would add and changes nothing.
 
 `save` writes a board as the project template `.openboard/templates/<name>.board.json` (lowercase letters, digits and dashes), without its comments. A template of that name is replaced only with `--force`; a project template with a built-in's id replaces the built-in in this project. Commit the folder to share it.
 

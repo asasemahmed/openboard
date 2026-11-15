@@ -1,7 +1,8 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseBoard, serializeBoard } from '@openboard/core';
+import { type Board, parseBoard, serializeBoard } from '@openboard/core';
+import { findOverlaps } from '@openboard/server';
 import { describe, expect, it, vi } from 'vitest';
 import { loadPlugins } from '../lib/plugins.js';
 import { startServer } from '../lib/server.js';
@@ -55,6 +56,12 @@ async function project(config?: unknown) {
 const board = async (dir: string, id = 'main') =>
   parseBoard(await readFile(path.join(dir, `.openboard/${id}.board.json`), 'utf8'));
 
+/** Every node has a position and no two siblings sit on top of each other. */
+const expectLaidOut = (b: Board) => {
+  expect(Object.values(b.nodes).filter((n) => !n.view)).toEqual([]);
+  expect(findOverlaps(b)).toEqual([]);
+};
+
 describe('templates without a server', () => {
   it("lists the built-in templates and the project's, and creates a board from one", async () => {
     const dir = await project();
@@ -70,6 +77,7 @@ describe('templates without a server', () => {
     expect(
       Object.values(made.nodes).some((n) => n.type === 'frame' && n.title === 'CSV export'),
     ).toBe(true);
+    expectLaidOut(made);
   });
 
   it('applies a template into a frame, dry-runs, and saves a board as a project template', async () => {
@@ -92,6 +100,8 @@ describe('templates without a server', () => {
     const after = await board(dir);
     const outer = Object.values(after.nodes).find((n) => n.title === 'Pick a queue');
     expect(outer?.parent).toBe('f_plan');
+    expect(io.out()).not.toContain('no position yet');
+    expectLaidOut(after);
 
     const saved = captureIo(dir);
     await templateSaveCommand(saved, 'launch-plan', undefined, { root: dir });

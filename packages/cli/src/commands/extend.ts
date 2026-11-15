@@ -26,6 +26,7 @@ import {
 import { parseProjectTemplate } from '@openboard/server';
 import { CliError, isNodeError } from '../lib/errors.js';
 import { type CliIo, println } from '../lib/io.js';
+import { placeUnplaced } from '../lib/layout.js';
 import { cliActor, resolveRoot } from '../lib/project.js';
 import { projectPaths } from '../lib/server.js';
 import { FileStore, openSession, type Session } from '../lib/store.js';
@@ -157,12 +158,11 @@ export async function templateApplyCommand(
     );
     return 0;
   }
-  await writeAtomic(store.paths.boardFile(board), serializeBoard(outcome.board));
-  println(io.stdout, `Applied template ${template} to ${board}: added ${what}.`);
-  println(
-    io.stdout,
-    'The new nodes have no position yet; the next automatic layout places them (the next change made through the server, or Tidy up on the canvas).',
+  await writeAtomic(
+    store.paths.boardFile(board),
+    serializeBoard(await placeUnplaced(outcome.board)),
   );
+  println(io.stdout, `Applied template ${template} to ${board}: added ${what}.`);
   return 0;
 }
 
