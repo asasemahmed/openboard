@@ -350,6 +350,14 @@
 .removal-notice svg {
   flex: none;
 }
+/* What changed since the last visit: a sentence that may wrap. */
+.visit-notice {
+  color: var(--ink);
+}
+.visit-notice-text {
+  min-width: 0;
+  line-height: 1.4;
+}
 .empty-board-templates {
   display: grid;
   gap: 8px;

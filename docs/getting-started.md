@@ -105,6 +105,7 @@ Clients that support MCP prompts also offer `map_codebase` and `plan_work`, whic
 - Every change is recorded: the **Activity** panel (or `openboard history`) lists them, and undo takes one back exactly, leaving later changes alone. Agents undo their own mistakes, answer your comments, and ask you questions on the canvas when they need an answer before going on.
 
 - The canvas shows agents while they work: the **Agents** panel lists their sessions, and with the Claude Code plugin's hooks (or `openboard hook` in another tool) it also shows what they run outside the board. **Replay history** in the command palette plays back how the board came to be.
+- When you open a board again, a small notice says what others changed since your last visit and who did it. **Show** outlines those cards; dismiss it and it stays gone. This browser remembers where you left off.
 
 [Staying in control](agents.md#staying-in-control) and [seeing agents work](agents.md#seeing-agents-work) explain the details.
 

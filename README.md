@@ -218,6 +218,7 @@ Full reference: [docs/tools.md](docs/tools.md).
 - **Review on the canvas.** By default an agent adds freely and edits its own work freely, while changes to anyone else's content arrive as proposals: dashed ghosts with Accept and Reject, decided as a whole or item by item, with an optional note back to the agent. Four policy modes per agent, and a frame can be opened up, protected, or locked.
 - **Exact undo.** Every change is a batch with an author and a reason. Undo restores exactly what was there and never overwrites later work.
 - **See agents at work.** Agents appear among the participants with what they are reading, writing, or running. A recorder hook shows the whole session tree, subagents included. Replay scrubs through how the board came to be.
+- **Since your last visit.** Open a board again and a short notice says what others changed while you were away, and who, with the cards outlined on request.
 - **A conversation in context.** Comment threads on cards, mentions, and question cards from agents with one-click answers.
 
 ### For your repository
