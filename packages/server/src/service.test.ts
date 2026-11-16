@@ -1,4 +1,4 @@
-import type { Actor } from '@openboard/core';
+import type { Actor } from '@openboard-dev/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { findOverlaps } from './layout/index.js';
 import { removeRoot, startTestServer, tempRoot } from './testing.js';

@@ -13,7 +13,7 @@ import {
   type Status,
   snap,
   type View,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 import {
   absoluteRect,
   boundsOf,

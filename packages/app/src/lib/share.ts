@@ -3,7 +3,7 @@
  * while the dialog is open: closing it (or starting another invite) drops it,
  * and it is never stored anywhere else.
  */
-import type { AccessGrant, GrantAccessResult } from '@openboard/core';
+import type { AccessGrant, GrantAccessResult } from '@openboard-dev/core';
 
 export type GrantStatus = 'active' | 'expired' | 'revoked';
 

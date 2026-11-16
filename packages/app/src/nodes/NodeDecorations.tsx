@@ -1,4 +1,4 @@
-import type { BoardNode } from '@openboard/core';
+import type { BoardNode } from '@openboard-dev/core';
 import { type DecorationSlot, decorationsFor } from './decorations.js';
 
 /** Renders every registered decoration for one slot of one node. */

@@ -6,15 +6,15 @@
  * - adds the export format `csv` (one row per estimate);
  * - keeps a note with the running total of points on every board that has estimates.
  *
- * It is a plain ES module that depends on `@openboard/core` for types only.
+ * It is a plain ES module that depends on `@openboard-dev/core` for types only.
  * Pass it to a server explicitly:
  *
- *   import { startServer } from '@openboard/server';
+ *   import { startServer } from '@openboard-dev/server';
  *   import { createEstimatesPlugin } from './examples/plugin-estimates/index.js';
  *   await startServer({ root, plugins: [createEstimatesPlugin()] });
  */
 
-/** @import { Board, BoardApi, Op, OpenBoardPlugin } from '@openboard/core' */
+/** @import { Board, BoardApi, Op, OpenBoardPlugin } from '@openboard-dev/core' */
 
 /** The plugin writes the total as this actor; a `system` actor is not held up by the review policy. */
 const ACTOR = { id: 'plugin-estimates', kind: 'system', name: 'Estimates' };

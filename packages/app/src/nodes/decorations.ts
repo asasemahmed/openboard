@@ -9,7 +9,7 @@
  *
  * Register at startup, before the canvas mounts.
  */
-import type { BoardNode } from '@openboard/core';
+import type { BoardNode } from '@openboard-dev/core';
 import type { ComponentType } from 'react';
 
 export type DecorationSlot = 'header' | 'overlay';

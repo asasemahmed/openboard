@@ -3,7 +3,7 @@
  * modal and never focused on its own: the oldest question is shown in full,
  * the rest as one-line rows. Folding the stack leaves a count in the top bar.
  */
-import type { Ask } from '@openboard/core';
+import type { Ask } from '@openboard-dev/core';
 import { useReactFlow } from '@xyflow/react';
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { calmMessage } from '../lib/api.js';

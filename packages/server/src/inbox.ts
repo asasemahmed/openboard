@@ -10,7 +10,7 @@
  * a long-poll) and is skipped by reads that do not pass `since`.
  */
 import { appendFile, readFile } from 'node:fs/promises';
-import type { InboxItem } from '@openboard/core';
+import type { InboxItem } from '@openboard-dev/core';
 import { errorMessage, isErrno, writeFileAtomic } from './fsutil.js';
 
 /** Items kept per board (across all recipients). */

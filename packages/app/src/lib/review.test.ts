@@ -1,4 +1,4 @@
-import type { Proposal } from '@openboard/core';
+import type { Proposal } from '@openboard-dev/core';
 import { describe, expect, it } from 'vitest';
 import { propose, sampleDoc } from '../test/fixtures.js';
 import {

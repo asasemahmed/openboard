@@ -1,4 +1,4 @@
-import { STATUSES, type Status } from '@openboard/core';
+import { STATUSES, type Status } from '@openboard-dev/core';
 import { useId } from 'react';
 import { useActions } from '../canvas/actions.js';
 import { STATUS_META, typeMeta } from '../lib/nodeTypes.js';

@@ -155,7 +155,7 @@ import {
   UndoRequestSchema,
   type UndoResult,
   type WhoAmI,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 import { z } from 'zod';
 import type { Boards } from './boards.js';
 import { errorMessage } from './fsutil.js';

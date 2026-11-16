@@ -10,8 +10,8 @@ import type {
   SchemaNodeType,
   TypeColor,
   TypeIcon,
-} from '@openboard/core';
-import { isEmptyValue } from '@openboard/core';
+} from '@openboard-dev/core';
+import { isEmptyValue } from '@openboard-dev/core';
 
 /** How many field values a card has room for in its body preview. */
 export const CARD_FIELDS = 2;

@@ -1,4 +1,4 @@
-import { type Actor, BoardDoc, type GrantAccessResult, type Role } from '@openboard/core';
+import { type Actor, BoardDoc, type GrantAccessResult, type Role } from '@openboard-dev/core';
 import * as decoding from 'lib0/decoding';
 import * as encoding from 'lib0/encoding';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';

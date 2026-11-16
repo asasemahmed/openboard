@@ -1,5 +1,5 @@
 /** The templates the server offers (`GET /api/templates`), read on first use. */
-import type { TemplateSummary } from '@openboard/core';
+import type { TemplateSummary } from '@openboard-dev/core';
 import { api } from './boards.js';
 import { useValue, Value } from './emitter.js';
 

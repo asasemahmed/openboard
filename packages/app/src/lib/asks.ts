@@ -1,5 +1,5 @@
 /** Questions agents ask people: which ones to show, in what order, with which answers. */
-import type { AnswerInput, Ask } from '@openboard/core';
+import type { AnswerInput, Ask } from '@openboard-dev/core';
 
 /** Open questions, oldest first: the one that has waited longest is answered first. */
 export function openAsks(asks: readonly Ask[]): Ask[] {

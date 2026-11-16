@@ -1,4 +1,4 @@
-import { type Actor, BoardDoc, buildProposal, type Op, type Proposal } from '@openboard/core';
+import { type Actor, BoardDoc, buildProposal, type Op, type Proposal } from '@openboard-dev/core';
 import { vi } from 'vitest';
 import type { ApiClient } from '../lib/api.js';
 

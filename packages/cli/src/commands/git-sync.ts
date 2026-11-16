@@ -25,8 +25,8 @@ import {
   type Op,
   type OpError,
   serializeBoard,
-} from '@openboard/core';
-import { connect, type OpenBoardClient } from '@openboard/sdk';
+} from '@openboard-dev/core';
+import { connect, type OpenBoardClient } from '@openboard-dev/sdk';
 import { CliError } from '../lib/errors.js';
 import { checkRev, git, gitTopLevel } from '../lib/git.js';
 import { type CliIo, println } from '../lib/io.js';

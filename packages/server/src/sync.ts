@@ -35,8 +35,8 @@
  */
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
-import type { Actor, TxOrigin } from '@openboard/core';
-import { ColorSchema, can, OpenBoardError } from '@openboard/core';
+import type { Actor, TxOrigin } from '@openboard-dev/core';
+import { ColorSchema, can, OpenBoardError } from '@openboard-dev/core';
 import * as decoding from 'lib0/decoding';
 import * as encoding from 'lib0/encoding';
 import { type RawData, type WebSocket, WebSocketServer } from 'ws';

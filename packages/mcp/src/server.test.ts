@@ -11,9 +11,9 @@ import {
   estimateTokens,
   renderSelection,
   STATUSES,
-} from '@openboard/core';
-import { connect } from '@openboard/sdk';
-import { type OpenBoardServer, startServer } from '@openboard/server';
+} from '@openboard-dev/core';
+import { connect } from '@openboard-dev/sdk';
+import { type OpenBoardServer, startServer } from '@openboard-dev/server';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { actorForClient, type ClientInfo } from './actor.js';
 import { createMcpServer, type McpServerOptions } from './server.js';

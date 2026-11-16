@@ -1,4 +1,4 @@
-import { NodeTypesSchema, type ProjectConfig, TYPE_LIMITS } from '@openboard/core';
+import { NodeTypesSchema, type ProjectConfig, TYPE_LIMITS } from '@openboard-dev/core';
 import { describe, expect, it } from 'vitest';
 import {
   defFromDraft,

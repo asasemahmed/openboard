@@ -10,7 +10,7 @@ import {
   OpenBoardError,
   type Presence,
   serializeBoard,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Boards } from './boards.js';
 import { projectPaths } from './paths.js';

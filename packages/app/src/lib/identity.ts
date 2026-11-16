@@ -2,7 +2,7 @@
  * The person using this browser. Generated once, kept in localStorage, and
  * sent with every request and over the presence channel.
  */
-import { type Actor, newId } from '@openboard/core';
+import { type Actor, newId } from '@openboard-dev/core';
 import { readStored, writeStored } from './storage.js';
 
 export interface Identity {

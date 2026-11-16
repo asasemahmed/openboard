@@ -4,7 +4,7 @@
  * counts only while its `@Name` is still in the text, so deleting it from the
  * text drops it.
  */
-import { MENTION_AGENTS } from '@openboard/core';
+import { MENTION_AGENTS } from '@openboard-dev/core';
 
 export interface MentionTarget {
   /** Actor id, or `MENTION_AGENTS`. */

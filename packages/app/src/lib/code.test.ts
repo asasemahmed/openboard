@@ -6,7 +6,7 @@ import {
   type ImportIntoResult,
   type Link,
   type RevisionsResult,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 import { describe, expect, it } from 'vitest';
 import { codeMarker, linkViews, localState, outOfDate } from './codeLinks.js';
 import { deriveDiffView, diffSummary } from './diffView.js';

@@ -1,4 +1,4 @@
-import { BoardDoc, type DocEvent } from '@openboard/core';
+import { BoardDoc, type DocEvent } from '@openboard-dev/core';
 import { describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
 import { offscreenGroups } from '../lib/offscreen.js';

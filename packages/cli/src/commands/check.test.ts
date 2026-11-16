@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { type Board, serializeBoard } from '@openboard/core';
+import { type Board, serializeBoard } from '@openboard-dev/core';
 import { describe, expect, it } from 'vitest';
 import { run } from '../program.js';
 import { captureIo, sampleBoard, tempDir } from '../testing/helpers.js';

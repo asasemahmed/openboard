@@ -40,7 +40,7 @@ import {
   type ReadQuery,
   serializeBoard,
   type UndoRequest,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 import { z } from 'zod';
 import type { McpCaller, SessionInfo } from './actor.js';
 import {

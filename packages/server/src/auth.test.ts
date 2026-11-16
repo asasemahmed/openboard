@@ -1,6 +1,6 @@
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
-import type { Actor } from '@openboard/core';
+import type { Actor } from '@openboard-dev/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { AccessStore, hashSecret, SESSION_IDLE_MS, TICKET_TTL_MS } from './access.js';
 import {

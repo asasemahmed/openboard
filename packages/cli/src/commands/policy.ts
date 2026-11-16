@@ -8,7 +8,7 @@ import {
   type ProjectConfig,
   parseConfig,
   serializeConfig,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 import { CliError, isNodeError } from '../lib/errors.js';
 import { type CliIo, println } from '../lib/io.js';
 import { resolveRoot } from '../lib/project.js';

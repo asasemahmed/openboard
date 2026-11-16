@@ -1,4 +1,4 @@
-import { type Board, type BoardEdge, type BoardNode, NODE_GAP } from '@openboard/core';
+import { type Board, type BoardEdge, type BoardNode, NODE_GAP } from '@openboard-dev/core';
 import { describe, expect, it } from 'vitest';
 import {
   board,

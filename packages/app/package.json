@@ -1,5 +1,5 @@
 {
-  "name": "@openboard/app",
+  "name": "@openboard-dev/app",
   "version": "0.1.0",
   "type": "module",
   "description": "The OpenBoard web canvas, prebuilt.",
@@ -22,7 +22,7 @@
     "postpack": "rm -f LICENSE"
   },
   "devDependencies": {
-    "@openboard/core": "workspace:*",
+    "@openboard-dev/core": "workspace:*",
     "@testing-library/react": "^16.3.0",
     "@types/markdown-it": "^14.2.0",
     "@types/react": "^19.2.0",

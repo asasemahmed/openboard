@@ -33,7 +33,7 @@ import {
   linkRangeText,
   normaliseLineEndings,
   RELOCATE_MAX_LINES,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 import { type FSWatcher, watch } from 'chokidar';
 import { errorMessage, isErrno } from './fsutil.js';
 import { jsonEqual } from './json.js';

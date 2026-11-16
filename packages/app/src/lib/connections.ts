@@ -5,7 +5,7 @@
  * until the card they belong to is pointed at or selected, and a person's
  * always show.
  */
-import type { Actor, BoardEdge } from '@openboard/core';
+import type { Actor, BoardEdge } from '@openboard-dev/core';
 
 type Actors = Readonly<Record<string, Actor>>;
 

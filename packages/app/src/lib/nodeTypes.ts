@@ -2,7 +2,7 @@
  * Presentation metadata for node types. Colours are CSS custom properties
  * (`--type-<tone>`) defined per theme in styles/tokens.css.
  */
-import { BUILTIN_NODE_TYPES, type BuiltinNodeType, type Status } from '@openboard/core';
+import { BUILTIN_NODE_TYPES, type BuiltinNodeType, type Status } from '@openboard-dev/core';
 
 export interface TypeMeta {
   type: string;

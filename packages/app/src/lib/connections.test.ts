@@ -1,4 +1,4 @@
-import type { Actor } from '@openboard/core';
+import type { Actor } from '@openboard-dev/core';
 import { describe, expect, it } from 'vitest';
 import { isQuietEdge, quietCounts } from './connections.js';
 

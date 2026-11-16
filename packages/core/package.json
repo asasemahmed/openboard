@@ -1,5 +1,5 @@
 {
-  "name": "@openboard/core",
+  "name": "@openboard-dev/core",
   "version": "0.1.0",
   "type": "module",
   "description": "Schema, operations and formats for OpenBoard boards.",

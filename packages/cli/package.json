@@ -1,5 +1,5 @@
 {
-  "name": "@openboard/cli",
+  "name": "@openboard-dev/cli",
   "version": "0.1.0",
   "type": "module",
   "description": "A shared canvas your AI agent can read, edit, and be steered from. Works with any MCP client.",
@@ -38,11 +38,11 @@
     "dist"
   ],
   "dependencies": {
-    "@openboard/app": "workspace:*",
-    "@openboard/core": "workspace:*",
-    "@openboard/mcp": "workspace:*",
-    "@openboard/sdk": "workspace:*",
-    "@openboard/server": "workspace:*",
+    "@openboard-dev/app": "workspace:*",
+    "@openboard-dev/core": "workspace:*",
+    "@openboard-dev/mcp": "workspace:*",
+    "@openboard-dev/sdk": "workspace:*",
+    "@openboard-dev/server": "workspace:*",
     "commander": "^15.1.0",
     "open": "^10.2.0"
   },

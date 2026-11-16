@@ -11,7 +11,7 @@ import {
   type Json,
   type PolicyMode,
   type ProjectConfig,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 
 export const POLICY_MODES: readonly PolicyMode[] = [
   'auto',

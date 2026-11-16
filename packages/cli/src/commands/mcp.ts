@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { format } from 'node:util';
-import { emptyBoard, OpenBoardError } from '@openboard/core';
-import { actorForClient, runStdio, sessionFromEnv } from '@openboard/mcp';
-import { connect } from '@openboard/sdk';
+import { emptyBoard, OpenBoardError } from '@openboard-dev/core';
+import { actorForClient, runStdio, sessionFromEnv } from '@openboard-dev/mcp';
+import { connect } from '@openboard-dev/sdk';
 import { CliError } from '../lib/errors.js';
 import type { CliIo } from '../lib/io.js';
 import { println } from '../lib/io.js';

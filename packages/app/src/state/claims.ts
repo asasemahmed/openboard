@@ -4,7 +4,7 @@
  * sweeps it away. `ClaimStore` keeps the claims in force and wakes up only at
  * the next expiry, and only while there are claims.
  */
-import type { Actor, BoardDoc, Claim } from '@openboard/core';
+import type { Actor, BoardDoc, Claim } from '@openboard-dev/core';
 import type { AgentSession } from '../lib/agents.js';
 import { colorFor, initials } from '../lib/identity.js';
 

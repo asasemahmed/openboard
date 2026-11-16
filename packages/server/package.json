@@ -1,5 +1,5 @@
 {
-  "name": "@openboard/server",
+  "name": "@openboard-dev/server",
   "version": "0.1.0",
   "type": "module",
   "description": "The OpenBoard board server: sync, persistence, layout and shared mode.",
@@ -25,7 +25,7 @@
   ],
   "dependencies": {
     "@hono/node-server": "^2.1.7",
-    "@openboard/core": "workspace:*",
+    "@openboard-dev/core": "workspace:*",
     "chokidar": "^4.0.3",
     "elkjs": "^0.12.1",
     "hono": "^4.13.18",

@@ -1,5 +1,5 @@
 {
-  "name": "@openboard/mcp",
+  "name": "@openboard-dev/mcp",
   "version": "0.1.0",
   "type": "module",
   "description": "The OpenBoard MCP server: board tools for AI agents.",
@@ -25,12 +25,12 @@
   ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
-    "@openboard/core": "workspace:*",
-    "@openboard/sdk": "workspace:*",
+    "@openboard-dev/core": "workspace:*",
+    "@openboard-dev/sdk": "workspace:*",
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@openboard/server": "workspace:*"
+    "@openboard-dev/server": "workspace:*"
   },
   "scripts": {
     "prepack": "cp ../../LICENSE LICENSE",

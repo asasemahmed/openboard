@@ -1,5 +1,5 @@
 {
-  "name": "@openboard/sdk",
+  "name": "@openboard-dev/sdk",
   "version": "0.1.0",
   "type": "module",
   "description": "A typed HTTP client for a running OpenBoard server.",
@@ -24,10 +24,10 @@
     "dist"
   ],
   "dependencies": {
-    "@openboard/core": "workspace:*"
+    "@openboard-dev/core": "workspace:*"
   },
   "devDependencies": {
-    "@openboard/server": "workspace:*"
+    "@openboard-dev/server": "workspace:*"
   },
   "scripts": {
     "prepack": "cp ../../LICENSE LICENSE",

@@ -4,7 +4,7 @@
  * and shows a snapshot from the server; a banner says plainly that this is
  * the past, and a timeline at the bottom scrubs and plays through it.
  */
-import { type Batch, type Board, BoardDoc } from '@openboard/core';
+import { type Batch, type Board, BoardDoc } from '@openboard-dev/core';
 import { ReactFlowProvider } from '@xyflow/react';
 import {
   type KeyboardEvent,

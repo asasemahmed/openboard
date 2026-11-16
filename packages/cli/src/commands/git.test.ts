@@ -15,7 +15,7 @@ import {
   type Op,
   parseBoard,
   serializeBoard,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 import { describe, expect, it } from 'vitest';
 import { CliError } from '../lib/errors.js';
 import { captureIo, sampleBoard, tempDir } from '../testing/helpers.js';

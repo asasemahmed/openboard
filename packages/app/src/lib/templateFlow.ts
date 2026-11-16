@@ -3,7 +3,7 @@
  * it and choose a frame, check what it adds (the server's dry run), then
  * apply. A result that waits for review or fails keeps its message.
  */
-import type { ApplyResult, TemplateSummary, TypeIcon } from '@openboard/core';
+import type { ApplyResult, TemplateSummary, TypeIcon } from '@openboard-dev/core';
 
 export type TemplateStep = 'loading' | 'choose' | 'checking' | 'preview' | 'applying' | 'done';
 

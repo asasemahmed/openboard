@@ -5,7 +5,7 @@
  * gives turns, token usage and cost. The harness never reads a provider key:
  * the CLI uses whatever login it already has.
  */
-import { TOOL_NAMES } from '@openboard/mcp';
+import { TOOL_NAMES } from '@openboard-dev/mcp';
 import type { AgentRunner, RunInput, RunOutput } from '../types.js';
 import { runProcess, tail, writeMcpConfig } from './process.js';
 

@@ -3,7 +3,7 @@
  * are built from: arranging one container with ELK, placing single nodes into
  * free space, sizing frames, and pushing siblings out of a grown frame's way.
  */
-import { type BoardNode, FRAME_PADDING, NODE_GAP, type View } from '@openboard/core';
+import { type BoardNode, FRAME_PADDING, NODE_GAP, type View } from '@openboard-dev/core';
 import { arrangeWithElk, type Direction } from './elk.js';
 import {
   ceilToGrid,

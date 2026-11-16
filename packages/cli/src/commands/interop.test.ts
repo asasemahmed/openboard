@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Readable } from 'node:stream';
-import { type Actor, parseBoard, serializeBoard } from '@openboard/core';
+import { type Actor, parseBoard, serializeBoard } from '@openboard-dev/core';
 import { describe, expect, it } from 'vitest';
 import { EXPORTERS, exporterForFile, findExporter } from '../exporters.js';
 import { startServer } from '../lib/server.js';

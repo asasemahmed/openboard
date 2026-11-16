@@ -1,5 +1,5 @@
 /** The current person, shared by every screen. */
-import type { Actor, WhoAmI } from '@openboard/core';
+import type { Actor, WhoAmI } from '@openboard-dev/core';
 import {
   cleanName,
   type Identity,

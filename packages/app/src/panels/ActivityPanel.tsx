@@ -3,7 +3,7 @@
  * changed what and why, with undo and redo per change. It pages backwards on
  * scroll and refreshes shortly after the board changes, only while open.
  */
-import type { Batch } from '@openboard/core';
+import type { Batch } from '@openboard-dev/core';
 import { useReactFlow } from '@xyflow/react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { reducedMotion } from '../canvas/actions.js';

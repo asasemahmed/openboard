@@ -10,7 +10,7 @@ import {
   type ProposalItem,
   type ProposalPreview,
   previewOf,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 import { errorMessage } from './fsutil.js';
 import { jsonEqual } from './json.js';
 import { layoutIncremental } from './layout/index.js';

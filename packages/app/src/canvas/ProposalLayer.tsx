@@ -4,7 +4,7 @@
  * small floating card next to it to accept or reject the whole proposal, or
  * open the review panel for item-by-item decisions.
  */
-import type { Proposal } from '@openboard/core';
+import type { Proposal } from '@openboard-dev/core';
 import { useStore } from '@xyflow/react';
 import { memo, useMemo, useState } from 'react';
 import { placementsOf } from '../lib/flow.js';

@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { Actor } from '@openboard/core';
+import type { Actor } from '@openboard-dev/core';
 import { CliError } from './errors.js';
 import type { CliIo } from './io.js';
 import { findProjectRoot } from './server.js';
@@ -63,12 +63,12 @@ export interface AppLocation {
   built: boolean;
 }
 
-/** Where the built web app lives, from the `@openboard/app` package. */
+/** Where the built web app lives, from the `@openboard-dev/app` package. */
 export function locateApp(): AppLocation {
   let dir: string;
   try {
     const require = createRequire(import.meta.url);
-    dir = path.join(path.dirname(require.resolve('@openboard/app/package.json')), 'dist');
+    dir = path.join(path.dirname(require.resolve('@openboard-dev/app/package.json')), 'dist');
   } catch {
     return { dir: undefined, built: false };
   }

@@ -3,7 +3,7 @@
  * to this actor, so it is derived from what the client says about itself
  * (`clientInfo` at initialize), unless the environment names it explicitly.
  */
-import { type AccessVia, type Actor, IdSchema, type Role, slugify } from '@openboard/core';
+import { type AccessVia, type Actor, IdSchema, type Role, slugify } from '@openboard-dev/core';
 
 /** What an MCP client reports about itself in `initialize`. */
 export interface ClientInfo {

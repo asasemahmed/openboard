@@ -18,7 +18,7 @@ import {
   type TemplateBuildOptions,
   type TemplateDef,
   type TemplateSummary,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 import { errorMessage, isErrno, readIfExists } from './fsutil.js';
 import { boardIdFromFile } from './paths.js';
 import type { PluginHost } from './plugins.js';

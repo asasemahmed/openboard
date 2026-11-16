@@ -9,7 +9,7 @@ import {
   MAX_MAX_TOKENS,
   renderOutline,
   renderRead,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 
 export interface ExportOptions {
   /** For `svg` and `html`. */

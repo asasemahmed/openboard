@@ -1,6 +1,6 @@
 import { lstat, mkdir, readdir, readFile, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { serializeBoard } from '@openboard/core';
+import { serializeBoard } from '@openboard-dev/core';
 import { describe, expect, it } from 'vitest';
 import { captureIo, sampleBoard, tempDir } from '../testing/helpers.js';
 import { adrCommand } from './adr.js';

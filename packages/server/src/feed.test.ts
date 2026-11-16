@@ -1,6 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { type Actor, BoardDoc } from '@openboard/core';
+import { type Actor, BoardDoc } from '@openboard-dev/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ChangeFeed } from './feed.js';
 import { removeRoot, tempRoot } from './testing.js';

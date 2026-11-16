@@ -1,4 +1,4 @@
-import type { ChangeEntry, ChangesOptions, ChangesResult } from '@openboard/core';
+import type { ChangeEntry, ChangesOptions, ChangesResult } from '@openboard-dev/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AGENT, ME, sampleDoc } from '../test/fixtures.js';
 import type { Clock } from './activity.js';

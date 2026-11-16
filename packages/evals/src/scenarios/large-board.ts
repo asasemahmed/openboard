@@ -1,4 +1,4 @@
-import type { Op, Status } from '@openboard/core';
+import type { Op, Status } from '@openboard-dev/core';
 import { nodes, semantic } from '../board.js';
 import { check, statusEquals, targetedReads, withinBudget } from '../checks.js';
 import { pick, seededRandom } from '../random.js';

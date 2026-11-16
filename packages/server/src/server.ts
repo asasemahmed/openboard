@@ -8,7 +8,7 @@ import { mkdir, readFile, rm } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { getRequestListener } from '@hono/node-server';
-import { type Actor, OpenBoardError } from '@openboard/core';
+import { type Actor, OpenBoardError } from '@openboard-dev/core';
 import { Auth, scrubSecrets } from './auth.js';
 import { Boards } from './boards.js';
 import { errorMessage, isErrno, writeFileAtomic } from './fsutil.js';

@@ -1,5 +1,5 @@
 /** Roles in words people read: one table for the share dialog, the join page and disabled controls. */
-import { type AccessAction, leastRoleFor, type Role } from '@openboard/core';
+import { type AccessAction, leastRoleFor, type Role } from '@openboard-dev/core';
 
 export const ROLE_TEXT: Record<Role, { name: string; line: string; you: string }> = {
   owner: {

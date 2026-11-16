@@ -1,8 +1,8 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { type Board, parseBoard, serializeBoard } from '@openboard/core';
-import { findOverlaps } from '@openboard/server';
+import { type Board, parseBoard, serializeBoard } from '@openboard-dev/core';
+import { findOverlaps } from '@openboard-dev/server';
 import { describe, expect, it, vi } from 'vitest';
 import { loadPlugins } from '../lib/plugins.js';
 import { startServer } from '../lib/server.js';

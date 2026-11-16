@@ -4,7 +4,7 @@
  * selects its card, brings it into view and focuses it. The section is not
  * rendered at all when there is nothing to show.
  */
-import type { HealthFinding, HealthKind } from '@openboard/core';
+import type { HealthFinding, HealthKind } from '@openboard-dev/core';
 import { useId, useMemo, useState } from 'react';
 import { useActions } from '../canvas/actions.js';
 import { focusNodeElement } from '../canvas/nodeFocus.js';

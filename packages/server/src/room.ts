@@ -20,7 +20,7 @@ import {
   type Op,
   type Presence,
   type TxOrigin,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 import { Awareness } from 'y-protocols/awareness';
 import { ConfigStore } from './config.js';
 import { ChangeFeed } from './feed.js';

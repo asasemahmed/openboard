@@ -1,4 +1,4 @@
-import type { Actor } from '@openboard/core';
+import type { Actor } from '@openboard-dev/core';
 import { colorFor, initials } from '../lib/identity.js';
 
 /** Initials on the actor's colour. Agents are drawn as rounded squares, people as circles. */

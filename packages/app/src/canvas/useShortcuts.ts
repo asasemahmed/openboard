@@ -3,7 +3,7 @@
  * person is typing in a field, or while a dialog, menu or the palette is open
  * (they handle their own keys).
  */
-import { GRID } from '@openboard/core';
+import { GRID } from '@openboard-dev/core';
 import { useEffect } from 'react';
 import { isTypingTarget, matchesShortcut } from '../lib/shortcuts.js';
 import { canNow } from '../state/access.js';

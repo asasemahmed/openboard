@@ -8,7 +8,7 @@ import { randomBytes } from 'node:crypto';
 import type { Dirent } from 'node:fs';
 import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { type AdrAction, type AdrExistingFile, planAdrs } from '@openboard/core';
+import { type AdrAction, type AdrExistingFile, planAdrs } from '@openboard-dev/core';
 import { CliError } from '../lib/errors.js';
 import { type CliIo, println } from '../lib/io.js';
 import { resolveRoot } from '../lib/project.js';

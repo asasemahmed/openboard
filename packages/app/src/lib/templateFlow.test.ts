@@ -1,4 +1,4 @@
-import type { ApplyResult, TemplateSummary } from '@openboard/core';
+import type { ApplyResult, TemplateSummary } from '@openboard-dev/core';
 import { describe, expect, it } from 'vitest';
 import {
   initialTemplate,

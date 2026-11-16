@@ -7,7 +7,7 @@ import {
   type GrantAccessResult,
   type Role,
   RoleSchema,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Boards } from './boards.js';
 import { createHttpApp, permissionAction, routeTable } from './http.js';

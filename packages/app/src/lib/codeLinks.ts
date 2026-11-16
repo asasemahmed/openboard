@@ -3,7 +3,7 @@
  * document, with the server's details when it has been asked), what a card
  * shows, and what can be done with a link.
  */
-import type { BoardNode, Link, LinkEntry, LinkState } from '@openboard/core';
+import type { BoardNode, Link, LinkEntry, LinkState } from '@openboard-dev/core';
 
 export const CODE_KINDS: ReadonlySet<Link['kind']> = new Set(['file', 'symbol']);
 

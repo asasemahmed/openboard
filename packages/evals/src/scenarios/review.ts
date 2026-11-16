@@ -1,4 +1,4 @@
-import type { Proposal } from '@openboard/core';
+import type { Proposal } from '@openboard-dev/core';
 import { findNodes } from '../board.js';
 import {
   check,

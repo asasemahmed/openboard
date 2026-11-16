@@ -24,7 +24,7 @@ import {
   OpSchema,
   STATUSES,
   StatusSchema,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 import { z } from 'zod';
 
 export const TOOL_NAMES = [

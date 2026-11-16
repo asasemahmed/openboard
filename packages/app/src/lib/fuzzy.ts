@@ -3,7 +3,7 @@
  * `null` means no match. Exact and prefix matches beat substrings, which beat
  * scattered subsequences; matches at word starts and in runs score higher.
  */
-import type { BoardNode } from '@openboard/core';
+import type { BoardNode } from '@openboard-dev/core';
 
 const WORD_BREAK = /[\s\-_./:#]/;
 

@@ -7,7 +7,7 @@ import {
   LINK_HASH_PREFIX,
   type Link,
   parseBoard,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Boards } from './boards.js';
 import { checkCodeLinks, hashContent } from './code.js';

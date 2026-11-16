@@ -1,4 +1,4 @@
-import { OpenBoardError } from '@openboard/core';
+import { OpenBoardError } from '@openboard-dev/core';
 import { type CliIo, isDebug, println } from './io.js';
 
 /** An expected failure: printed as one line, without a stack trace. */

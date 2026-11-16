@@ -14,7 +14,7 @@ import {
   ProjectConfigSchema,
   parseConfig,
   serializeConfig,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 import { errorMessage, isErrno, readIfExists, sha256, writeFileAtomic } from './fsutil.js';
 
 export class ConfigStore {

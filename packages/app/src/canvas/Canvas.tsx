@@ -3,7 +3,7 @@
  * hands it nodes and edges, and React Flow hands back drags, measurements and
  * selection. Drags are written to the document once, on drop.
  */
-import { GRID } from '@openboard/core';
+import { GRID } from '@openboard-dev/core';
 import {
   Background,
   BackgroundVariant,

@@ -1,5 +1,5 @@
 /** The list of boards on the server, shared by the home screen, switcher and palette. */
-import type { BoardSummary } from '@openboard/core';
+import type { BoardSummary } from '@openboard-dev/core';
 import { ApiError, createApiClient, type ServerInfo } from '../lib/api.js';
 import { isString, readStored, writeStored } from '../lib/storage.js';
 import { Emitter, useStoreValue, Value } from './emitter.js';

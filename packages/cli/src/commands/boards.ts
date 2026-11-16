@@ -1,4 +1,4 @@
-import type { BoardSummary } from '@openboard/core';
+import type { BoardSummary } from '@openboard-dev/core';
 import { type CliIo, println } from '../lib/io.js';
 import { resolveRoot } from '../lib/project.js';
 import { openSession } from '../lib/store.js';

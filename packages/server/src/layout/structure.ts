@@ -2,7 +2,7 @@
  * The board seen as a tree of containers (the canvas and its frames), with
  * every edge lifted to the container where it can influence placement.
  */
-import type { Board, BoardEdge, BoardNode } from '@openboard/core';
+import type { Board, BoardEdge, BoardNode } from '@openboard-dev/core';
 import { cmp } from './geometry.js';
 
 /** Container key for the canvas itself. `#` cannot appear in a node id, so it never collides. */

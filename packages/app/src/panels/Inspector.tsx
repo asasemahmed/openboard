@@ -4,7 +4,7 @@
  * (they are not needed to show a board) and are fetched as soon as the
  * browser is idle.
  */
-import { LIMITS } from '@openboard/core';
+import { LIMITS } from '@openboard-dev/core';
 import { lazy, Suspense, useEffect } from 'react';
 import { useCan } from '../state/access.js';
 import { useBoardEdge, useBoardNode, useMeta, useSelection, useSession } from '../state/context.js';

@@ -10,7 +10,7 @@ import {
   FRAME_PADDING,
   NODE_GAP,
   type View,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 import { nodeSize, rectsTooClose } from './geometry.js';
 
 const AT = '2026-01-01T00:00:00.000Z';

@@ -1,4 +1,4 @@
-import type { Batch, Board, Claim, Session } from '@openboard/core';
+import type { Batch, Board, Claim, Session } from '@openboard-dev/core';
 import { describe, expect, it, vi } from 'vitest';
 import {
   cursorAnchor,

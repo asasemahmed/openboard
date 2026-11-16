@@ -6,8 +6,8 @@ import type { AddressInfo } from 'node:net';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
-import type { Actor } from '@openboard/core';
-import { actorForClient } from '@openboard/mcp';
+import type { Actor } from '@openboard-dev/core';
+import { actorForClient } from '@openboard-dev/mcp';
 import { describe, expect, it } from 'vitest';
 import {
   detectFormat,

@@ -1,4 +1,4 @@
-# @openboard/evals
+# @openboard-dev/evals
 
 An evaluation harness for agents on an OpenBoard. It measures two things for each task:
 

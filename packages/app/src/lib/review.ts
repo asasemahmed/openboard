@@ -11,7 +11,7 @@
  *                   same way the server expands a decision
  *   affectedNodes   which nodes an item is about, to point at them
  */
-import type { BoardEdge, BoardNode, Json, Proposal, ProposalItem, View } from '@openboard/core';
+import type { BoardEdge, BoardNode, Json, Proposal, ProposalItem, View } from '@openboard-dev/core';
 import { absoluteRect, type PlacementMap, type Rect } from './geometry.js';
 
 export type MarkKind = 'update' | 'remove' | 'conflict';

@@ -23,7 +23,7 @@ import {
   parseBoard,
   renderConflicts,
   serializeBoard,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 import { fullText, outlineText } from '../exporters.js';
 import { CliError, isNodeError } from '../lib/errors.js';
 import { git, gitTopLevel } from '../lib/git.js';

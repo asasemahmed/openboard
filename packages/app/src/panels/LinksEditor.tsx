@@ -3,7 +3,7 @@
  * card describes (live from the document, with the server's detail), and what
  * can be done: open it in the editor, mark it up to date, edit, remove, add.
  */
-import { LIMITS, type Link, type LinkEntry } from '@openboard/core';
+import { LIMITS, type Link, type LinkEntry } from '@openboard-dev/core';
 import { type FormEvent, useEffect, useId, useState } from 'react';
 import { calmMessage } from '../lib/api.js';
 import { type LinkView, linkViews } from '../lib/codeLinks.js';

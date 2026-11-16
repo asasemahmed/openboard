@@ -12,7 +12,7 @@ import {
   type LiveSessions,
   type Presence,
   type Role,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
 import { WebsocketProvider } from 'y-websocket';

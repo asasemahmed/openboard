@@ -1,4 +1,4 @@
-import type { FieldDef } from '@openboard/core';
+import type { FieldDef } from '@openboard-dev/core';
 import { describe, expect, it } from 'vitest';
 import { inputValue, missingRequired, parseInput, propsWith } from './fieldForm.js';
 

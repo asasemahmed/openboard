@@ -2,7 +2,7 @@
  * How a session reaches the server. The real transport is y-websocket; tests
  * and offline previews use the local one, which never leaves the page.
  */
-import type { Actor } from '@openboard/core';
+import type { Actor } from '@openboard-dev/core';
 import { Awareness } from 'y-protocols/awareness';
 import { WebsocketProvider } from 'y-websocket';
 import type * as Y from 'yjs';

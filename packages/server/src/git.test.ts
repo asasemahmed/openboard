@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
-import { type Actor, type BoardApi, OpenBoardError } from '@openboard/core';
+import { type Actor, type BoardApi, OpenBoardError } from '@openboard-dev/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { projectPaths } from './paths.js';
 import { api, removeRoot, startTestServer, tempRoot, waitFor } from './testing.js';

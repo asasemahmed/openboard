@@ -3,7 +3,7 @@
  * up the pointer (so the inside behaves like canvas: box-select, double-click
  * to add), and the frame is resizable while selected.
  */
-import { FRAME_MIN, FRAME_PADDING } from '@openboard/core';
+import { FRAME_MIN, FRAME_PADDING } from '@openboard-dev/core';
 import { Handle, type NodeProps, NodeResizer, Position } from '@xyflow/react';
 import { memo } from 'react';
 import { useNodeFocus } from '../canvas/nodeFocus.js';

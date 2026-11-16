@@ -4,7 +4,7 @@
  * it without changing anything (a dry run), and only then is it imported.
  * Errors keep the importer's warnings so nothing fails blankly.
  */
-import type { ImportIntoResult, ImportRequest } from '@openboard/core';
+import type { ImportIntoResult, ImportRequest } from '@openboard-dev/core';
 
 /** A built-in importer (`mermaid`, `jsoncanvas`) or one a server plugin adds. */
 export type ImportFormat = string;

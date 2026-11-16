@@ -15,8 +15,8 @@
  * cursor, which is what makes `snapshotAt` exact.
  */
 import { appendFile, readFile } from 'node:fs/promises';
-import type { BoardDoc, ChangeEntry, DocEvent } from '@openboard/core';
-import { ChangeKindSchema, type Link, type TxSource, TxSourceSchema } from '@openboard/core';
+import type { BoardDoc, ChangeEntry, DocEvent } from '@openboard-dev/core';
+import { ChangeKindSchema, type Link, type TxSource, TxSourceSchema } from '@openboard-dev/core';
 import { errorMessage, isErrno, writeFileAtomic } from './fsutil.js';
 
 /** How many entries are kept in memory (and, after compaction, on disk). */

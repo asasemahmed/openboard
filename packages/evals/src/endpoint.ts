@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
-import { createMcpServer, type McpServerOptions } from '@openboard/mcp';
+import { createMcpServer, type McpServerOptions } from '@openboard-dev/mcp';
 import type { Recorder } from './trace.js';
 import { StreamTransport } from './transport.js';
 

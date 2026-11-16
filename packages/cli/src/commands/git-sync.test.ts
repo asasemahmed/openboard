@@ -9,7 +9,7 @@ import { existsSync, statSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { type Board, parseBoard, serializeBoard } from '@openboard/core';
+import { type Board, parseBoard, serializeBoard } from '@openboard-dev/core';
 import { describe, expect, it } from 'vitest';
 import { startServer } from '../lib/server.js';
 import { captureIo, sampleBoard, serverWorks, tempDir } from '../testing/helpers.js';

@@ -10,7 +10,7 @@ import {
   FRAME_PADDING,
   GRID,
   type View,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 
 /** Node id -> complete new view (keeps `pinned`, `color`, `collapsed` unless a scope says otherwise). */
 export type LayoutPatch = Map<string, View>;

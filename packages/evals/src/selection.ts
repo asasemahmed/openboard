@@ -8,7 +8,7 @@
  * the harness needs no Yjs dependency: it never syncs the document itself,
  * which the server does not require.
  */
-import type { Actor } from '@openboard/core';
+import type { Actor } from '@openboard-dev/core';
 
 const MESSAGE_AWARENESS = 1;
 

@@ -19,7 +19,7 @@ import {
   can,
   forbiddenMessage,
   OpenBoardError,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 import { type Context, Hono, type MiddlewareHandler } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';

@@ -1,4 +1,4 @@
-import { type Actor, OpenBoardError } from '@openboard/core';
+import { type Actor, OpenBoardError } from '@openboard-dev/core';
 import { describe, expect, it } from 'vitest';
 import { connect, OpenBoardClient } from './index.js';
 

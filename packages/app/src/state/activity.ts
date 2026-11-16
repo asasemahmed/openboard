@@ -15,7 +15,7 @@
  * (`createdBy` / `updatedBy`). A removal leaves nothing to read, so the store
  * asks the server's change feed who made it.
  */
-import type { Actor, BoardEdge, BoardNode, DocEvent } from '@openboard/core';
+import type { Actor, BoardEdge, BoardNode, DocEvent } from '@openboard-dev/core';
 import { Emitter } from './emitter.js';
 
 /** How long a change stays highlighted. */

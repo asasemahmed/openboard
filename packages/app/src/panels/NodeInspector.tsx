@@ -1,4 +1,4 @@
-import { type BoardNode, LIMITS, type NodePatch, STATUSES, type Status } from '@openboard/core';
+import { type BoardNode, LIMITS, type NodePatch, STATUSES, type Status } from '@openboard-dev/core';
 import { useCallback, useEffect, useRef } from 'react';
 import { applyOrReport, useActions } from '../canvas/actions.js';
 import { cardModel } from '../lib/declaredTypes.js';

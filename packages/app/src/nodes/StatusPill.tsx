@@ -1,4 +1,4 @@
-import type { Status } from '@openboard/core';
+import type { Status } from '@openboard-dev/core';
 import { STATUS_META } from '../lib/nodeTypes.js';
 import { Icon, type IconName } from '../ui/Icon.js';
 

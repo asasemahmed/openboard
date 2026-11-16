@@ -1,5 +1,5 @@
 /**
- * Imported before anything else. Zod (through @openboard/core) probes whether
+ * Imported before anything else. Zod (through @openboard-dev/core) probes whether
  * it may compile validators with `new Function`; under this app's
  * Content-Security-Policy the probe fails quietly but is still reported as a
  * violation. Telling it up front not to try keeps the console clean.

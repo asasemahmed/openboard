@@ -1,4 +1,4 @@
-import { LIMITS } from '@openboard/core';
+import { LIMITS } from '@openboard-dev/core';
 import { useState } from 'react';
 import { Icon } from '../ui/Icon.js';
 

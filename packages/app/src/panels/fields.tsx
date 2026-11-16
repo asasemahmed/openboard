@@ -1,4 +1,4 @@
-import type { Actor } from '@openboard/core';
+import type { Actor } from '@openboard-dev/core';
 import { type ReactNode, useId } from 'react';
 import { absoluteTime, relativeTime } from '../lib/time.js';
 import { useMeta } from '../state/context.js';

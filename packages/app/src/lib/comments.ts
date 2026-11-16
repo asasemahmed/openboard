@@ -1,5 +1,5 @@
 /** Comments grouped into threads, and the comment a person writes in the browser. */
-import { type Actor, type Comment, newId } from '@openboard/core';
+import { type Actor, type Comment, newId } from '@openboard-dev/core';
 
 export interface Thread {
   /** The thread id: the id of its first comment. */

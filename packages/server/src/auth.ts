@@ -10,7 +10,7 @@
  * `isLocalOwnerRequest` accepts is trusted, as the owner at this machine.
  */
 import type { IncomingHttpHeaders } from 'node:http';
-import { type AccessVia, type Actor, OpenBoardError, type Role } from '@openboard/core';
+import { type AccessVia, type Actor, OpenBoardError, type Role } from '@openboard-dev/core';
 import { type AccessStore, cleanName } from './access.js';
 import { ANONYMOUS_AGENT, actorFromHeaders } from './actor.js';
 import type { CallerInfo } from './types.js';

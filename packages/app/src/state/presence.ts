@@ -4,7 +4,7 @@
  * when it becomes empty: the server answers "what is the human pointing at?"
  * from it, so it must never be stale.
  */
-import type { Actor, LiveSessions, Presence } from '@openboard/core';
+import type { Actor, LiveSessions, Presence } from '@openboard-dev/core';
 import type { Awareness } from 'y-protocols/awareness';
 import { type AgentSession, partitionPresence } from '../lib/agents.js';
 import { colorFor } from '../lib/identity.js';

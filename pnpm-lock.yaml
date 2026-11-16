@@ -184,7 +184,7 @@ importers:
 
   packages/app:
     devDependencies:
-      '@openboard/core':
+      '@openboard-dev/core':
         specifier: workspace:*
         version: link:../core
       '@testing-library/react':
@@ -232,19 +232,19 @@ importers:
 
   packages/cli:
     dependencies:
-      '@openboard/app':
+      '@openboard-dev/app':
         specifier: workspace:*
         version: link:../app
-      '@openboard/core':
+      '@openboard-dev/core':
         specifier: workspace:*
         version: link:../core
-      '@openboard/mcp':
+      '@openboard-dev/mcp':
         specifier: workspace:*
         version: link:../mcp
-      '@openboard/sdk':
+      '@openboard-dev/sdk':
         specifier: workspace:*
         version: link:../sdk
-      '@openboard/server':
+      '@openboard-dev/server':
         specifier: workspace:*
         version: link:../server
       commander:
@@ -272,16 +272,16 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.32.2
         version: 1.32.2(zod@4.6.7)
-      '@openboard/core':
+      '@openboard-dev/core':
         specifier: workspace:*
         version: link:../core
-      '@openboard/mcp':
+      '@openboard-dev/mcp':
         specifier: workspace:*
         version: link:../mcp
-      '@openboard/sdk':
+      '@openboard-dev/sdk':
         specifier: workspace:*
         version: link:../sdk
-      '@openboard/server':
+      '@openboard-dev/server':
         specifier: workspace:*
         version: link:../server
       commander:
@@ -293,27 +293,27 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.32.2
         version: 1.32.2(zod@4.6.7)
-      '@openboard/core':
+      '@openboard-dev/core':
         specifier: workspace:*
         version: link:../core
-      '@openboard/sdk':
+      '@openboard-dev/sdk':
         specifier: workspace:*
         version: link:../sdk
       zod:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
-      '@openboard/server':
+      '@openboard-dev/server':
         specifier: workspace:*
         version: link:../server
 
   packages/sdk:
     dependencies:
-      '@openboard/core':
+      '@openboard-dev/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
-      '@openboard/server':
+      '@openboard-dev/server':
         specifier: workspace:*
         version: link:../server
 
@@ -322,7 +322,7 @@ importers:
       '@hono/node-server':
         specifier: ^2.1.7
         version: 2.1.7(hono@4.13.18)
-      '@openboard/core':
+      '@openboard-dev/core':
         specifier: workspace:*
         version: link:../core
       chokidar:

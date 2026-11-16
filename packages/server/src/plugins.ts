@@ -28,7 +28,7 @@ import {
   TemplateIdSchema,
   type TypeConflict,
   type TypeRegistry,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 import type { z } from 'zod';
 import { errorMessage } from './fsutil.js';
 

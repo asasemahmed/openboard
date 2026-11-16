@@ -1,4 +1,4 @@
-import { type Actor, BoardDoc } from '@openboard/core';
+import { type Actor, BoardDoc } from '@openboard-dev/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
 import { WebsocketProvider } from 'y-websocket';

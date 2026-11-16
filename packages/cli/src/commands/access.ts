@@ -11,8 +11,8 @@ import {
   MAX_GRANT_HOURS,
   type Role,
   RoleSchema,
-} from '@openboard/core';
-import type { OpenBoardClient } from '@openboard/sdk';
+} from '@openboard-dev/core';
+import type { OpenBoardClient } from '@openboard-dev/sdk';
 import { CliError } from '../lib/errors.js';
 import { type CliIo, println } from '../lib/io.js';
 import { resolveRoot } from '../lib/project.js';

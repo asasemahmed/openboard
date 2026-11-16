@@ -68,7 +68,7 @@ import {
   type UndoRequest,
   type UndoResult,
   type WhoAmI,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 
 /** Requests that take longer than this fail with an `unavailable` error. */
 export const DEFAULT_TIMEOUT_MS = 30_000;

@@ -1,5 +1,5 @@
 /** Op builders that keep scenario fixtures short. */
-import type { Op, Status } from '@openboard/core';
+import type { Op, Status } from '@openboard-dev/core';
 
 export function frame(ref: string, title: string, parent?: string): Op {
   return { op: 'add_node', ref, node: { type: 'frame', title, ...(parent ? { parent } : {}) } };
