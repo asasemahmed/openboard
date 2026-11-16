@@ -137,6 +137,15 @@ export function CommandPalette() {
         run: actions.fit,
       },
       {
+        id: 'fit-selection',
+        group: 'Commands',
+        label: 'Fit selection in view',
+        lead: icon('fit'),
+        shortcut: 'shift+2',
+        keywords: 'zoom selected',
+        run: actions.fitSelection,
+      },
+      {
         id: 'connections',
         group: 'Commands',
         label:
