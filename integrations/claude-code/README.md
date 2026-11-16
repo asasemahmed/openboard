@@ -49,7 +49,7 @@ claude mcp get plugin:openboard:openboard
 
 Its `Status` line should say `Connected`. Inside Claude Code, `/mcp` lists the server as `plugin:openboard:openboard`, and `/plugin` lists the plugin.
 
-Open the canvas with `openboard start` in the project (the examples use the `openboard` alias from [Getting started](../../docs/getting-started.md#build-it); without it, run `node /path/to/openboard/packages/cli/dist/bin.js start`). If the plugin already started the board server, this opens the browser on it. Then ask Claude: "Show me the outline of the board."
+Open the canvas with `openboard start` in the project (`openboard` is the command from [Getting started](../../docs/getting-started.md#install-it), or the alias described there for a checkout). If the plugin already started the board server, this opens the browser on it. Then ask Claude: "Show me the outline of the board."
 
 If the server does not connect, run `openboard doctor` in the project.
 

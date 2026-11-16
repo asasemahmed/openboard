@@ -10,7 +10,7 @@ In your project, print the exact block for your machine:
 openboard connect codex
 ```
 
-(`openboard` is the alias from [Getting started](../../docs/getting-started.md#build-it); without it, run `node /path/to/openboard/packages/cli/dist/bin.js connect codex` in the project.)
+(`openboard` is the command from [Getting started](../../docs/getting-started.md#install-it).)
 
 Paste the printed `[mcp_servers.openboard]` table into `~/.codex/config.toml`. [`config.toml`](config.toml) in this directory shows the shape, with placeholders where the printed block has absolute paths: the Node.js binary, the CLI in your checkout, and the project root.
 

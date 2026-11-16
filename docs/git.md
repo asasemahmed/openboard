@@ -138,35 +138,28 @@ openboard diff --from FETCH_HEAD --to HEAD --format markdown --out board-changes
 openboard diff main --from FETCH_HEAD --to HEAD --format svg --out board-changes.svg || [ $? -eq 1 ]
 ```
 
-Then attach `board-changes.md` as a comment and `board-changes.svg` as an artifact with whatever your CI offers for that. `openboard` here is the command from your OpenBoard checkout, as in [Getting started](getting-started.md#build-it).
+Then attach `board-changes.md` as a comment and `board-changes.svg` as an artifact with whatever your CI offers for that. `openboard` here is the installed command from [Getting started](getting-started.md#install-it); in CI, `npx -y @openboard-dev/cli` runs it without installing.
 
 ## Checking boards in CI and before a commit
 
 `openboard check` fails when a board no longer matches the code: a code link whose code changed or is gone, or a node that does not fit its declared type. It needs no server and reads only the files, so it runs anywhere the repository is checked out. The exit status is 0 when everything matches, 1 when something needs a look, and 2 on an error. See the [CLI reference](cli.md#check).
 
-In GitHub Actions, build OpenBoard next to the project, then run the check:
+In GitHub Actions:
 
 ```yaml
 - uses: actions/checkout@v4
-- uses: actions/checkout@v4
-  with:
-    repository: asasemahmed/openboard
-    path: openboard-cli
 - uses: actions/setup-node@v4
   with:
     node-version: 22
-- name: Build OpenBoard
-  working-directory: openboard-cli
-  run: corepack enable && pnpm install && pnpm build
 - name: Check the boards against the code
-  run: node openboard-cli/packages/cli/dist/bin.js check
+  run: npx -y @openboard-dev/cli check
 ```
 
 As a pre-commit hook, put this in `.git/hooks/pre-commit` and make it executable (`chmod +x`):
 
 ```sh
 #!/bin/sh
-exec node /path/to/openboard/packages/cli/dist/bin.js check
+exec openboard check
 ```
 
 The hook checks the files as they are in the working tree, not only what is staged. A tool that manages hooks for you can run the same command. `git commit --no-verify` skips the hook when you need to.

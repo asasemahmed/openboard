@@ -1,6 +1,6 @@
 # Integrations
 
-Ready-made setups for connecting an agent to OpenBoard. Each one works from a built source checkout.
+Ready-made setups for connecting an agent to OpenBoard. Each one works with the `openboard` command, installed from npm or built from source; the Claude Code plugin runs from a source checkout.
 
 | Directory                      | For            | What it contains                                                         |
 | ------------------------------ | -------------- | ------------------------------------------------------------------------ |

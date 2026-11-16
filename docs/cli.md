@@ -1,6 +1,6 @@
 # CLI reference
 
-The `openboard` command starts the board server, manages boards, and connects agents. It is built to `packages/cli/dist/bin.js` in a source checkout; [Getting started](getting-started.md#build-it) shows how to make it available as `openboard`. Inside the checkout, `pnpm openboard <command>` runs it with the checkout as the working directory.
+The `openboard` command starts the board server, manages boards, and connects agents. Install it with `npm install -g @openboard-dev/cli`; [Getting started](getting-started.md#install-it) also shows how to run it from a source checkout.
 
 ```text
 openboard [command] [options]
@@ -85,7 +85,7 @@ Boards: .openboard
 
 Connect an agent (`openboard connect` shows the setup for each agent):
   MCP over HTTP   http://127.0.0.1:4747/mcp
-  MCP over stdio  /usr/local/bin/node /path/to/openboard/packages/cli/dist/bin.js mcp --root /path/to/project
+  MCP over stdio  /usr/local/bin/node /usr/local/lib/node_modules/@openboard-dev/cli/dist/bin.js mcp --root /path/to/project
 
 Press Ctrl+C to stop.
 ```
@@ -449,7 +449,7 @@ Codex, for the boards in /path/to/project:
 Add this to ~/.codex/config.toml:
   [mcp_servers.openboard]
   command = "/usr/local/bin/node"
-  args = ["/path/to/openboard/packages/cli/dist/bin.js", "mcp", "--root", "/path/to/project"]
+  args = ["/usr/local/lib/node_modules/@openboard-dev/cli/dist/bin.js", "mcp", "--root", "/path/to/project"]
 
 The server is named "openboard"; its tools start with board_.
 ```

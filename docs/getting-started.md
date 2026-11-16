@@ -1,16 +1,24 @@
 # Getting started
 
-From nothing to an agent drawing on a board in your browser. It takes a few minutes, most of them spent in `pnpm install`.
+From nothing to an agent drawing on a board in your browser, in a few minutes.
 
 ## Requirements
 
-- Node.js 22 or newer. Corepack, which provides pnpm, ships with Node.
+- Node.js 22 or newer.
 - A browser.
 - An agent that speaks MCP: Claude Code, Cursor, Codex, or any other MCP client.
 
-## Build it
+## Install it
 
-OpenBoard runs from a source checkout. In the root of your clone of this repository:
+```bash
+npm install -g @openboard-dev/cli
+```
+
+This installs the `openboard` command. `openboard --version` checks that it is on your path, and `openboard doctor` checks the rest.
+
+### From source
+
+To work on OpenBoard itself, or to run a version that is not on npm yet, build it from a clone of this repository:
 
 ```bash
 corepack enable
@@ -24,7 +32,7 @@ The command line tool is now at `packages/cli/dist/bin.js`. Inside the checkout,
 alias openboard="node $PWD/packages/cli/dist/bin.js"
 ```
 
-Add the expanded line to your shell profile to keep it. The rest of the documentation writes `openboard`; without the alias, use `node /path/to/openboard/packages/cli/dist/bin.js` instead.
+Add the expanded line to your shell profile to keep it.
 
 ## Start a board
 
@@ -43,7 +51,7 @@ Boards: .openboard
 
 Connect an agent (`openboard connect` shows the setup for each agent):
   MCP over HTTP   http://127.0.0.1:4747/mcp
-  MCP over stdio  /usr/local/bin/node /path/to/openboard/packages/cli/dist/bin.js mcp --root /path/to/your/project
+  MCP over stdio  /usr/local/bin/node /usr/local/lib/node_modules/@openboard-dev/cli/dist/bin.js mcp --root /path/to/your/project
 
 Press Ctrl+C to stop.
 ```
@@ -75,7 +83,7 @@ In the canvas, choose Gemini CLI to copy either the `gemini mcp add openboard ..
 For Claude Code the quickest route is the command it prints, run in the project:
 
 ```bash
-claude mcp add openboard -- /usr/local/bin/node /path/to/openboard/packages/cli/dist/bin.js mcp --root /path/to/your/project
+claude mcp add openboard -- /usr/local/bin/node /usr/local/lib/node_modules/@openboard-dev/cli/dist/bin.js mcp --root /path/to/your/project
 ```
 
 To also give the agent guidance on working with a board, use the ready-made integrations instead:
