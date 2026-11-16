@@ -1,4 +1,4 @@
-import type { Actor, Board, BoardEdge, BoardNode } from '@openboard/core';
+import type { Actor, Board, BoardEdge, BoardNode } from '@openboard-dev/core';
 import { describe, expect, it } from 'vitest';
 import {
   calledBefore,

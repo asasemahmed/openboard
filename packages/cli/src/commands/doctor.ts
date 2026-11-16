@@ -2,8 +2,8 @@ import { execFile } from 'node:child_process';
 import { existsSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { parseConfig } from '@openboard/core';
-import { connect } from '@openboard/sdk';
+import { parseConfig } from '@openboard-dev/core';
+import { connect } from '@openboard-dev/sdk';
 import { type CliIo, println } from '../lib/io.js';
 import { type AppLocation, cliActor, locateApp, resolveRoot } from '../lib/project.js';
 import { findRunningServer, projectPaths } from '../lib/server.js';
@@ -57,7 +57,7 @@ async function configCheck(root: string, file: string): Promise<Check | undefine
 /** The MCP entry point loads and builds a server with its tools. */
 async function mcpCheck(): Promise<Check> {
   try {
-    const mcp = await import('@openboard/mcp');
+    const mcp = await import('@openboard-dev/mcp');
     mcp.createMcpServer({
       resolveApi: () => {
         throw new Error('not connected');

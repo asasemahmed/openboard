@@ -1,4 +1,4 @@
-import type { SchemaNodeType } from '@openboard/core';
+import type { SchemaNodeType } from '@openboard-dev/core';
 import { describe, expect, it } from 'vitest';
 import { hasBodyRoom } from '../nodes/CardNode.js';
 import { cardModel, fieldText, shortHint } from './declaredTypes.js';

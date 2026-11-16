@@ -3,8 +3,8 @@
  * them, the history of applied changes, and undo. All of it is working state
  * kept by the running server, so these commands need one.
  */
-import type { Decision, Proposal, UndoRequest } from '@openboard/core';
-import type { OpenBoardClient } from '@openboard/sdk';
+import type { Decision, Proposal, UndoRequest } from '@openboard-dev/core';
+import type { OpenBoardClient } from '@openboard-dev/sdk';
 import { CliError } from '../lib/errors.js';
 import { type CliIo, println } from '../lib/io.js';
 import { resolveRoot } from '../lib/project.js';

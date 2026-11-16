@@ -216,7 +216,7 @@ describe('BoardView', () => {
   });
 
   it('shows the empty state on an empty board', async () => {
-    const { BoardDoc } = await import('@openboard/core');
+    const { BoardDoc } = await import('@openboard-dev/core');
     const session = createSession({
       boardId: 'empty',
       actor: ME,

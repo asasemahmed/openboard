@@ -1,4 +1,4 @@
-import type { BoardNode } from '@openboard/core';
+import type { BoardNode } from '@openboard-dev/core';
 import { describe, expect, it } from 'vitest';
 import { fuzzyScore, searchNodes } from './fuzzy.js';
 

@@ -3,7 +3,7 @@
  * publishes, with subagents under their parent. Everything an agent's tools
  * report is untrusted text, so it is shown as plain, cut text only.
  */
-import type { AgentStatus, Session } from '@openboard/core';
+import type { AgentStatus, Session } from '@openboard-dev/core';
 import { useReactFlow } from '@xyflow/react';
 import { useEffect, useMemo, useState } from 'react';
 import { reducedMotion } from '../canvas/actions.js';

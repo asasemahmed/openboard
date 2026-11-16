@@ -5,7 +5,7 @@
  * Comments are written straight into the board document as this person, so
  * they work while the server is unreachable and sync when it is back.
  */
-import type { Comment, CommentInput } from '@openboard/core';
+import type { Comment, CommentInput } from '@openboard-dev/core';
 import {
   type KeyboardEvent,
   type ReactNode,

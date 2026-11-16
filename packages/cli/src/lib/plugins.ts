@@ -8,7 +8,7 @@ import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { OpenBoardPlugin } from '@openboard/core';
+import type { OpenBoardPlugin } from '@openboard-dev/core';
 import { CliError } from './errors.js';
 
 /** Whether `spec` names a file rather than a package. */

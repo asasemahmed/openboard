@@ -4,7 +4,7 @@
  * revision, removed nodes drawn as ghosts where they were, a legend with
  * counts, and the list of changes.
  */
-import { type Board, BoardDoc, diffBoards } from '@openboard/core';
+import { type Board, BoardDoc, diffBoards } from '@openboard-dev/core';
 import { ReactFlowProvider, useReactFlow } from '@xyflow/react';
 import { type KeyboardEvent, useEffect, useState } from 'react';
 import { reducedMotion, useBoardActions } from '../canvas/actions.js';

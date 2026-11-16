@@ -5,7 +5,7 @@ import {
   FRAME_POLICY_PROP,
   MENTION_AGENTS,
   type ProjectConfig,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 import { describe, expect, it } from 'vitest';
 import { answerPayload, askedNodes, askOptions, openAsks } from './asks.js';
 import { filterThreads, indexComments } from './comments.js';

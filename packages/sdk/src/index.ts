@@ -1,4 +1,4 @@
-export { OpenBoardError, type OpenBoardErrorCode } from '@openboard/core';
+export { OpenBoardError, type OpenBoardErrorCode } from '@openboard-dev/core';
 export {
   ACTOR_HEADERS,
   actorHeaders,

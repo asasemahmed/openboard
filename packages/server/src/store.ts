@@ -12,7 +12,7 @@
  * what keeps a save from being read back as an external edit.
  */
 import { stat, unlink } from 'node:fs/promises';
-import { BoardDoc, OpenBoardError, parseBoard, serializeBoard } from '@openboard/core';
+import { BoardDoc, OpenBoardError, parseBoard, serializeBoard } from '@openboard-dev/core';
 import { errorMessage, isErrno, readIfExists, sha256, writeFileAtomic } from './fsutil.js';
 
 export type FileStatus = 'ok' | 'conflict';

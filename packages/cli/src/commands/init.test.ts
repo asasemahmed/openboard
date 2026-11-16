@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { parseBoard } from '@openboard/core';
+import { parseBoard } from '@openboard-dev/core';
 import { describe, expect, it } from 'vitest';
 import { captureIo, tempDir } from '../testing/helpers.js';
 import { initCommand } from './init.js';

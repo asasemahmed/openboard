@@ -26,7 +26,7 @@ import {
   type DocEvent,
   MAX_MAX_TOKENS,
   SYSTEM_ACTOR,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 import type { ApiClient } from '../lib/api.js';
 import { readStored, writeStored } from '../lib/storage.js';
 import { type Clock, type ItemKind, systemClock } from './activity.js';

@@ -1,7 +1,7 @@
 /**
  * Thin wrapper around ELK's layered algorithm for one container at a time.
  */
-import { NODE_GAP, snap } from '@openboard/core';
+import { NODE_GAP, snap } from '@openboard-dev/core';
 import ElkModule from 'elkjs/lib/elk.bundled.js';
 import type { ElkExtendedEdge, ElkNode } from 'elkjs/lib/elk-api.js';
 import { cmp, type Size } from './geometry.js';

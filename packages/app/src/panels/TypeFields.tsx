@@ -3,7 +3,7 @@
  * `props[key]` on commit. A value that does not fit is not written; the
  * reason stays next to the control until it is fixed or reset.
  */
-import type { BoardNode, FieldDef, Json, SchemaNodeType } from '@openboard/core';
+import type { BoardNode, FieldDef, Json, SchemaNodeType } from '@openboard-dev/core';
 import { type ReactNode, useId, useState } from 'react';
 import { inputValue, parseInput, propsWith } from '../lib/fieldForm.js';
 import { useDraft } from './useDraft.js';

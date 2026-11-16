@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { MAX_MAX_TOKENS, renderOutline, renderRead, serializeBoard } from '@openboard/core';
+import { MAX_MAX_TOKENS, renderOutline, renderRead, serializeBoard } from '@openboard-dev/core';
 import { describe, expect, it } from 'vitest';
 import { EXPORTERS, exporterForFile } from '../exporters.js';
 import { captureIo, sampleBoard, tempDir } from '../testing/helpers.js';

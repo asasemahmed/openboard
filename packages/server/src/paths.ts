@@ -6,7 +6,7 @@ import { existsSync, readFileSync, realpathSync, rmSync, statSync } from 'node:f
 import { isIP } from 'node:net';
 import { networkInterfaces } from 'node:os';
 import path from 'node:path';
-import { IdSchema, OpenBoardError } from '@openboard/core';
+import { IdSchema, OpenBoardError } from '@openboard-dev/core';
 import type { ProjectPaths, ServerInfo } from './types.js';
 
 export const BOARD_SUFFIX = '.board.json';

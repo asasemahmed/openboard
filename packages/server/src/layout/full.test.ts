@@ -1,4 +1,4 @@
-import { type Board, FRAME_PADDING, GRID, NODE_WIDTH } from '@openboard/core';
+import { type Board, FRAME_PADDING, GRID, NODE_WIDTH } from '@openboard-dev/core';
 import { describe, expect, it } from 'vitest';
 import {
   board,

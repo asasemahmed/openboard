@@ -3,7 +3,7 @@
  * the final board and the trace. Board checks look at what the agent left;
  * trace checks look at how it got there.
  */
-import type { Board, BoardNode, Status } from '@openboard/core';
+import type { Board, BoardNode, Status } from '@openboard-dev/core';
 import {
   edgeBetween,
   findNodes,

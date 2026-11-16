@@ -14,7 +14,7 @@ import {
   type Op,
   type OpError,
   serializeBoard,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 import { CliError } from '../lib/errors.js';
 import { type CliIo, println } from '../lib/io.js';
 import { placeUnplaced } from '../lib/layout.js';

@@ -1,5 +1,5 @@
 /** "Agent access" for a frame: inherit the project policy, or free, review or lock what is inside. */
-import type { BoardNode, Json } from '@openboard/core';
+import type { BoardNode, Json } from '@openboard-dev/core';
 import { type KeyboardEvent, useId } from 'react';
 import { FRAME_ACCESS, FRAME_ACCESS_META, frameAccess, framePolicyProps } from '../lib/policy.js';
 

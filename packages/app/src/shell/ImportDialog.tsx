@@ -4,7 +4,7 @@
  * changing anything), then import. Everything lands through the normal
  * validated apply path, attributed to this person.
  */
-import { detectFormat } from '@openboard/core';
+import { detectFormat } from '@openboard-dev/core';
 import { useReactFlow } from '@xyflow/react';
 import { type DragEvent, useEffect, useId, useReducer, useRef } from 'react';
 import { reducedMotion } from '../canvas/actions.js';

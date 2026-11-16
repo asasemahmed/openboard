@@ -1,7 +1,12 @@
 import { createServer, request, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { getRequestListener } from '@hono/node-server';
-import { type Actor, DEFAULT_CONFIG, type NodeTypeDef, type ProjectConfig } from '@openboard/core';
+import {
+  type Actor,
+  DEFAULT_CONFIG,
+  type NodeTypeDef,
+  type ProjectConfig,
+} from '@openboard-dev/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Boards } from './boards.js';
 import { ChangeFeed } from './feed.js';

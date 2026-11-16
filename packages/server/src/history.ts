@@ -30,7 +30,7 @@ import {
   type HistoryOptions,
   newId,
   OpenBoardError,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 import { errorMessage, isErrno, writeFileAtomic } from './fsutil.js';
 import { jsonEqual } from './json.js';
 

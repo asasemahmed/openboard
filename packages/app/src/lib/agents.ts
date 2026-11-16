@@ -15,7 +15,7 @@ import {
   type LiveSessions,
   type Session,
   type SessionStep,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 import { absoluteRect, type PlacementMap, type XY } from './geometry.js';
 import { colorFor } from './identity.js';
 

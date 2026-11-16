@@ -1,6 +1,6 @@
 import { rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { type Actor, BoardDoc, type Op, OpenBoardError, serializeBoard } from '@openboard/core';
+import { type Actor, BoardDoc, type Op, OpenBoardError, serializeBoard } from '@openboard-dev/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
 import { WebsocketProvider } from 'y-websocket';

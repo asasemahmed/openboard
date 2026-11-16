@@ -1,4 +1,4 @@
-import type { Actor, AgentStatus } from '@openboard/core';
+import type { Actor, AgentStatus } from '@openboard-dev/core';
 import { useRef, useState } from 'react';
 import { type AgentGroup, groupByAgent, workingCount } from '../lib/agents.js';
 import { confirmUndoAll } from '../panels/ActivityPanel.js';

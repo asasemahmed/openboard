@@ -15,7 +15,7 @@ import {
   escapeMarkdown,
   parseBoard,
   toSvg,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 import { CliError, isNodeError } from '../lib/errors.js';
 import { boardIdsAt, checkRev, gitTopLevel, showAt } from '../lib/git.js';
 import type { CliIo } from '../lib/io.js';

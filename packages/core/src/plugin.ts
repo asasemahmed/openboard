@@ -5,7 +5,7 @@
  * importers, react to applied batches, and run code for the server's
  * lifetime. Loading code is a trust decision, so a server never discovers
  * plugins on its own: they are passed to it explicitly
- * (`ServerOptions.plugins`). Plugin authors depend on `@openboard/core` alone.
+ * (`ServerOptions.plugins`). Plugin authors depend on `@openboard-dev/core` alone.
  */
 import type { BoardApi } from './api.js';
 import type { Batch } from './collab.js';

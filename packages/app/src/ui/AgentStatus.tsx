@@ -2,7 +2,7 @@
  * An agent's status as a small glyph with its word next to it or in its
  * accessible name, so it never relies on colour alone.
  */
-import type { AgentStatus } from '@openboard/core';
+import type { AgentStatus } from '@openboard-dev/core';
 import { Icon, type IconName } from './Icon.js';
 
 const GLYPH: Record<AgentStatus, IconName> = {

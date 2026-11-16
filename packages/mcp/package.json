@@ -1,10 +1,19 @@
 {
-  "name": "@openboard/mcp",
+  "name": "@openboard-dev/mcp",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
-  "description": "MCP server that exposes an OpenBoard to AI agents.",
+  "description": "The OpenBoard MCP server: board tools for AI agents.",
   "license": "PolyForm-Noncommercial-1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/asasemahmed/openboard.git",
+    "directory": "packages/mcp"
+  },
+  "homepage": "https://github.com/asasemahmed/openboard#readme",
+  "bugs": "https://github.com/asasemahmed/openboard/issues",
+  "engines": {
+    "node": ">=22"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -16,11 +25,18 @@
   ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
-    "@openboard/core": "workspace:*",
-    "@openboard/sdk": "workspace:*",
+    "@openboard-dev/core": "workspace:*",
+    "@openboard-dev/sdk": "workspace:*",
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@openboard/server": "workspace:*"
+    "@openboard-dev/server": "workspace:*"
+  },
+  "scripts": {
+    "prepack": "cp ../../LICENSE LICENSE",
+    "postpack": "rm -f LICENSE"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

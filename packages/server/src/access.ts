@@ -28,7 +28,7 @@ import {
   StoredGrantSchema,
   slugify,
   TOKEN_PATTERN,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 import { z } from 'zod';
 import { errorMessage, readIfExists, writeFileAtomic } from './fsutil.js';
 import { Mutex } from './mutex.js';

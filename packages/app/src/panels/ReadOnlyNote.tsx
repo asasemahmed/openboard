@@ -1,5 +1,5 @@
 /** Why the inspector's fields are off for this person, said once at the top. */
-import type { AccessAction } from '@openboard/core';
+import type { AccessAction } from '@openboard-dev/core';
 import { disabledReason } from '../lib/roles.js';
 import { useRole } from '../state/access.js';
 import { Icon } from '../ui/Icon.js';

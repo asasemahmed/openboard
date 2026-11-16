@@ -1,5 +1,5 @@
 /** Undo and redo of this person's own changes, scoped by `BoardDoc.createUndoManager`. */
-import type { BoardDoc } from '@openboard/core';
+import type { BoardDoc } from '@openboard-dev/core';
 import type * as Y from 'yjs';
 import { Emitter } from './emitter.js';
 

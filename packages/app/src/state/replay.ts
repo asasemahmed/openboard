@@ -7,7 +7,7 @@
  *
  * Fetching and time are passed in, so it is tested without a server or timers.
  */
-import type { Batch, Board } from '@openboard/core';
+import type { Batch, Board } from '@openboard-dev/core';
 import { type Clock, systemClock } from './activity.js';
 import { Emitter } from './emitter.js';
 

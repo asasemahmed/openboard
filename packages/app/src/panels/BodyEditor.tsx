@@ -1,4 +1,4 @@
-import { LIMITS } from '@openboard/core';
+import { LIMITS } from '@openboard-dev/core';
 import { useEffect, useRef, useState } from 'react';
 import { useMarkdownHtml } from '../ui/Markdown.js';
 import { useDraft } from './useDraft.js';

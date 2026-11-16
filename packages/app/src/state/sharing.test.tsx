@@ -1,4 +1,4 @@
-import { type AccessGrant, can, type Role, type WhoAmI } from '@openboard/core';
+import { type AccessGrant, can, type Role, type WhoAmI } from '@openboard-dev/core';
 import { act, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createApiClient, onUnauthorized } from '../lib/api.js';

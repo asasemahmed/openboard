@@ -15,7 +15,7 @@ import type {
   TransportSendOptions,
 } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
-import { estimateTokens } from '@openboard/core';
+import { estimateTokens } from '@openboard-dev/core';
 import type { ToolCallRecord, Trace } from './types.js';
 
 export interface RecorderHooks {

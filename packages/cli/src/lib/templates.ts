@@ -8,7 +8,7 @@ import {
   opsFromBoard,
   parseBoard,
   TemplateIdSchema,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 import { CliError, isNodeError } from './errors.js';
 import { projectPaths } from './server.js';
 

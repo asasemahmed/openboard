@@ -4,7 +4,7 @@
  * the moment the app starts, and wiped from the address bar right away, so it
  * is not left in the history, a bookmark or a screenshot.
  */
-import type { WhoAmI } from '@openboard/core';
+import type { WhoAmI } from '@openboard-dev/core';
 
 export const JOIN_PATH = '/join';
 

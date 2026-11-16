@@ -38,7 +38,7 @@ import type {
   UndoRequest,
   UndoResult,
   WhoAmI,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 
 export class ApiError extends Error {
   /** Server error code, or `unreachable` when the request never got an answer. */

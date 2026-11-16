@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { emptyBoard } from '@openboard/core';
+import { emptyBoard } from '@openboard-dev/core';
 import { type CliIo, println } from '../lib/io.js';
 import { projectName } from '../lib/project.js';
 import { projectPaths } from '../lib/server.js';

@@ -2,7 +2,7 @@
  * How each relationship looks. Every type differs by more than colour: dash
  * pattern and end marker carry the meaning too.
  */
-import { BUILTIN_EDGE_TYPES, type SchemaEdgeType } from '@openboard/core';
+import { BUILTIN_EDGE_TYPES, type SchemaEdgeType } from '@openboard-dev/core';
 
 export type EdgeMarker = 'none' | 'arrow' | 'open' | 'tee' | 'hollow' | 'dot';
 

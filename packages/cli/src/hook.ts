@@ -24,7 +24,7 @@ import { request } from 'node:http';
 import { isIP } from 'node:net';
 import { networkInterfaces } from 'node:os';
 import path from 'node:path';
-import type { ActivityEvent, Actor } from '@openboard/core';
+import type { ActivityEvent, Actor } from '@openboard-dev/core';
 
 /** How long the post to the server may take before the hook gives up. */
 export const HOOK_TIMEOUT_MS = 300;
@@ -78,7 +78,7 @@ const str = (value: unknown): string | undefined =>
 
 /**
  * The actor a client is attributed to; the same rule as `actorForClient` in
- * `@openboard/mcp`, repeated here so the hook does not load the MCP server.
+ * `@openboard-dev/mcp`, repeated here so the hook does not load the MCP server.
  */
 export function hookActor(clientName: string, env: Env): Actor {
   const envId = env.OPENBOARD_AGENT_ID?.trim();

@@ -4,7 +4,7 @@
  * ghosts where they were, counts for the legend, and the list of changes.
  * Pure, from core's `BoardDiff` and the board before and after.
  */
-import type { Board, BoardDiff, BoardEdge, BoardNode } from '@openboard/core';
+import type { Board, BoardDiff, BoardEdge, BoardNode } from '@openboard-dev/core';
 import { fieldName, formatValue } from './review.js';
 
 export type DiffKind = 'added' | 'updated' | 'moved' | 'removed';

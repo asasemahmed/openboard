@@ -1,8 +1,8 @@
 import { mkdtemp, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { type Actor, OpenBoardError } from '@openboard/core';
-import { type OpenBoardServer, startServer } from '@openboard/server';
+import { type Actor, OpenBoardError } from '@openboard-dev/core';
+import { type OpenBoardServer, startServer } from '@openboard-dev/server';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { connect } from './index.js';
 

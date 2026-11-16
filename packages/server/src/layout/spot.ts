@@ -1,7 +1,7 @@
 /**
  * Finding a free spot for one rectangle among fixed obstacles.
  */
-import { NODE_GAP, snap } from '@openboard/core';
+import { NODE_GAP, snap } from '@openboard-dev/core';
 import { ceilToGrid, floorToGrid, type Rect, type Size } from './geometry.js';
 
 export type Axis = 'x' | 'y';

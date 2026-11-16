@@ -2,7 +2,7 @@
  * A list of templates to pick one from, as radio cards: icon, name,
  * description, tags and what it adds. Used by "New board" and "Insert template".
  */
-import type { TemplateSummary } from '@openboard/core';
+import type { TemplateSummary } from '@openboard-dev/core';
 import { useId } from 'react';
 import { templateCounts, templateIcon } from '../lib/templateFlow.js';
 import { TypeIcon } from '../ui/TypeIcon.js';

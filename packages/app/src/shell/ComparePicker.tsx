@@ -1,5 +1,5 @@
 /** "Compare with…": pick a git revision of this board's file. */
-import type { RevisionsResult } from '@openboard/core';
+import type { RevisionsResult } from '@openboard-dev/core';
 import { useEffect, useState } from 'react';
 import { plainLine } from '../lib/agents.js';
 import { calmMessage } from '../lib/api.js';

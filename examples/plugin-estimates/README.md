@@ -7,14 +7,14 @@ A small OpenBoard plugin that shows each thing a plugin can do:
 - **An export format.** `csv`: one row per estimate, served by `GET /api/boards/<id>/export?format=csv` as `text/csv`.
 - **A hook.** After every batch that changes a board, it updates a note titled `Estimate total: N points` (it adds the note the first time a board has an estimate).
 
-It is one plain ES module, [`index.js`](index.js), and uses `@openboard/core` for types only. `createEstimatesPlugin()` makes an instance; use one per server.
+It is one plain ES module, [`index.js`](index.js), and uses `@openboard-dev/core` for types only. `createEstimatesPlugin()` makes an instance; use one per server.
 
 ## Use it
 
 Plugins are code, so a server never loads them by itself: pass them when you start it.
 
 ```js
-import { startServer } from '@openboard/server';
+import { startServer } from '@openboard-dev/server';
 import { createEstimatesPlugin } from './examples/plugin-estimates/index.js';
 
 const server = await startServer({ root: process.cwd(), plugins: [createEstimatesPlugin()] });
@@ -34,4 +34,4 @@ curl -s "$URL/api/boards/main/export?format=csv"
 
 ## Writing your own
 
-A plugin is an object of type `OpenBoardPlugin` from `@openboard/core` (`definePlugin` gives it the type in TypeScript). Every part is optional except `name`. See "Plugins" in [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md) for the rules: names, types, template ids and format names must not clash with another plugin's, hooks run one at a time per plugin and never hold up an apply, and `setup` may return a teardown that runs when the server closes.
+A plugin is an object of type `OpenBoardPlugin` from `@openboard-dev/core` (`definePlugin` gives it the type in TypeScript). Every part is optional except `name`. See "Plugins" in [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md) for the rules: names, types, template ids and format names must not clash with another plugin's, hooks run one at a time per plugin and never hold up an apply, and `setup` may return a teardown that runs when the server closes.

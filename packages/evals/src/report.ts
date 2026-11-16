@@ -97,7 +97,7 @@ function failureLines(s: ScenarioSummary): string[] {
 
 function metaLine(report: Report): string {
   const m = report.meta;
-  return `runner ${m.runner}${m.model ? `, model ${m.model}` : ''}${m.guide ? ', with guide' : ''}; repeat ${m.repeat}; @openboard/evals ${m.evalsVersion}, mcp ${m.mcpVersion}, server ${m.serverVersion}, node ${m.node}; ${m.startedAt}, ${(m.durationMs / 1000).toFixed(1)}s`;
+  return `runner ${m.runner}${m.model ? `, model ${m.model}` : ''}${m.guide ? ', with guide' : ''}; repeat ${m.repeat}; @openboard-dev/evals ${m.evalsVersion}, mcp ${m.mcpVersion}, server ${m.serverVersion}, node ${m.node}; ${m.startedAt}, ${(m.durationMs / 1000).toFixed(1)}s`;
 }
 
 export function formatTable(report: Report): string {

@@ -1,4 +1,4 @@
-import type { Link } from '@openboard/core';
+import type { Link } from '@openboard-dev/core';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import type { ReactNode } from 'react';

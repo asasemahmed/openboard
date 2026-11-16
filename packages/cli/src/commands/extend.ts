@@ -22,8 +22,8 @@ import {
   TemplateIdSchema,
   type TemplateSummary,
   type TypeRegistry,
-} from '@openboard/core';
-import { parseProjectTemplate } from '@openboard/server';
+} from '@openboard-dev/core';
+import { parseProjectTemplate } from '@openboard-dev/server';
 import { CliError, isNodeError } from '../lib/errors.js';
 import { type CliIo, println } from '../lib/io.js';
 import { placeUnplaced } from '../lib/layout.js';

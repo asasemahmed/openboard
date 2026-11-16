@@ -1,7 +1,7 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { type Actor, serializeBoard } from '@openboard/core';
+import { type Actor, serializeBoard } from '@openboard-dev/core';
 import { describe, expect, it } from 'vitest';
 import { type OpenBoardServer, startServer } from '../lib/server.js';
 import { captureIo, sampleBoard, serverWorks, tempDir } from '../testing/helpers.js';

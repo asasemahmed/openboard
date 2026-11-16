@@ -1,4 +1,4 @@
-import type { Op } from '@openboard/core';
+import type { Op } from '@openboard-dev/core';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import { describe, expect, it, vi } from 'vitest';

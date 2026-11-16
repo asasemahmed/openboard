@@ -3,7 +3,7 @@
  * headers, over the WebSocket as `actorId`, `actorName` and `actorKind` query
  * parameters (see "HTTP surface" in docs/ARCHITECTURE.md).
  */
-import { type Actor, ActorSchema, OpenBoardError } from '@openboard/core';
+import { type Actor, ActorSchema, OpenBoardError } from '@openboard-dev/core';
 
 /** Used for HTTP callers that do not say who they are. */
 export const ANONYMOUS_AGENT: Actor = { id: 'anonymous', kind: 'agent', name: 'Anonymous agent' };

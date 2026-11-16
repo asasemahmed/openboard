@@ -6,7 +6,7 @@
  */
 import { execFile } from 'node:child_process';
 import path from 'node:path';
-import { OpenBoardError, type Revision, RevisionSchema } from '@openboard/core';
+import { OpenBoardError, type Revision, RevisionSchema } from '@openboard-dev/core';
 
 const GIT_TIMEOUT_MS = 10_000;
 const MAX_OUTPUT = 64 * 1024 * 1024;

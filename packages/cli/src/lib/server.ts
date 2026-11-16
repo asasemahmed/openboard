@@ -1,4 +1,4 @@
-/** The one place the CLI reaches into `@openboard/server`. */
+/** The one place the CLI reaches into `@openboard-dev/server`. */
 export {
   checkCodeLinks,
   DEFAULT_PORT,
@@ -10,4 +10,4 @@ export {
   type ServerInfo,
   type ServerOptions,
   startServer,
-} from '@openboard/server';
+} from '@openboard-dev/server';

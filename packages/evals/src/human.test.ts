@@ -1,4 +1,4 @@
-import type { Ask, Board, BoardApi, Decision, Proposal } from '@openboard/core';
+import type { Ask, Board, BoardApi, Decision, Proposal } from '@openboard-dev/core';
 import { describe, expect, it } from 'vitest';
 import { describeScript, HumanEngine } from './human.js';
 import type { HumanScript, ToolCallRecord } from './types.js';

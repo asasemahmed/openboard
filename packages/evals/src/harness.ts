@@ -10,9 +10,15 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { type Actor, type Board, type BoardApi, estimateTokens, type Op } from '@openboard/core';
-import { actorForClient, createMcpServer, VERSION as MCP_VERSION } from '@openboard/mcp';
-import { type OpenBoardServer, startServer } from '@openboard/server';
+import {
+  type Actor,
+  type Board,
+  type BoardApi,
+  estimateTokens,
+  type Op,
+} from '@openboard-dev/core';
+import { actorForClient, createMcpServer, VERSION as MCP_VERSION } from '@openboard-dev/mcp';
+import { type OpenBoardServer, startServer } from '@openboard-dev/server';
 import { startEndpoint } from './endpoint.js';
 import { HumanEngine } from './human.js';
 import { DEFAULT_THRESHOLD, type RunResult, toResult, weightedScore } from './score.js';

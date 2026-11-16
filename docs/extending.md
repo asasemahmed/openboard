@@ -113,7 +113,7 @@ Applying a project template copies its nodes, edges and positions with fresh ids
 
 ## Writing a plugin
 
-A plugin is an object with a `name` and any of `version`, `nodeTypes`, `edgeTypes`, `templates`, `exporters`, `importers`, `onBatch` and `setup`. It depends on `@openboard/core` for its types only (`OpenBoardPlugin`, `definePlugin`). [`examples/plugin-estimates`](../examples/plugin-estimates/) shows each part:
+A plugin is an object with a `name` and any of `version`, `nodeTypes`, `edgeTypes`, `templates`, `exporters`, `importers`, `onBatch` and `setup`. It depends on `@openboard-dev/core` for its types only (`OpenBoardPlugin`, `definePlugin`). [`examples/plugin-estimates`](../examples/plugin-estimates/) shows each part:
 
 - **A node type**, `x:estimate`, with the fields `points` (a required number), `confidence` (a select), `owner`, `due` and `notes`. A plugin's types are checked like the project's; the project's `config.json` wins a clash, and the plugin gets a warning.
 - **A template**, `estimation`: `{ id, name, description, tags, build(options) }`, where `build` returns operations that use `ref`s, so it fits any board.

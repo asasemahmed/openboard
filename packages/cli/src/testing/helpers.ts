@@ -2,7 +2,7 @@
 import { mkdtemp, realpath, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { type Board, emptyBoard } from '@openboard/core';
+import { type Board, emptyBoard } from '@openboard-dev/core';
 import { afterEach } from 'vitest';
 import type { CliIo } from '../lib/io.js';
 import { startServer } from '../lib/server.js';

@@ -15,7 +15,7 @@ import {
   TYPE_LIMITS,
   type TypeColor,
   type TypeIcon,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 
 export interface FieldDraft {
   key: string;

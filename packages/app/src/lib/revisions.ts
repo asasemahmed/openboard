@@ -1,5 +1,5 @@
 /** The revision picker for "Compare with…": what to show for the board's git history. */
-import type { Revision, RevisionsResult } from '@openboard/core';
+import type { Revision, RevisionsResult } from '@openboard-dev/core';
 
 export type RevisionPicker =
   | { state: 'untracked' }

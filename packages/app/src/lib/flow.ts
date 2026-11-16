@@ -9,7 +9,7 @@ import {
   FRAME_MIN,
   FRAME_PADDING,
   type Size,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 import type { Edge, Node } from '@xyflow/react';
 import type { Placement, PlacementMap } from './geometry.js';
 

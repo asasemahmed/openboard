@@ -1,4 +1,4 @@
-import { type BoardEdge, LIMITS } from '@openboard/core';
+import { type BoardEdge, LIMITS } from '@openboard-dev/core';
 import { applyOrReport, useActions } from '../canvas/actions.js';
 import { EDGE_TYPES, edgeMeta } from '../lib/edgeTypes.js';
 import { typeMeta } from '../lib/nodeTypes.js';

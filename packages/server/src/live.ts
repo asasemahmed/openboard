@@ -45,7 +45,7 @@ import {
   SESSIONS_KEPT,
   type Session,
   SYSTEM_ACTOR,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate } from 'y-protocols/awareness';
 import * as Y from 'yjs';
 import { errorMessage } from './fsutil.js';

@@ -3,7 +3,7 @@
  * code changed, live from the document, opening a list with the details the
  * server gives, and "Mark all as up to date".
  */
-import type { LinkEntry } from '@openboard/core';
+import type { LinkEntry } from '@openboard-dev/core';
 import { useReactFlow } from '@xyflow/react';
 import { useEffect, useRef, useState } from 'react';
 import { reducedMotion } from '../canvas/actions.js';

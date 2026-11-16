@@ -1,5 +1,5 @@
-import type { Board } from '@openboard/core';
-import { applyLayoutPatch, layoutIncremental } from '@openboard/server';
+import type { Board } from '@openboard-dev/core';
+import { applyLayoutPatch, layoutIncremental } from '@openboard-dev/server';
 
 /**
  * Give every node without a position one, as the server does after each

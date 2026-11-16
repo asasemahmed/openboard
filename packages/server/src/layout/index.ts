@@ -22,7 +22,7 @@
  *   `structure.ts`): `depends_on` and `implements` put their target upstream,
  *   every other type its source. `down` puts upstream above, `right` left.
  */
-import type { Board, BoardNode } from '@openboard/core';
+import type { Board, BoardNode } from '@openboard-dev/core';
 import type { Direction } from './elk.js';
 import { arrangeContainer, makeRoom, placeEach, sizeFrame, Workspace } from './engine.js';
 import { type LayoutPatch, nodeSize, type Rect } from './geometry.js';

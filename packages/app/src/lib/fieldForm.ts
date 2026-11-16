@@ -12,7 +12,7 @@ import {
   type Json,
   type NodeTypeDef,
   type TypedShape,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 
 /** What the input shows for a stored value. */
 export function inputValue(field: FieldDef, value: Json | undefined): string | boolean {

@@ -7,7 +7,7 @@
  *
  * `can(role, action)` from core is the only rule; components ask `useCan`.
  */
-import { type AccessAction, type Actor, can, type Role, type WhoAmI } from '@openboard/core';
+import { type AccessAction, type Actor, can, type Role, type WhoAmI } from '@openboard-dev/core';
 import { type ApiClient, ApiError } from '../lib/api.js';
 import { useStoreValue, Value } from './emitter.js';
 

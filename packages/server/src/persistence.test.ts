@@ -1,6 +1,6 @@
 import { readFile, stat, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { type Actor, parseBoard, serializeBoard } from '@openboard/core';
+import { type Actor, parseBoard, serializeBoard } from '@openboard-dev/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { projectPaths } from './paths.js';
 import { removeRoot, sleep, startTestServer, tempRoot, waitFor } from './testing.js';

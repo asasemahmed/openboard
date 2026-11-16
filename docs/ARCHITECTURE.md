@@ -20,14 +20,14 @@ A board is a typed graph that lives in a shared document. Humans edit it in the 
 
 ## Packages
 
-| Package           | Name                | Depends on       | Role                                                                                                                |
-| ----------------- | ------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `packages/core`   | `@openboard/core`   | —                | Schema, operations, the board document, queries, text rendering, serialization, diffing. No network or disk access. |
-| `packages/server` | `@openboard/server` | core             | The local server: sync, persistence, layout, change feed, the agent API over HTTP.                                  |
-| `packages/sdk`    | `@openboard/sdk`    | core             | `BoardApi` over HTTP, for code that talks to a running server.                                                      |
-| `packages/mcp`    | `@openboard/mcp`    | core, sdk        | MCP tools built on any `BoardApi`.                                                                                  |
-| `packages/app`    | `@openboard/app`    | core             | The web canvas. Built to static files that the server serves.                                                       |
-| `packages/cli`    | `openboard`         | all of the above | The `openboard` command.                                                                                            |
+| Package           | Name                    | Depends on       | Role                                                                                                                |
+| ----------------- | ----------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `packages/core`   | `@openboard-dev/core`   | —                | Schema, operations, the board document, queries, text rendering, serialization, diffing. No network or disk access. |
+| `packages/server` | `@openboard-dev/server` | core             | The local server: sync, persistence, layout, change feed, the agent API over HTTP.                                  |
+| `packages/sdk`    | `@openboard-dev/sdk`    | core             | `BoardApi` over HTTP, for code that talks to a running server.                                                      |
+| `packages/mcp`    | `@openboard-dev/mcp`    | core, sdk        | MCP tools built on any `BoardApi`.                                                                                  |
+| `packages/app`    | `@openboard-dev/app`    | core             | The web canvas. Built to static files that the server serves.                                                       |
+| `packages/cli`    | `openboard`             | all of the above | The `openboard` command.                                                                                            |
 
 Dependencies point one way: `core` knows nothing about the others, and nothing imports from `app` or `cli`.
 

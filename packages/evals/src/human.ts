@@ -7,7 +7,7 @@
  * milliseconds and `onCall()` after every tool call; `now` is injected, so a
  * test can drive it step by step.
  */
-import type { BoardApi, Decision, Proposal } from '@openboard/core';
+import type { BoardApi, Decision, Proposal } from '@openboard-dev/core';
 import { resolveRef } from './board.js';
 import type {
   HumanAction,

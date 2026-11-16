@@ -23,8 +23,8 @@ import {
   type ReadQuery,
   type ReadResult,
   type SelectionResult,
-} from '@openboard/core';
-import { connect, type OpenBoardClient } from '@openboard/sdk';
+} from '@openboard-dev/core';
+import { connect, type OpenBoardClient } from '@openboard-dev/sdk';
 import { CliError } from './errors.js';
 import { type CliIo, println } from './io.js';
 import { cliBinPath } from './project.js';

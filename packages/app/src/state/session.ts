@@ -2,7 +2,7 @@
  * One open board: the document, the derived canvas store, presence,
  * connection state, undo, and per-board UI state, wired together.
  */
-import { type Actor, BoardDoc, MAX_MAX_TOKENS } from '@openboard/core';
+import { type Actor, BoardDoc, MAX_MAX_TOKENS } from '@openboard-dev/core';
 import * as Y from 'yjs';
 import { type ApiClient, calmMessage } from '../lib/api.js';
 import { ActivityStore, itemKey, type RemovalResolver } from './activity.js';

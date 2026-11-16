@@ -15,7 +15,7 @@ import {
   TYPE_COLORS,
   TYPE_ICONS,
   TYPE_LIMITS,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 import { type ReactNode, useId, useState } from 'react';
 import { calmMessage } from '../lib/api.js';
 import { COLOR_NAMES } from '../lib/declaredTypes.js';

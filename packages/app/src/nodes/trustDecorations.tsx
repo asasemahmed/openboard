@@ -4,7 +4,7 @@
  * access, and the outline a panel draws when it points at something.
  * Registered once at startup, next to the built-in ones.
  */
-import type { Proposal } from '@openboard/core';
+import type { Proposal } from '@openboard-dev/core';
 import { type RefObject, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { FRAME_ACCESS_META, frameAccess } from '../lib/policy.js';

@@ -1,4 +1,4 @@
-import { FRAME_PADDING } from '@openboard/core';
+import { FRAME_PADDING } from '@openboard-dev/core';
 import { describe, expect, it } from 'vitest';
 import {
   absoluteRect,

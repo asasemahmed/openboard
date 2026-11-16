@@ -3,7 +3,7 @@
  * people (a link) and agents (a token), see who has access and revoke it.
  * In local mode the dialog explains that the boards are only reachable here.
  */
-import type { AccessGrant, Role } from '@openboard/core';
+import type { AccessGrant, Role } from '@openboard-dev/core';
 import { useEffect, useId, useReducer, useState } from 'react';
 import { plainLine } from '../lib/agents.js';
 import { calmMessage } from '../lib/api.js';

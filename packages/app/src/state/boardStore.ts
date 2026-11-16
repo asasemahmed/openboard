@@ -23,8 +23,8 @@ import type {
   DocEvent,
   HealthFinding,
   Op,
-} from '@openboard/core';
-import { boardHealth } from '@openboard/core';
+} from '@openboard-dev/core';
+import { boardHealth } from '@openboard-dev/core';
 import {
   applyEdgeChanges,
   applyNodeChanges,

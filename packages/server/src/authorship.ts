@@ -30,7 +30,7 @@ import type {
   Comment,
   DocEvent,
   Proposal,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 import { errorMessage } from './fsutil.js';
 import { jsonEqual } from './json.js';
 import type { Room } from './room.js';

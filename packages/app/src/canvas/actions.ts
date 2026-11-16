@@ -2,7 +2,7 @@
  * Everything a person can do to the board, shared by the canvas, keyboard
  * shortcuts, toolbar, inspector and command palette.
  */
-import { type Actor, newId, type Op, type Status } from '@openboard/core';
+import { type Actor, newId, type Op, type Status } from '@openboard-dev/core';
 import { useReactFlow } from '@xyflow/react';
 import { createContext, useContext, useMemo } from 'react';
 import { ApiError } from '../lib/api.js';

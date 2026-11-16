@@ -1,4 +1,4 @@
-import type { SchemaNodeType } from '@openboard/core';
+import type { SchemaNodeType } from '@openboard-dev/core';
 import { useRef, useState } from 'react';
 import { useActions } from '../canvas/actions.js';
 import { shortHint } from '../lib/declaredTypes.js';

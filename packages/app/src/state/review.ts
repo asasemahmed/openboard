@@ -4,7 +4,7 @@
  * the REST API as this person; the document then brings the new state to
  * every browser, so nothing here updates local state by hand.
  */
-import type { Decision, Proposal, UndoRequest, UndoResult } from '@openboard/core';
+import type { Decision, Proposal, UndoRequest, UndoResult } from '@openboard-dev/core';
 import { calmMessage } from '../lib/api.js';
 import { type DecisionOutcome, decisionOutcome } from '../lib/review.js';
 import type { BoardSession } from './session.js';

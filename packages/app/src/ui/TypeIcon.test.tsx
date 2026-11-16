@@ -1,4 +1,4 @@
-import { applyOps, emptyBoard, toSvg } from '@openboard/core';
+import { applyOps, emptyBoard, toSvg } from '@openboard-dev/core';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { BuiltinTypeIcon, hasBuiltinTypeIcon, TypeIcon } from './TypeIcon.js';

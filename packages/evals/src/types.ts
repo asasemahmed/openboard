@@ -14,7 +14,7 @@ import type {
   Op,
   PolicyMode,
   Proposal,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 
 // ── Trace ────────────────────────────────────────────────────────────────────
 

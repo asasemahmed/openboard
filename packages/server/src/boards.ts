@@ -16,7 +16,7 @@ import {
   type CreateBoardInput,
   OpenBoardError,
   slugify,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 import { type FSWatcher, watch } from 'chokidar';
 import { AccessStore } from './access.js';
 import { guardAuthorship } from './authorship.js';

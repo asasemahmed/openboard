@@ -1,4 +1,4 @@
-import { type AccessAction, can } from '@openboard/core';
+import { type AccessAction, can } from '@openboard-dev/core';
 /**
  * Cmd/Ctrl+K: find a node by title, id or tag and jump to it, or run a
  * command (add a node, tidy up, switch theme or board).

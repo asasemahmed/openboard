@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { actorForSession, createHttpHandler } from '@openboard/mcp';
+import { actorForSession, createHttpHandler } from '@openboard-dev/mcp';
 import { boardUrl, openBrowser, waitForSignal } from '../lib/browser.js';
 import { CliError } from '../lib/errors.js';
 import { type CliIo, isDebug, println } from '../lib/io.js';

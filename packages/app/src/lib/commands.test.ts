@@ -1,4 +1,4 @@
-import { absolutePosition, FRAME_PADDING } from '@openboard/core';
+import { absolutePosition, FRAME_PADDING } from '@openboard-dev/core';
 import { describe, expect, it } from 'vitest';
 import { ME, sampleDoc } from '../test/fixtures.js';
 import { addNodeOps, duplicateOps, frameAroundOps, moveOps, removeOps } from './commands.js';

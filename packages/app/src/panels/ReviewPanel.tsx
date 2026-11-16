@@ -8,7 +8,7 @@
  * proposal in focus, R rejects them, arrow keys move between items, Space
  * toggles one.
  */
-import { type Proposal, type ProposalItem, selectItems } from '@openboard/core';
+import { type Proposal, type ProposalItem, selectItems } from '@openboard-dev/core';
 import { useReactFlow } from '@xyflow/react';
 import {
   type KeyboardEvent,

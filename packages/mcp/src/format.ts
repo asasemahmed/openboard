@@ -10,7 +10,7 @@ import type {
   BoardSummary,
   ChangesResult,
   InboxResult,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
 

@@ -7,7 +7,7 @@ import {
   type NodeTypeDef,
   type OpenBoardPlugin,
   type ProjectConfig,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 // The example plugin is a plain ES module outside the package; it is used end to end here.
 import { createEstimatesPlugin } from '../../../examples/plugin-estimates/index.js';

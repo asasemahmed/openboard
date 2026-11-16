@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { Actor, BoardApi } from '@openboard/core';
+import type { Actor, BoardApi } from '@openboard-dev/core';
 import { describe, expect, it } from 'vitest';
 import { type OpenBoardServer, startServer } from '../lib/server.js';
 import { captureIo, serverWorks, tempDir } from '../testing/helpers.js';

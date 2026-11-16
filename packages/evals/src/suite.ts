@@ -1,6 +1,6 @@
 /** Running many scenarios, repeated, with a scripted baseline beside a real agent. */
 import { readFileSync } from 'node:fs';
-import { VERSION as SERVER_VERSION } from '@openboard/server';
+import { VERSION as SERVER_VERSION } from '@openboard-dev/server';
 import {
   MCP_VERSION,
   measureToolSurface,

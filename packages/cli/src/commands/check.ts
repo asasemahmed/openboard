@@ -10,7 +10,7 @@ import {
   type LinkEntry,
   linkRangeLabel,
   type TypeWarning,
-} from '@openboard/core';
+} from '@openboard-dev/core';
 import { CliError } from '../lib/errors.js';
 import { type CliIo, println } from '../lib/io.js';
 import { resolveRoot } from '../lib/project.js';

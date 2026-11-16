@@ -1,4 +1,4 @@
-import type { AccessVia, Actor, BoardApi, OpenBoardPlugin, Role } from '@openboard/core';
+import type { AccessVia, Actor, BoardApi, OpenBoardPlugin, Role } from '@openboard-dev/core';
 
 export const DEFAULT_PORT = 4747;
 

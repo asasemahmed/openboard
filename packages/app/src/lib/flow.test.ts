@@ -1,4 +1,4 @@
-import { defaultNodeSize, FRAME_MIN } from '@openboard/core';
+import { defaultNodeSize, FRAME_MIN } from '@openboard-dev/core';
 import { describe, expect, it } from 'vitest';
 import { sampleDoc } from '../test/fixtures.js';
 import {

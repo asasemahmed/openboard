@@ -2,7 +2,7 @@
  * The icons a declared type may pick (`TYPE_ICONS` in core), drawn like the
  * rest of the app's icons: a 16px grid, 1.5px stroke in `currentColor`.
  */
-import { builtinTypeGlyph, type TypeIcon as TypeIconName } from '@openboard/core';
+import { builtinTypeGlyph, type TypeIcon as TypeIconName } from '@openboard-dev/core';
 import { createElement, type ReactNode } from 'react';
 
 export const TYPE_ICON_PATHS: Record<TypeIconName, ReactNode> = {

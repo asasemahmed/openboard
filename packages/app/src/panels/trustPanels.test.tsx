@@ -1,4 +1,4 @@
-import { type Ask, BoardDoc, MENTION_AGENTS } from '@openboard/core';
+import { type Ask, BoardDoc, MENTION_AGENTS } from '@openboard-dev/core';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import type { ReactNode } from 'react';

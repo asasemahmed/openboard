@@ -17,8 +17,8 @@ import {
   parseBoard,
   serializeBoard,
   slugify,
-} from '@openboard/core';
-import { connect, type OpenBoardClient } from '@openboard/sdk';
+} from '@openboard-dev/core';
+import { connect, type OpenBoardClient } from '@openboard-dev/sdk';
 import { CliError, isNodeError } from './errors.js';
 import { type CliIo, println } from './io.js';
 import { placeUnplaced } from './layout.js';

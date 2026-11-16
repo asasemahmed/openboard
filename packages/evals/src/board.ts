@@ -1,5 +1,5 @@
 /** Small lookups over a whole `Board`, shared by checks, the person and the reference. */
-import type { Board, BoardEdge, BoardNode } from '@openboard/core';
+import type { Board, BoardEdge, BoardNode } from '@openboard-dev/core';
 import type { NodeRef } from './types.js';
 
 /** A title to match: exact text (case-insensitive, trimmed) or a pattern. */

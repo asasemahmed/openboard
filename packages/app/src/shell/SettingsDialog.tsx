@@ -6,7 +6,7 @@
  * .openboard/config.json, so they apply to every board of the project and
  * are reread each time the dialog opens.
  */
-import type { PolicyMode, ProjectConfig } from '@openboard/core';
+import type { PolicyMode, ProjectConfig } from '@openboard-dev/core';
 import { type KeyboardEvent, useEffect, useId, useRef, useState } from 'react';
 import { calmMessage } from '../lib/api.js';
 import { EDITORS, type EditorScheme, readEditorScheme, writeEditorScheme } from '../lib/editor.js';

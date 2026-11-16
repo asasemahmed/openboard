@@ -1,5 +1,5 @@
 /** History batches as rows of the activity panel, and the words for an undo's outcome. */
-import type { Batch, UndoResult } from '@openboard/core';
+import type { Batch, UndoResult } from '@openboard-dev/core';
 
 export type HistoryBadge = 'proposal' | 'undo' | 'undone';
 

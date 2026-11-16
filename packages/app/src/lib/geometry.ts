@@ -4,7 +4,7 @@
  * Everything here is pure and works on a `PlacementMap`, a flat snapshot of
  * where each node is drawn.
  */
-import { FRAME_PADDING, GRID } from '@openboard/core';
+import { FRAME_PADDING, GRID } from '@openboard-dev/core';
 
 export interface XY {
   x: number;

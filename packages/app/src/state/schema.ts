@@ -3,7 +3,7 @@
  * the project settings change or the window regains focus, since a plugin or
  * a teammate may have changed them meanwhile.
  */
-import type { SchemaEdgeType, SchemaNodeType, SchemaResult } from '@openboard/core';
+import type { SchemaEdgeType, SchemaNodeType, SchemaResult } from '@openboard-dev/core';
 import { api } from './boards.js';
 import { useValue, Value } from './emitter.js';
 
