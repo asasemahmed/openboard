@@ -37,6 +37,7 @@ import { BoardEdge } from './BoardEdge.js';
 import { Cursors } from './Cursors.js';
 import { EdgeMarkers } from './EdgeMarkers.js';
 import { EmptyBoard } from './EmptyBoard.js';
+import { useInitialFit } from './initialFit.js';
 import { useNodeKeyboard } from './nodeFocus.js';
 import { ProposalLayer } from './ProposalLayer.js';
 import { ZoomControls } from './ZoomControls.js';
@@ -76,6 +77,7 @@ export function Canvas({
   const { resolved } = useTheme();
   const flow = useReactFlow();
   const flowStore = useStoreApi<FlowNode, FlowEdge>();
+  useInitialFit(FIT_OPTIONS);
 
   // Select a node and, if it is not fully in view, pan to it at the current zoom.
   const reveal = useCallback(
@@ -277,8 +279,6 @@ export function Canvas({
         disableKeyboardA11y
         minZoom={0.1}
         maxZoom={2.5}
-        fitView
-        fitViewOptions={FIT_OPTIONS}
         colorMode={resolved}
       >
         <Background
