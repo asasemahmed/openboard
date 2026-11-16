@@ -2,7 +2,7 @@
 
 OpenBoard speaks the Model Context Protocol over two transports. Use stdio unless your client can only reach HTTP servers.
 
-The examples use the `openboard` alias from [Getting started](../../docs/getting-started.md#build-it). Without it, replace `openboard` with `node /path/to/openboard/packages/cli/dist/bin.js`.
+The examples use the `openboard` command from [Getting started](../../docs/getting-started.md#install-it).
 
 ## stdio
 
@@ -16,7 +16,7 @@ It prints something like:
 
 ```text
 Over stdio (starts the board server when needed):
-  /usr/local/bin/node /path/to/openboard/packages/cli/dist/bin.js mcp --root /path/to/your/project
+  /usr/local/bin/node /usr/local/lib/node_modules/@openboard-dev/cli/dist/bin.js mcp --root /path/to/your/project
 ```
 
 Configure your client to launch that command, with `command` set to the Node.js path and `args` to the rest. In the common `mcpServers` JSON format:
@@ -27,7 +27,7 @@ Configure your client to launch that command, with `command` set to the Node.js 
     "openboard": {
       "command": "/usr/local/bin/node",
       "args": [
-        "/path/to/openboard/packages/cli/dist/bin.js",
+        "/usr/local/lib/node_modules/@openboard-dev/cli/dist/bin.js",
         "mcp",
         "--root",
         "/path/to/your/project"

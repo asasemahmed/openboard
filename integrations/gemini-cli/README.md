@@ -10,7 +10,7 @@ In your project, print the exact block for your machine:
 openboard connect gemini-cli
 ```
 
-(`openboard` is the alias from [Getting started](../../docs/getting-started.md#build-it); without it, run `node /path/to/openboard/packages/cli/dist/bin.js connect gemini-cli` in the project.)
+(`openboard` is the command from [Getting started](../../docs/getting-started.md#install-it).)
 
 Paste the printed block into `.gemini/settings.json` in the project root (create the `.gemini` directory if there is none). [`settings.json`](settings.json) in this directory shows the shape, with placeholders where the printed block has absolute paths: the Node.js binary, the CLI in your checkout, and the project root. Keep every server that is already there; the file holds all of them under `mcpServers`.
 
