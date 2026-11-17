@@ -20,6 +20,9 @@ export interface ShortcutDef {
 export const SHORTCUTS: ShortcutDef[] = [
   { keys: ['n'], label: 'New note at the pointer', group: 'Create' },
   { keys: ['t'], label: 'New task at the pointer', group: 'Create' },
+  { keys: ['d'], label: 'New decision at the pointer', group: 'Create' },
+  { keys: ['q'], label: 'New question at the pointer', group: 'Create' },
+  { keys: ['r'], label: 'New risk at the pointer', group: 'Create' },
   { keys: ['f'], label: 'Frame around the selection', group: 'Create' },
   { keys: ['mod+d'], label: 'Duplicate', group: 'Create' },
   { keys: ['enter'], label: 'Edit title', group: 'Edit' },
@@ -98,6 +101,9 @@ export function useShortcuts(actions: BoardActions): void {
       if (is('mod+d')) return run(actions.duplicateSelection);
       if (is('n')) return run(() => actions.addNode('note'));
       if (is('t')) return run(() => actions.addNode('task'));
+      if (is('d')) return run(() => actions.addNode('decision'));
+      if (is('q')) return run(() => actions.addNode('question'));
+      if (is('r')) return run(() => actions.addNode('risk'));
       if (is('f')) return run(actions.frameSelection);
       if (is('enter')) return run(actions.editTitle);
       if (is('backspace') || is('delete')) return run(actions.deleteSelection);

@@ -43,6 +43,7 @@ const BUILTIN: Record<BuiltinNodeType, TypeMeta> = {
     label: 'decision',
     tone: 'decision',
     hint: 'A choice and why',
+    key: 'd',
   },
   question: {
     type: 'question',
@@ -50,8 +51,16 @@ const BUILTIN: Record<BuiltinNodeType, TypeMeta> = {
     label: 'question',
     tone: 'question',
     hint: 'Something open',
+    key: 'q',
   },
-  risk: { type: 'risk', name: 'Risk', label: 'risk', tone: 'risk', hint: 'What could go wrong' },
+  risk: {
+    type: 'risk',
+    name: 'Risk',
+    label: 'risk',
+    tone: 'risk',
+    hint: 'What could go wrong',
+    key: 'r',
+  },
   doc: { type: 'doc', name: 'Doc', label: 'doc', tone: 'doc', hint: 'Longer writing' },
   code: {
     type: 'code',
