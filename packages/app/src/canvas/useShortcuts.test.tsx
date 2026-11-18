@@ -8,12 +8,14 @@ import { fakeApi, ME, sampleDoc } from '../test/fixtures.js';
 import { useBoardActions } from './actions.js';
 import { SHORTCUTS, useShortcuts } from './useShortcuts.js';
 
+const fitView = vi.fn();
+
 vi.mock('@xyflow/react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@xyflow/react')>();
   return {
     ...actual,
     useReactFlow: () => ({
-      fitView: vi.fn(),
+      fitView,
       zoomIn: vi.fn(),
       zoomOut: vi.fn(),
       zoomTo: vi.fn(),
@@ -47,6 +49,8 @@ function mount() {
 afterEach(() => {
   access.set({ status: 'loading' });
   document.body.innerHTML = '';
+  fitView.mockReset();
+  vi.unstubAllGlobals();
 });
 
 describe('useShortcuts D, Q and R', () => {
@@ -115,6 +119,56 @@ describe('useShortcuts D, Q and R', () => {
       fireEvent.keyDown(window, { key: 'r' });
     });
     expect(session.store.boardNodes().size).toBe(initialTotal);
+    session.destroy();
+  });
+});
+
+describe('useShortcuts Shift+2', () => {
+  it('lists Shift+2 in the shortcuts sheet', () => {
+    expect(SHORTCUTS).toContainEqual({
+      keys: ['shift+2'],
+      label: 'Fit the selection in view',
+      group: 'View',
+    });
+  });
+
+  it('fits the selected cards and frames in view and does nothing when empty', () => {
+    const session = mount();
+
+    act(() => {
+      fireEvent.keyDown(window, { key: '@', code: 'Digit2', shiftKey: true });
+    });
+    expect(fitView).not.toHaveBeenCalled();
+
+    act(() => {
+      session.store.select(['note1', 'outer']);
+      fireEvent.keyDown(window, { key: '@', code: 'Digit2', shiftKey: true });
+    });
+    expect(fitView).toHaveBeenCalledWith({
+      nodes: [{ id: 'note1' }, { id: 'outer' }],
+      duration: 240,
+      padding: 0.12,
+      maxZoom: 1.25,
+    });
+    session.destroy();
+  });
+
+  it('respects prefers-reduced-motion when fitting the selection', () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query === '(prefers-reduced-motion: reduce)',
+    }));
+    const session = mount();
+
+    act(() => {
+      session.store.select(['risk1']);
+      fireEvent.keyDown(window, { key: '@', code: 'Digit2', shiftKey: true });
+    });
+    expect(fitView).toHaveBeenCalledWith({
+      nodes: [{ id: 'risk1' }],
+      duration: 0,
+      padding: 0.12,
+      maxZoom: 1.25,
+    });
     session.destroy();
   });
 });

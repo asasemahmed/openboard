@@ -41,6 +41,7 @@ export interface BoardActions {
   /** Select and bring into view nodes that are on their way (a template or import just added them). */
   reveal(nodeIds: readonly string[]): Promise<void>;
   fit(): void;
+  fitSelection(): void;
   zoomIn(): void;
   zoomOut(): void;
   resetZoom(): void;
@@ -300,6 +301,16 @@ export function useBoardActions(): BoardActions {
 
       fit() {
         void flow.fitView({ duration: reducedMotion() ? 0 : 240, padding: 0.12, maxZoom: 1.25 });
+      },
+      fitSelection() {
+        const ids = store.selection.nodeIds;
+        if (ids.length === 0) return;
+        void flow.fitView({
+          nodes: ids.map((id) => ({ id })),
+          duration: reducedMotion() ? 0 : 240,
+          padding: 0.12,
+          maxZoom: 1.25,
+        });
       },
       zoomIn() {
         void flow.zoomIn({ duration: reducedMotion() ? 0 : 120 });
