@@ -37,6 +37,7 @@ import { importCommand } from './commands/import.js';
 import { initCommand } from './commands/init.js';
 import { activityCommand, snapshotCommand } from './commands/live.js';
 import { mcpCommand } from './commands/mcp.js';
+import { openCommand } from './commands/open.js';
 import { policyCommand, policySetCommand, policyUnsetCommand } from './commands/policy.js';
 import { decideCommand, historyCommand, proposalsCommand, undoCommand } from './commands/review.js';
 import { startCommand } from './commands/start.js';
@@ -193,6 +194,17 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
     .description('stop the server running for this project')
     .addOption(rootOption())
     .action(action((opts: { root?: string }) => stopCommand(io, opts)));
+
+  program
+    .command('open')
+    .description('open the running board in the browser')
+    .argument('[board]', 'board id to open')
+    .addOption(rootOption())
+    .action(
+      action((board: string | undefined, opts: { root?: string }) =>
+        openCommand(io, { ...opts, ...(board !== undefined ? { board } : {}) }),
+      ),
+    );
 
   program
     .command('boards')
