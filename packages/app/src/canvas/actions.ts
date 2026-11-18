@@ -18,6 +18,7 @@ import {
 import { DEFAULT_EDGE_TYPE } from '../lib/edgeTypes.js';
 import type { XY } from '../lib/geometry.js';
 import { typeMeta } from '../lib/nodeTypes.js';
+import { PASTE_CONFIRM_THRESHOLD, parsePastedLines, pasteLinesOps } from '../lib/pasteLines.js';
 import { useSession } from '../state/context.js';
 import { types } from '../state/schema.js';
 import type { BoardSession } from '../state/session.js';
@@ -26,6 +27,7 @@ import { toasts } from '../state/toasts.js';
 export interface BoardActions {
   apply(ops: Op[]): boolean;
   addNode(type: string, at?: XY): string | null;
+  pasteLines(text: string, at?: XY): void;
   deleteSelection(): void;
   duplicateSelection(): void;
   frameSelection(): void;
@@ -131,6 +133,28 @@ export function useBoardActions(): BoardActions {
         store.select([id]);
         ui.editing.set(id);
         return id;
+      },
+
+      pasteLines(text, at) {
+        const cards = parsePastedLines(text);
+        if (cards.length === 0) return;
+        const point = at ?? ui.lastPointer ?? viewCenter();
+        const run = () => {
+          const { ops, ids } = pasteLinesOps(cards, point, store.placements(), () => newId('n'));
+          if (apply(ops)) store.select(ids);
+        };
+        if (cards.length > PASTE_CONFIRM_THRESHOLD) {
+          ui.confirm.set({
+            title: `Add ${cards.length} cards?`,
+            body: `Pasting this text will create ${cards.length} cards on the board.`,
+            actions: [
+              { label: 'Cancel', run: () => {} },
+              { label: `Add ${cards.length} cards`, tone: 'primary', run },
+            ],
+          });
+          return;
+        }
+        run();
       },
 
       deleteSelection() {
