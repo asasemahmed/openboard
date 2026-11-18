@@ -1,5 +1,6 @@
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { absolutePosition, type Board, type BoardNode, descendantsOf } from '@openboard-dev/core';
 import {
   EXPORTERS,
   type Exporter,
@@ -20,6 +21,8 @@ export interface ExportOptions {
   out?: string;
   /** For `svg` and `html`. */
   theme?: 'light' | 'dark';
+  /** Export only this frame (id or title), its contents, and edges between them. */
+  frame?: string;
 }
 
 /** The exporter for `--format`, else the one `--out`'s extension selects, else `json`. */
@@ -47,6 +50,47 @@ export async function defaultBoardId(store: BoardStore): Promise<string> {
   );
 }
 
+/** Return a sub-board containing only `frame` (by id or title), its contents and internal edges. */
+export function filterBoardByFrame(board: Board, query: string): Board {
+  const frames = Object.values(board.nodes).filter((node) => node.type === 'frame');
+  let target = frames.find((node) => node.id === query);
+  if (!target) {
+    const needle = query.toLowerCase();
+    const byTitle = frames.filter((node) => node.title.toLowerCase() === needle);
+    if (byTitle.length === 0) {
+      throw new CliError(`no frame "${query}" on board "${board.id}"`);
+    }
+    if (byTitle.length > 1) {
+      throw new CliError(`more than one frame is called "${query}"; pass the frame id instead`);
+    }
+    target = byTitle[0];
+  }
+  if (!target) throw new CliError(`no frame "${query}" on board "${board.id}"`);
+
+  const kept = new Set<string>([target.id, ...descendantsOf(board, target.id).map((n) => n.id)]);
+  const nodes: Record<string, BoardNode> = {};
+  for (const id of kept) {
+    const node = board.nodes[id];
+    if (!node) continue;
+    if (id === target.id) {
+      const abs = absolutePosition(board, target.id);
+      const { parent: _parent, ...rest } = node;
+      nodes[id] = {
+        ...rest,
+        ...(abs && node.view ? { view: { ...node.view, x: abs.x, y: abs.y } } : {}),
+      };
+    } else {
+      nodes[id] = node;
+    }
+  }
+  const edges = Object.fromEntries(
+    Object.entries(board.edges).filter(
+      ([, edge]) => kept.has(edge.source) && kept.has(edge.target),
+    ),
+  );
+  return { ...board, nodes, edges };
+}
+
 /** Write a board in one of the export formats. */
 export async function exportCommand(
   io: CliIo,
@@ -72,7 +116,9 @@ export async function exportCommand(
     return 0;
   }
   const exporter = chooseExporter(options);
-  const board = await store.getBoard(boardId ?? (await defaultBoardId(store)));
+  const rawBoard = await store.getBoard(boardId ?? (await defaultBoardId(store)));
+  const board =
+    options.frame !== undefined ? filterBoardByFrame(rawBoard, options.frame) : rawBoard;
   await writeExport(
     io,
     exporter.render(board, options.theme ? { theme: options.theme } : {}),

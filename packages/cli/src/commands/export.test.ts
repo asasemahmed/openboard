@@ -1,6 +1,13 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { MAX_MAX_TOKENS, renderOutline, renderRead, serializeBoard } from '@openboard-dev/core';
+import {
+  emptyBoard,
+  MAX_MAX_TOKENS,
+  parseBoard,
+  renderOutline,
+  renderRead,
+  serializeBoard,
+} from '@openboard-dev/core';
 import { describe, expect, it } from 'vitest';
 import { EXPORTERS, exporterForFile } from '../exporters.js';
 import { captureIo, sampleBoard, tempDir } from '../testing/helpers.js';
@@ -85,5 +92,56 @@ describe('export', () => {
     expect(exporterForFile('x.outline.txt')?.name).toBe('outline');
     expect(exporterForFile('x.txt')?.name).toBe('text');
     expect(exporterForFile('x.pdf')).toBeUndefined();
+  });
+
+  it('exports a single frame by id or title, with only its contents and internal edges', async () => {
+    const dir = await tempDir();
+    await mkdir(path.join(dir, '.openboard'));
+    const t = '2026-01-01T00:00:00.000Z';
+    const by = { createdBy: 'ada', createdAt: t, updatedBy: 'ada', updatedAt: t };
+    const board = emptyBoard({ id: 'main', name: 'Main' }, new Date(t));
+    board.actors.ada = { id: 'ada', kind: 'human', name: 'Ada' };
+    board.nodes = {
+      f1: {
+        id: 'f1',
+        type: 'frame',
+        title: 'Risks',
+        view: { x: 0, y: 0, width: 400, height: 300 },
+        ...by,
+      },
+      f2: {
+        id: 'f2',
+        type: 'frame',
+        title: 'Tasks',
+        view: { x: 500, y: 0, width: 400, height: 300 },
+        ...by,
+      },
+      r1: { id: 'r1', type: 'risk', title: 'Timeout', parent: 'f1', view: { x: 20, y: 40 }, ...by },
+      r2: { id: 'r2', type: 'risk', title: 'Retry', parent: 'f1', view: { x: 20, y: 140 }, ...by },
+      t1: { id: 't1', type: 'task', title: 'Fix it', parent: 'f2', view: { x: 20, y: 40 }, ...by },
+    };
+    board.edges = {
+      e1: { id: 'e1', type: 'relates_to', source: 'r1', target: 'r2', ...by },
+      e2: { id: 'e2', type: 'depends_on', source: 't1', target: 'r1', ...by },
+    };
+    await writeFile(path.join(dir, '.openboard/main.board.json'), serializeBoard(board));
+
+    const byTitle = captureIo(dir);
+    expect(
+      await exportCommand(byTitle, 'main', { root: dir, format: 'json', frame: 'risks' }),
+    ).toBe(0);
+    const parsed = parseBoard(byTitle.out());
+    expect(Object.keys(parsed.nodes).sort()).toEqual(['f1', 'r1', 'r2']);
+    expect(Object.keys(parsed.edges)).toEqual(['e1']);
+
+    const svgIo = captureIo(dir);
+    expect(await exportCommand(svgIo, 'main', { root: dir, format: 'svg', frame: 'f1' })).toBe(0);
+    expect(svgIo.out()).toContain('<svg');
+    expect(svgIo.out()).toContain('Timeout');
+    expect(svgIo.out()).not.toContain('Fix it');
+
+    await expect(
+      exportCommand(captureIo(dir), 'main', { root: dir, frame: 'missing' }),
+    ).rejects.toThrow(/no frame "missing"/);
   });
 });
