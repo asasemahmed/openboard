@@ -21,7 +21,7 @@ export function readyToFit(canvas: Size, view: Size): boolean {
 }
 
 /** Fits the board once, as soon as the window and the canvas have a size. */
-export function useInitialFit(options: FitViewOptions): void {
+export function useInitialFit(options: FitViewOptions, onFirstFit?: () => boolean): void {
   const flow = useReactFlow<FlowNode, FlowEdge>();
   const flowStore = useStoreApi<FlowNode, FlowEdge>();
 
@@ -35,7 +35,7 @@ export function useInitialFit(options: FitViewOptions): void {
       if (!panZoom || !readyToFit({ width, height }, view)) return;
       done = true;
       stop();
-      void flow.fitView(options);
+      if (!onFirstFit?.()) void flow.fitView(options);
     };
     // React Flow measures the canvas whenever it resizes, which updates its store.
     const unsubscribe = flowStore.subscribe(tryFit);
@@ -46,5 +46,5 @@ export function useInitialFit(options: FitViewOptions): void {
     };
     tryFit();
     return () => stop();
-  }, [flow, flowStore, options]);
+  }, [flow, flowStore, options, onFirstFit]);
 }

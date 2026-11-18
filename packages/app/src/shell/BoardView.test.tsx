@@ -254,4 +254,30 @@ describe('BoardView', () => {
     expect(session.ui.confirm.get()?.title).toBe('Add 51 cards?');
     session.destroy();
   });
+
+  it('selects a linked card on open and ignores an unknown card id', () => {
+    const linked = createSession({
+      boardId: 'test-board',
+      actor: ME,
+      api: fakeApi(),
+      transport: (ydoc) => createLocalTransport(ydoc),
+      doc: sampleDoc(),
+    });
+    render(<BoardView session={linked} onlyRenderVisibleElements={false} initialCardId="risk1" />);
+    expect(linked.store.selection.nodeIds).toEqual(['risk1']);
+    linked.destroy();
+
+    const unknown = createSession({
+      boardId: 'test-board',
+      actor: ME,
+      api: fakeApi(),
+      transport: (ydoc) => createLocalTransport(ydoc),
+      doc: sampleDoc(),
+    });
+    render(
+      <BoardView session={unknown} onlyRenderVisibleElements={false} initialCardId="missing" />,
+    );
+    expect(unknown.store.selection.nodeIds).toEqual([]);
+    unknown.destroy();
+  });
 });

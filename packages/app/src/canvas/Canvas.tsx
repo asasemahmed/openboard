@@ -60,12 +60,15 @@ export interface CanvasProps {
   onlyRenderVisibleElements?: boolean;
   /** Replay: nothing can be moved, connected, added or edited. */
   readOnly?: boolean;
+  /** Optional card id from `/b/<board>#<card>` to select and fit on first open. */
+  initialCardId?: string;
 }
 
 export function Canvas({
   actions,
   onlyRenderVisibleElements = true,
   readOnly = false,
+  initialCardId,
 }: CanvasProps) {
   const session = useSession();
   const { store, ui, presence } = session;
@@ -77,7 +80,20 @@ export function Canvas({
   const { resolved } = useTheme();
   const flow = useReactFlow();
   const flowStore = useStoreApi<FlowNode, FlowEdge>();
-  useInitialFit(FIT_OPTIONS);
+  useInitialFit(
+    FIT_OPTIONS,
+    useCallback(() => {
+      if (!initialCardId || !store.node(initialCardId)) return false;
+      store.select([initialCardId]);
+      void flow.fitView({
+        nodes: [{ id: initialCardId }],
+        duration: 0,
+        maxZoom: 1.25,
+        padding: 0.4,
+      });
+      return true;
+    }, [flow, initialCardId, store]),
+  );
 
   // Select a node and, if it is not fully in view, pan to it at the current zoom.
   const reveal = useCallback(

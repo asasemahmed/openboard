@@ -5,6 +5,7 @@ import { type AccessAction, can } from '@openboard-dev/core';
  */
 import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useActions } from '../canvas/actions.js';
+import { copyCardLink } from '../lib/clipboard.js';
 import { shortHint } from '../lib/declaredTypes.js';
 import { fuzzyScore, searchNodes } from '../lib/fuzzy.js';
 import { ADDABLE_TYPES, STATUS_META, typeMeta } from '../lib/nodeTypes.js';
@@ -13,7 +14,7 @@ import { setThemePref, type ThemePref } from '../lib/theme.js';
 import { useRole } from '../state/access.js';
 import { boards, useBoards } from '../state/boards.js';
 import { useSession } from '../state/context.js';
-import { useValue } from '../state/emitter.js';
+import { useStoreValue, useValue } from '../state/emitter.js';
 import { useTypes } from '../state/schema.js';
 import { Kbd } from '../ui/Button.js';
 import { Dialog } from '../ui/Dialog.js';
@@ -54,6 +55,7 @@ export function CommandPalette() {
   const session = useSession();
   const { ui, store } = session;
   const state = useValue(ui.palette);
+  const selectedIds = useStoreValue(store, () => store.selection.nodeIds);
   const actions = useActions();
   const role = useRole();
   const declared = useTypes().declaredNodes;
@@ -136,6 +138,18 @@ export function CommandPalette() {
         keywords: 'zoom',
         run: actions.fit,
       },
+      ...(selectedIds.length === 1
+        ? [
+            {
+              id: 'copy-card-link',
+              group: 'Commands' as const,
+              label: 'Copy link to card',
+              lead: icon('link'),
+              keywords: 'share url permalink',
+              run: () => void copyCardLink(session.boardId, selectedIds[0]!),
+            },
+          ]
+        : []),
       {
         id: 'fit-selection',
         group: 'Commands',
@@ -284,7 +298,7 @@ export function CommandPalette() {
       const needs = COMMAND_NEEDS[item.id] ?? (item.id.startsWith('add:') ? 'board.edit' : null);
       return needs === null || can(role, needs);
     });
-  }, [actions, ui, store, role, declared]);
+  }, [actions, ui, store, session.boardId, selectedIds, role, declared]);
 
   const items = useMemo<Item[]>(() => {
     const q = query.trim();
