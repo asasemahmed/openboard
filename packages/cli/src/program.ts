@@ -331,6 +331,7 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
       `output format: ${FORMAT_NAMES.join(', ')}, or a format of a plugin the running server loaded (default: from --out, else json)`,
     )
     .option('-o, --out <file>', 'write to a file instead of stdout')
+    .option('--frame <id-or-title>', 'export only this frame, its contents, and edges between them')
     .addOption(
       new Option(
         '--theme <theme>',
@@ -341,7 +342,13 @@ export function createProgram(io: CliIo, setExitCode: (code: number) => void): C
       action(
         (
           board: string | undefined,
-          opts: { root?: string; format?: string; out?: string; theme?: 'light' | 'dark' },
+          opts: {
+            root?: string;
+            format?: string;
+            out?: string;
+            frame?: string;
+            theme?: 'light' | 'dark';
+          },
         ) => exportCommand(io, board, opts),
       ),
     );

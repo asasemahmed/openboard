@@ -176,7 +176,7 @@ openboard: a board with id "spikes" already exists
 ## export
 
 ```text
-openboard export [board] [--root <dir>] [-f, --format <format>] [-o, --out <file>] [--theme light|dark]
+openboard export [board] [--root <dir>] [-f, --format <format>] [-o, --out <file>] [--frame <id-or-title>] [--theme light|dark]
 ```
 
 Write a board to stdout or a file. With a server running, the live board is exported, including changes not yet saved to the file.
@@ -186,6 +186,7 @@ Write a board to stdout or a file. With a server running, the live board is expo
 | `[board]`                 | the only board, else `main` | Board id. With several boards and none called `main`, name one.             |
 | `-f`, `--format <format>` | from `--out`, else `json`   | One of the formats below, or a format of a plugin the running server loaded |
 | `-o`, `--out <file>`      | stdout                      | Write to this file; `-` means stdout                                        |
+| `--frame <id-or-title>`   | whole board                 | Export only this frame, its contents, and the connections between them      |
 | `--theme <theme>`         | `light`                     | `light` or `dark`, for `svg`; for `html`, instead of following the system   |
 
 | Format                  | Output                                                                     | Extension that selects it |
