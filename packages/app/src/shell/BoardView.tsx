@@ -9,7 +9,9 @@ import { ActionsProvider, useBoardActions } from '../canvas/actions.js';
 import { Canvas } from '../canvas/Canvas.js';
 import { useBoardCommentNotices, useReviewAutoOpen } from '../canvas/TrustHooks.js';
 import { useShortcuts } from '../canvas/useShortcuts.js';
+import { isTypingTarget } from '../lib/shortcuts.js';
 import { LeftPanel, RightPanel } from '../panels/PanelSlot.js';
+import { canNow } from '../state/access.js';
 import { SessionProvider, useMeta, useSession } from '../state/context.js';
 import { useStoreValue } from '../state/emitter.js';
 import { currentActor, identity } from '../state/identity.js';
@@ -43,6 +45,22 @@ function Workspace({ onlyRenderVisibleElements }: { onlyRenderVisibleElements: b
       }),
     [session],
   );
+
+  // Paste plain text lines onto the canvas to create one card per line.
+  useEffect(() => {
+    const onPaste = (event: ClipboardEvent) => {
+      if (event.defaultPrevented || session.replay.active || session.ui.compare.get() !== null)
+        return;
+      if (isTypingTarget(event.target) || session.ui.modalOpen()) return;
+      if (!canNow('board.edit')) return;
+      const text = event.clipboardData?.getData('text/plain');
+      if (!text) return;
+      event.preventDefault();
+      actions.pasteLines(text);
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, [actions, session]);
 
   const replaying = useStoreValue(session.replay, () => session.replay.active);
   const comparing = useStoreValue(session.ui.compare, () => session.ui.compare.get() !== null);

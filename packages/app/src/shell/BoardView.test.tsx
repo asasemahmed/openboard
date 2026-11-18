@@ -229,4 +229,29 @@ describe('BoardView', () => {
     expect(screen.getByText(/Agents connected over MCP/)).toBeTruthy();
     session.destroy();
   });
+
+  it('pastes plain-text lines onto the canvas and asks confirmation above 50 cards', () => {
+    const { session } = mount();
+    const before = session.store.boardNodes().size;
+
+    const paste = (text: string) => {
+      const event = new Event('paste', { bubbles: true, cancelable: true }) as ClipboardEvent;
+      Object.defineProperty(event, 'clipboardData', {
+        value: { getData: (type: string) => (type === 'text/plain' ? text : '') },
+      });
+      act(() => {
+        window.dispatchEvent(event);
+      });
+    };
+
+    paste('- First note\n[ ] Check logs');
+    expect(session.store.boardNodes().size).toBe(before + 2);
+    expect(session.ui.confirm.get()).toBeNull();
+
+    const many = Array.from({ length: 51 }, (_, i) => `Item ${i + 1}`).join('\n');
+    paste(many);
+    expect(session.store.boardNodes().size).toBe(before + 2);
+    expect(session.ui.confirm.get()?.title).toBe('Add 51 cards?');
+    session.destroy();
+  });
 });
