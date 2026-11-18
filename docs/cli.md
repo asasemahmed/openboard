@@ -12,6 +12,7 @@ openboard [command] [options]
 | [`init`](#init)                          | Create `.openboard/` with an empty board                            |
 | [`status`](#status)                      | Show whether the server is running, and the boards                  |
 | [`stop`](#stop)                          | Stop the server running for this project                            |
+| [`open`](#open)                          | Open the running board in the browser                               |
 | [`boards`](#boards)                      | List boards                                                         |
 | [`new`](#new)                            | Create a board                                                      |
 | [`export`](#export)                      | Write a board as JSON or text                                       |
@@ -141,6 +142,14 @@ openboard stop [--root <dir>]
 ```
 
 Stop the server recorded for the project: SIGTERM, then SIGKILL if it has not stopped within 5 seconds. Prints `Stopped OpenBoard (pid N).`, or `OpenBoard is not running.` (exit status 0) when there is nothing to stop. Use it for servers that agents started in the background.
+
+## open
+
+```text
+openboard open [board] [--root <dir>]
+```
+
+Open the running project server's board in the browser (pass `board` to jump straight to `/b/<board>`). When no server is running for the project, prints how to start one and exits with status 1.
 
 ## boards
 
