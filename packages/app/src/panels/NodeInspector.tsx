@@ -1,6 +1,7 @@
 import { type BoardNode, LIMITS, type NodePatch, STATUSES, type Status } from '@openboard-dev/core';
 import { useCallback, useEffect, useRef } from 'react';
 import { applyOrReport, useActions } from '../canvas/actions.js';
+import { copyCardLink } from '../lib/clipboard.js';
 import { cardModel } from '../lib/declaredTypes.js';
 import { typeProblems } from '../lib/fieldForm.js';
 import { CARD_TYPES, STATUS_META, typeMeta } from '../lib/nodeTypes.js';
@@ -227,13 +228,20 @@ export function NodeInspector({ node }: { node: BoardNode }) {
           updatedBy={node.updatedBy}
           updatedAt={node.updatedAt}
         />
-        <div className="inspector-actions" hidden={!canEdit}>
-          <Button size="sm" icon="copy" onClick={actions.duplicateSelection}>
-            Duplicate
+        <div className="inspector-actions">
+          <Button size="sm" icon="link" onClick={() => void copyCardLink(session.boardId, node.id)}>
+            Copy link to card
           </Button>
-          <Button size="sm" variant="danger" icon="trash" onClick={actions.deleteSelection}>
-            Delete
-          </Button>
+          {canEdit && (
+            <>
+              <Button size="sm" icon="copy" onClick={actions.duplicateSelection}>
+                Duplicate
+              </Button>
+              <Button size="sm" variant="danger" icon="trash" onClick={actions.deleteSelection}>
+                Delete
+              </Button>
+            </>
+          )}
         </div>
       </Section>
     </div>

@@ -4,7 +4,7 @@
  * in-memory board in tests.
  */
 import { ReactFlowProvider } from '@xyflow/react';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { ActionsProvider, useBoardActions } from '../canvas/actions.js';
 import { Canvas } from '../canvas/Canvas.js';
 import { useBoardCommentNotices, useReviewAutoOpen } from '../canvas/TrustHooks.js';
@@ -22,13 +22,28 @@ import { LazyDialogs } from './LazyDialogs.js';
 import { ReplayView } from './ReplayView.js';
 import { TopBar } from './TopBar.js';
 
-function Workspace({ onlyRenderVisibleElements }: { onlyRenderVisibleElements: boolean }) {
+function Workspace({
+  onlyRenderVisibleElements,
+  initialCardId,
+}: {
+  onlyRenderVisibleElements: boolean;
+  initialCardId?: string;
+}) {
   const session = useSession();
   const actions = useBoardActions();
   const { meta } = useMeta();
   useShortcuts(actions);
   useReviewAutoOpen();
   useBoardCommentNotices();
+
+  const lastCardId = useRef(initialCardId);
+  useEffect(() => {
+    if (initialCardId === lastCardId.current) return;
+    lastCardId.current = initialCardId;
+    if (initialCardId && session.store.node(initialCardId)) {
+      actions.jumpTo(initialCardId);
+    }
+  }, [actions, initialCardId, session.store]);
 
   useEffect(() => {
     document.title = `${meta.name} · OpenBoard`;
@@ -75,7 +90,11 @@ function Workspace({ onlyRenderVisibleElements }: { onlyRenderVisibleElements: b
         <div className="workspace-body">
           <LeftPanel />
           <main className="canvas-area" aria-label="Board canvas">
-            <Canvas actions={actions} onlyRenderVisibleElements={onlyRenderVisibleElements} />
+            <Canvas
+              actions={actions}
+              onlyRenderVisibleElements={onlyRenderVisibleElements}
+              {...(initialCardId ? { initialCardId } : {})}
+            />
           </main>
           <RightPanel />
         </div>
@@ -89,14 +108,19 @@ function Workspace({ onlyRenderVisibleElements }: { onlyRenderVisibleElements: b
 export function BoardView({
   session,
   onlyRenderVisibleElements = true,
+  initialCardId,
 }: {
   session: BoardSession;
   onlyRenderVisibleElements?: boolean;
+  initialCardId?: string;
 }) {
   return (
     <SessionProvider session={session}>
       <ReactFlowProvider>
-        <Workspace onlyRenderVisibleElements={onlyRenderVisibleElements} />
+        <Workspace
+          onlyRenderVisibleElements={onlyRenderVisibleElements}
+          {...(initialCardId ? { initialCardId } : {})}
+        />
       </ReactFlowProvider>
     </SessionProvider>
   );

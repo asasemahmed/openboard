@@ -44,7 +44,11 @@ export function App() {
   if (route.name === 'board') {
     return (
       <>
-        <BoardScreen key={route.boardId} boardId={route.boardId} />
+        <BoardScreen
+          key={route.boardId}
+          boardId={route.boardId}
+          {...(route.cardId ? { cardId: route.cardId } : {})}
+        />
         <Toasts />
       </>
     );

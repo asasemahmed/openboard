@@ -140,7 +140,7 @@ function LostEditsNotice({ onDismiss }: { onDismiss: () => void }) {
   );
 }
 
-function Connecting({ session }: { session: BoardSession }) {
+function Connecting({ session, cardId }: { session: BoardSession; cardId?: string }) {
   const ready = useStoreValue(session.store, () => session.store.meta.ready);
   const gone = useStoreValue(session.connection, () => session.connection.get().gone);
   const [slow, setSlow] = useState(false);
@@ -149,7 +149,7 @@ function Connecting({ session }: { session: BoardSession }) {
     return () => clearTimeout(timer);
   }, []);
   if (gone) return <NotFound boardId={session.boardId} />;
-  if (ready) return <BoardView session={session} />;
+  if (ready) return <BoardView session={session} {...(cardId ? { initialCardId: cardId } : {})} />;
   return (
     <StateScreen title="Opening board…" busy>
       {slow && (
@@ -164,7 +164,7 @@ function Connecting({ session }: { session: BoardSession }) {
   );
 }
 
-export function BoardScreen({ boardId }: { boardId: string }) {
+export function BoardScreen({ boardId, cardId }: { boardId: string; cardId?: string }) {
   const list = useBoards();
 
   useEffect(() => {
@@ -178,7 +178,7 @@ export function BoardScreen({ boardId }: { boardId: string }) {
   if (known && session)
     return (
       <>
-        <Connecting key={lineage.generation} session={session} />
+        <Connecting key={lineage.generation} session={session} {...(cardId ? { cardId } : {})} />
         {lineage.lostEdits && <LostEditsNotice onDismiss={dismiss} />}
       </>
     );
