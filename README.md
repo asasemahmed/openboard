@@ -111,23 +111,7 @@ It prints the exact command for your project, with absolute paths. Put it in you
 claude mcp add openboard -- openboard mcp
 ```
 
-**OpenCode** — `opencode.json` in the project:
-
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "mcp": {
-    "servers": {
-      "openboard": {
-        "type": "local",
-        "command": ["openboard", "mcp", "--root", "/path/to/your/project"]
-      }
-    }
-  }
-}
-```
-
-Older OpenCode versions put the server directly under `mcp`, without `servers`.
+**OpenCode V2** — run `openboard connect opencode` for the `mcp.servers.openboard` entry in your project's `opencode.json` or `opencode.jsonc`. See the [OpenCode setup](integrations/opencode/README.md) for the `AGENTS.md` snippet, verification and shared boards.
 
 **Cline** — open the MCP Servers panel, choose **Configure MCP Servers**, and add to `cline_mcp_settings.json`:
 
@@ -154,7 +138,7 @@ Older OpenCode versions put the server directly under `mcp`, without `servers`.
 | Zed            | Zed's `settings.json`                 | `context_servers`                     |
 | Anything else  | Your client's MCP settings            | stdio, or `http://127.0.0.1:4747/mcp` |
 
-If your client cannot find `openboard` (it may start servers with a shorter path than your shell's), use the command with absolute paths that `openboard connect` prints. Setups that also teach the agent how to work on a board — a plugin with a skill for Claude Code, a rule for Cursor, a snippet for Codex, a `GEMINI.md` snippet for Gemini CLI, and a generic guide for everything else — are in [`integrations/`](integrations/README.md).
+If your client cannot find `openboard` (it may start servers with a shorter path than your shell's), use the command with absolute paths that `openboard connect` prints. Setups that also teach the agent how to work on a board — a plugin with a skill for Claude Code, a rule for Cursor, `AGENTS.md` snippets for Codex and OpenCode, a `GEMINI.md` snippet for Gemini CLI, and a generic guide for everything else — are in [`integrations/`](integrations/README.md).
 
 Then try:
 
