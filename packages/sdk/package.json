@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "type": "module",
   "description": "A typed HTTP client for a running OpenBoard server.",
-  "license": "PolyForm-Noncommercial-1.0.0",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/asasemahmed/openboard.git",

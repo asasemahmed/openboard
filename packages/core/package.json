@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "type": "module",
   "description": "Schema, operations and formats for OpenBoard boards.",
-  "license": "PolyForm-Noncommercial-1.0.0",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/asasemahmed/openboard.git",
