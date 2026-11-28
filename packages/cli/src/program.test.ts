@@ -149,10 +149,13 @@ describe('argument parsing and exit codes', () => {
     const io = captureIo(dir);
     expect(await run(['connect', 'cursor', '--root', dir], io)).toBe(0);
     expect(io.out()).toContain('Add this to .cursor/mcp.json:');
+    const opencode = captureIo(dir);
+    expect(await run(['connect', 'opencode', '--root', dir], opencode)).toBe(0);
+    expect(opencode.out()).toContain('Add this to opencode.json:');
     const bad = captureIo(dir);
     expect(await run(['connect', 'vim'], bad)).toBe(1);
     expect(bad.err()).toBe(
-      'openboard: unknown agent "vim" (choose one of: claude-code, cursor, codex, gemini-cli, generic)\n',
+      'openboard: unknown agent "vim" (choose one of: claude-code, cursor, codex, gemini-cli, opencode, generic)\n',
     );
   });
 

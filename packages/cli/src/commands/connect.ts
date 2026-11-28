@@ -8,7 +8,14 @@ import { type Launch, mcpLaunch, shellCommand } from '../lib/mcp.js';
 import { resolveRoot } from '../lib/project.js';
 import { DEFAULT_PORT, findRunningServer } from '../lib/server.js';
 
-export const AGENTS = ['claude-code', 'cursor', 'codex', 'gemini-cli', 'generic'] as const;
+export const AGENTS = [
+  'claude-code',
+  'cursor',
+  'codex',
+  'gemini-cli',
+  'opencode',
+  'generic',
+] as const;
 export type AgentName = (typeof AGENTS)[number];
 
 export interface ConnectOptions {
@@ -80,6 +87,11 @@ export function remoteSetups(publicUrl: string): Record<AgentName, AgentSetup> {
       label: 'Gemini CLI',
       file: '.gemini/settings.json',
       config: proxyJson,
+    },
+    opencode: {
+      label: 'OpenCode',
+      file: 'opencode.json',
+      config: opencodeBlock(proxy, { OPENBOARD_TOKEN: '{env:OPENBOARD_TOKEN}' }),
     },
     generic: {
       label: 'Any MCP client',
@@ -155,6 +167,25 @@ function jsonBlock(launch: Launch): string {
   );
 }
 
+function opencodeBlock(launch: Launch, environment?: Record<string, string>): string {
+  return JSON.stringify(
+    {
+      $schema: 'https://opencode.ai/config.json',
+      mcp: {
+        servers: {
+          openboard: {
+            type: 'local',
+            command: [launch.command, ...launch.args],
+            ...(environment === undefined ? {} : { environment }),
+          },
+        },
+      },
+    },
+    null,
+    2,
+  );
+}
+
 /** TOML basic strings share JSON's escapes for everything a path can hold. */
 function tomlBlock(launch: Launch): string {
   return [
@@ -180,6 +211,7 @@ export function agentSetups(launch: Launch, httpUrl: string): Record<AgentName, 
       file: '.gemini/settings.json',
       config: jsonBlock(launch),
     },
+    opencode: { label: 'OpenCode', file: 'opencode.json', config: opencodeBlock(launch) },
     generic: {
       label: 'Any MCP client',
       command: shellCommand(launch),
@@ -236,6 +268,7 @@ export async function connectCommand(
     out(`  Cursor       add to .cursor/mcp.json: ${flat(setups.cursor.config ?? '')}`);
     out(`  Codex        add to ~/.codex/config.toml: ${flat(setups.codex.config ?? '')}`);
     out(`  Gemini CLI   add to .gemini/settings.json: ${flat(setups['gemini-cli'].config ?? '')}`);
+    out(`  OpenCode     add to opencode.json: ${flat(setups.opencode.config ?? '')}`);
     out(`  Other        stdio: ${shellCommand(info.stdio)}`);
     out(`               HTTP:  ${info.http.url} ${httpNote}`);
     out();
