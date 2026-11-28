@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <a href="LICENSE"><img alt="License: PolyForm Noncommercial 1.0.0" src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-FF5A1F"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-FF5A1F"></a>
   <img alt="Node.js 22 or newer" src="https://img.shields.io/badge/node-%E2%89%A5%2022-15171A">
   <img alt="16 MCP tools" src="https://img.shields.io/badge/MCP-16%20tools-15171A">
   <img alt="Status: pre-release" src="https://img.shields.io/badge/status-pre--release-5F646D">
@@ -21,7 +21,7 @@
 </p>
 
 > [!NOTE]
-> OpenBoard is free to use, change and share for personal and other noncommercial purposes under the [PolyForm Noncommercial License](LICENSE). Commercial use needs a separate license. It is pre-release: nothing is published to a package registry yet.
+> OpenBoard is open source under the [MIT License](LICENSE). It is pre-release software: expect changes between versions until 1.0.
 
 # OpenBoard
 
@@ -306,9 +306,4 @@ pnpm typecheck
 
 ## License
 
-OpenBoard is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE).
-
-- **You may** use, change, and share it for personal use, research, hobby projects, education, and other noncommercial purposes, including inside charities, schools, and public institutions.
-- **You may not** use it for commercial purposes without a separate license. To ask about one, open an issue.
-
-This is a source-available license, not an open-source license as the Open Source Initiative defines the term.
+OpenBoard is licensed under the [MIT License](LICENSE). You may use, change and share it for any purpose, commercial ones included, as long as the copyright notice and the license text stay with it.

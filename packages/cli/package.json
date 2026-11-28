@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "type": "module",
   "description": "A shared canvas your AI agent can read, edit, and be steered from. Works with any MCP client.",
-  "license": "PolyForm-Noncommercial-1.0.0",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/asasemahmed/openboard.git",
