@@ -475,7 +475,7 @@ With `--remote`, it prints the setup for an agent on another machine connecting 
 | `cursor`      | The stdio bridge (`openboard mcp --url`) for `.cursor/mcp.json`, with `OPENBOARD_TOKEN` in its `env` block            |
 | `codex`       | The stdio bridge as a `[mcp_servers.openboard]` table with `env = { OPENBOARD_TOKEN = ... }`                          |
 | `gemini-cli`  | The stdio bridge as an `openboard` entry in `.gemini/settings.json`, with `OPENBOARD_TOKEN` in its `env` block        |
-| `opencode`    | The stdio bridge for `opencode.json`, with `OPENBOARD_TOKEN` set to `{env:OPENBOARD_TOKEN}` in `environment`         |
+| `opencode`    | The stdio bridge for `opencode.json`, with `OPENBOARD_TOKEN` set to `{env:OPENBOARD_TOKEN}` in `environment`          |
 | `generic`     | The HTTP URL with the header to send, and the stdio bridge                                                            |
 
 ```text

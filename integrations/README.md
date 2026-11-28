@@ -8,7 +8,7 @@ Ready-made setups for connecting an agent to OpenBoard. Each one works with the 
 | [`cursor/`](cursor/)           | Cursor         | The `.cursor/mcp.json` entry, a project rule and activity hooks          |
 | [`codex/`](codex/)             | Codex          | The `config.toml` entry, an `AGENTS.md` snippet and activity hooks       |
 | [`gemini-cli/`](gemini-cli/)   | Gemini CLI     | The `.gemini/settings.json` entry and a `GEMINI.md` snippet              |
-| [`opencode/`](opencode/)       | OpenCode V2    | The `opencode.json` entry and an `AGENTS.md` snippet                    |
+| [`opencode/`](opencode/)       | OpenCode V2    | The `opencode.json` entry and an `AGENTS.md` snippet                     |
 | [`generic/`](generic/)         | Any MCP client | stdio and Streamable HTTP setup, and a client-agnostic guide             |
 
 `.claude-plugin/marketplace.json` makes this directory a local Claude Code plugin marketplace; see [`claude-code/README.md`](claude-code/README.md).
